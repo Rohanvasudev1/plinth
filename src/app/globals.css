@@ -109,3 +109,17 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .result { margin: 0; color: var(--good); }
 .result.refused { color: var(--ink); font-weight: 600; }
+
+.safe-to-spend { margin-top: 8px; }
+.safe-to-spend p { margin: 0; }
+.bills { list-style: none; margin: 8px 0 0; padding: 0; }
+.bills li, .bills-total {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--soft);
+}
+.bill-date { display: inline-block; min-width: 4.5em; }
+.bills-total { margin: 0; border-bottom: 0; font-weight: 600; }
+.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
