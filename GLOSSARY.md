@@ -20,6 +20,18 @@ _Avoid_: Transfer, when the movement is not between two of the customer's accoun
 A record that a ledger transaction posted, which rules react to.
 _Avoid_: Notification, message
 
+**Clearing account**:
+A system-owned account for one simulated outside institution, which takes the opposite entry when money enters or leaves the bank.
+_Avoid_: Suspense account, external account
+
+**Goal**:
+A target amount attached to one of the customer's savings accounts, such as the House fund.
+_Avoid_: Target, pot
+
+**Safe to spend**:
+The checking balance minus the Buffer minus Scheduled bills due before the next payday.
+_Avoid_: Available balance, spare cash
+
 **Scheduled bill**:
 A payment the customer expects to make on a known date for a known amount, such as rent.
 _Avoid_: Upcoming payment, recurring charge
