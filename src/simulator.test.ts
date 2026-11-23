@@ -102,6 +102,20 @@ describe("Advance clock one day", () => {
     expect(samsBalances(bank).checking).toBe(3_467_00);
   });
 
+  it("keeps the time of day in New York across a daylight saving change", () => {
+    // 9am EST on Saturday 13 March 2027; clocks spring forward overnight.
+    const bank = bankAt(new Date("2027-03-13T14:00:00Z"));
+
+    expect(bank.advanceClock().now.toISOString()).toBe("2027-03-14T13:00:00.000Z");
+  });
+
+  it("moves to the next date even when a day is 25 hours long", () => {
+    // 12:30am EDT on Sunday 7 November 2027; clocks fall back at 2am.
+    const bank = bankAt(new Date("2027-11-07T04:30:00Z"));
+
+    expect(bank.advanceClock().now.toISOString()).toBe("2027-11-08T05:30:00.000Z");
+  });
+
   it("pays every 14 days across several pay cycles, in date order", () => {
     const bank = openTestBank();
     const sam = signInByName(bank, "Sam Calloway");

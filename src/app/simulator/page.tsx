@@ -42,8 +42,8 @@ export default async function SimulatorPage() {
           <time dateTime={now.toISOString()}>{timeFormat.format(now)}</time> New York time
         </p>
         <p className="muted">
-          Acme Corp pays every 14 days from Friday 20 November 2026. Advancing the clock posts every paycheck whose
-          date it passes.
+          &ldquo;Post paycheck&rdquo; posts paychecks due today. Advancing the clock posts every paycheck whose date
+          it passes.
         </p>
         <ClockControls />
       </section>

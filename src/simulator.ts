@@ -1,13 +1,8 @@
-import { addDays, daysBetween, localDateOf, type LocalDate } from "./calendar";
+import { addDays, daysBetween, localDateOf, sameTimeNextDay, type LocalDate } from "./calendar";
 import type { SettableClock } from "./clock";
-import type { Customer, CustomerData } from "./customer-data";
+import type { Customer, CustomerData, Payroll } from "./customer-data";
 import { cents, type Cents } from "./money";
-import type { Payroll, SystemAccount, SystemData } from "./system-data";
-
-/** The simulated employers that run payrolls, and the clearing account each pays through. */
-export const EMPLOYERS: Record<string, { name: string; clearingAccount: SystemAccount }> = {
-  "acme-corp": { name: "Acme Corp", clearingAccount: "acmePayroll" },
-};
+import { EMPLOYERS, type SystemData } from "./system-data";
 
 export interface PostedPaycheck {
   customerId: number;
@@ -44,14 +39,14 @@ export interface AdvancedClock {
   paychecks: PostedPaycheck[];
 }
 
-/** One day on the simulated clock. Across a daylight saving change the local time of day shifts by an hour. */
-const ONE_DAY_MS = 24 * 60 * 60 * 1000;
-
-/** The outside institutions the bank talks to, simulated: employers paying in, and the clock they share. */
+/** The outside institutions the bank talks to, simulated: employers paying in, merchants, and the clock they share. */
 export interface Simulator {
-  /** Posts every paycheck due today. Posting a paycheck that already posted changes nothing. */
+  /** Posts every customer's paycheck due today. Posting a paycheck that already posted changes nothing. */
   postPaycheck(): PostedPaycheck[];
-  /** Moves the clock forward one day, then posts, in date order, every paycheck whose date it passed. */
+  /**
+   * Moves the clock to the same time of day on the next date, then posts, in date order, every
+   * paycheck whose date it passed.
+   */
   advanceClock(): AdvancedClock;
   /**
    * Spends from one of the customer's accounts at a simulated merchant, through the Merchant clearing account.
@@ -61,6 +56,17 @@ export interface Simulator {
   cardPurchase(customer: Customer, purchase: CardPurchase): PostedCardPurchase;
 }
 
+interface DuePaycheck {
+  customer: Customer;
+  payroll: Payroll;
+  payDate: LocalDate;
+}
+
+function isPayday(payroll: Payroll, date: LocalDate): boolean {
+  const days = daysBetween(payroll.firstPayDate, date);
+  return days >= 0 && days % payroll.intervalDays === 0;
+}
+
 export function createSimulator(deps: {
   clock: SettableClock;
   systemData: SystemData;
@@ -68,43 +74,33 @@ export function createSimulator(deps: {
 }): Simulator {
   const { clock, systemData, customerData } = deps;
 
-  function isPayday(payroll: Payroll, date: LocalDate): boolean {
-    const days = daysBetween(payroll.firstPayDate, date);
-    return days >= 0 && days % payroll.intervalDays === 0;
-  }
-
-  function customerFor(payroll: Payroll): Customer {
-    const customer = systemData.findCustomer(payroll.customerId);
-    if (!customer) throw new Error(`Payroll ${payroll.id} pays a customer that doesn't exist`);
-    return customer;
-  }
-
-  /** Paychecks due after `after` and on or before `through`, in date order, then in payroll order. */
-  function paychecksDue(after: LocalDate, through: LocalDate): { payroll: Payroll; payDate: LocalDate }[] {
-    const due = [];
-    for (let date = addDays(after, 1); date <= through; date = addDays(date, 1)) {
-      for (const payroll of systemData.listPayrolls()) {
-        if (isPayday(payroll, date)) due.push({ payroll, payDate: date });
+  /** Paychecks due after `after` and on or before `through`, in date order, then customer and payroll order. */
+  function paychecksDue(after: LocalDate, through: LocalDate): DuePaycheck[] {
+    const payrolls = systemData
+      .listCustomers()
+      .flatMap((customer) => customerData.listPayrolls(customer).map((payroll) => ({ customer, payroll })));
+    const due: DuePaycheck[] = [];
+    for (let payDate = addDays(after, 1); payDate <= through; payDate = addDays(payDate, 1)) {
+      for (const { customer, payroll } of payrolls) {
+        if (isPayday(payroll, payDate)) due.push({ customer, payroll, payDate });
       }
     }
     return due;
   }
 
-  function postPaychecks(due: { payroll: Payroll; payDate: LocalDate }[]): PostedPaycheck[] {
-    return due.map(({ payroll, payDate }) => {
+  function postPaychecks(due: DuePaycheck[]): PostedPaycheck[] {
+    return due.map(({ customer, payroll, payDate }) => {
       const employer = EMPLOYERS[payroll.employer];
-      if (!employer) throw new Error(`Payroll ${payroll.id} names an unknown employer ${payroll.employer}`);
-      const clearing = systemData.ensureSystemAccount(employer.clearingAccount);
-      const posted = customerData.postLedgerTransaction(customerFor(payroll), {
+      const posted = customerData.postLedgerTransaction(customer, {
         idempotencyKey: `payroll:${payroll.employer}:${payDate}`,
         description: `Paycheck from ${employer.name}`,
         entries: [
-          { accountId: clearing, amount: cents(-payroll.amount) },
+          { accountId: systemData.ensureSystemAccount(employer.clearingAccount), amount: cents(-payroll.amount) },
           { accountId: payroll.accountId, amount: payroll.amount },
         ],
       });
       return {
-        customerId: payroll.customerId,
+        customerId: customer.id,
         accountId: payroll.accountId,
         employerName: employer.name,
         payDate,
@@ -122,7 +118,7 @@ export function createSimulator(deps: {
     },
     advanceClock() {
       const before = clock.now();
-      const now = new Date(before.getTime() + ONE_DAY_MS);
+      const now = sameTimeNextDay(before);
       clock.setTo(now);
       return { now, paychecks: postPaychecks(paychecksDue(localDateOf(before), localDateOf(now))) };
     },

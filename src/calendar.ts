@@ -43,3 +43,23 @@ export function addDays(date: LocalDate, days: number): LocalDate {
 export function daysBetween(from: LocalDate, to: LocalDate): number {
   return Math.round((utcMidnight(to) - utcMidnight(from)) / DAY_MS);
 }
+
+const offsetFormat = new Intl.DateTimeFormat("en-US", { timeZone: BANK_TIME_ZONE, timeZoneName: "longOffset" });
+
+/** Minutes the bank's time zone is ahead of UTC at `instant`, such as -300 for EST. */
+function utcOffsetMinutes(instant: Date): number {
+  const name = offsetFormat.formatToParts(instant).find((part) => part.type === "timeZoneName")?.value ?? "";
+  const match = /^GMT(?:([+-])(\d{2}):(\d{2}))?$/.exec(name);
+  if (!match) throw new Error(`Unexpected time zone offset ${name}`);
+  const [, sign, hours = "0", minutes = "0"] = match;
+  return (sign === "-" ? -1 : 1) * (Number(hours) * 60 + Number(minutes));
+}
+
+/**
+ * The same time of day on the next date in the bank's time zone. Across a daylight saving change
+ * that is 23 or 25 hours later, not 24.
+ */
+export function sameTimeNextDay(instant: Date): Date {
+  const guess = new Date(instant.getTime() + DAY_MS);
+  return new Date(guess.getTime() + (utcOffsetMinutes(instant) - utcOffsetMinutes(guess)) * 60_000);
+}

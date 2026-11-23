@@ -1,13 +1,13 @@
 import { localDate } from "./calendar";
-import type { Customer, CustomerData, NewAccount } from "./customer-data";
+import type { Customer, CustomerData, NewAccount, NewPayroll } from "./customer-data";
 import { cents, type Cents } from "./money";
-import type { NewPayroll, SystemData } from "./system-data";
+import type { SystemData } from "./system-data";
 
 interface SeedCustomer {
   name: string;
   accounts: (NewAccount & { openingBalance: Cents })[];
   /** Paid into the customer's checking account. */
-  payroll?: Pick<NewPayroll, "employer" | "amount" | "firstPayDate" | "intervalDays">;
+  payroll?: Omit<NewPayroll, "accountId">;
 }
 
 /** Fictional customers. Sam's numbers make the 20 Nov 2026 paycheck sweep exactly $340. */
@@ -50,7 +50,7 @@ export function seedDemoData(system: SystemData, data: CustomerData): void {
         ],
       });
       if (seed.payroll && account.kind === "checking") {
-        system.addPayroll({ ...seed.payroll, customerId: customer.id, accountId: account.id });
+        data.addPayroll(customer, { ...seed.payroll, accountId: account.id });
       }
     }
   }

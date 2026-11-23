@@ -14,16 +14,17 @@ export interface SimulatorResult {
   message: string;
 }
 
-/** Describes the signed-in customer's paychecks in full, and only counts other customers'. */
+/**
+ * Describes the signed-in customer's own paychecks. The clock posts every customer's paychecks,
+ * but a customer only hears about theirs.
+ */
 function describePaychecks(customer: Customer, paychecks: PostedPaycheck[]): string[] {
-  const own = paychecks.filter((paycheck) => paycheck.customerId === customer.id);
-  const othersPosted = paychecks.filter((paycheck) => paycheck.customerId !== customer.id && paycheck.created).length;
-  const lines = own.map((paycheck) => {
-    const what = `${paycheck.employerName} paycheck of ${formatDollars(paycheck.amount)} for ${paycheck.payDate}`;
-    return paycheck.created ? `Posted your ${what}.` : `Your ${what} already posted. Nothing changed.`;
-  });
-  if (othersPosted > 0) lines.push(`Posted ${othersPosted} paycheck${othersPosted === 1 ? "" : "s"} to other customers.`);
-  return lines;
+  return paychecks
+    .filter((paycheck) => paycheck.customerId === customer.id)
+    .map((paycheck) => {
+      const what = `${paycheck.employerName} paycheck of ${formatDollars(paycheck.amount)} for ${paycheck.payDate}`;
+      return paycheck.created ? `Posted your ${what}.` : `Your ${what} already posted. Nothing changed.`;
+    });
 }
 
 /** Runs the clock button that was pressed: "Post paycheck" or "Advance clock one day". */
@@ -53,12 +54,10 @@ export async function cardPurchase(_previous: SimulatorResult | null, form: Form
     return { ok: false, message: "Enter an amount in dollars, such as 25 or 25.50." };
   }
   const accountId = Number(form.get("accountId"));
+  const purchaseId = String(form.get("purchaseId") ?? "");
+  if (purchaseId === "") return { ok: false, message: "Reload the page and try again." };
   try {
-    const posted = bank.cardPurchase(customer, {
-      accountId,
-      amount,
-      idempotencyKey: `card:${String(form.get("purchaseId") ?? "")}`,
-    });
+    const posted = bank.cardPurchase(customer, { accountId, amount, idempotencyKey: `card:${purchaseId}` });
     revalidatePath("/", "layout");
     const account = bank.customerData.getAccount(customer, accountId);
     return posted.created
