@@ -1,4 +1,4 @@
-import { addDays, localDateOf, sameTimeNextDay, type LocalDate } from "./calendar";
+import { datesAfterThrough, localDateOf, sameTimeNextDay, type LocalDate } from "./calendar";
 import type { SettableClock } from "./clock";
 import type { Customer, CustomerData, Payroll, ScheduledBill } from "./customer-data";
 import { cents, type Cents } from "./money";
@@ -77,9 +77,19 @@ export interface Simulator {
   cardPurchase(customer: Customer, purchase: CardPurchase): PostedCardPurchase;
 }
 
-type DuePaycheck = { kind: "paycheck"; customer: Customer; payroll: Payroll; date: LocalDate };
-type DueBill = { kind: "bill"; customer: Customer; bill: ScheduledBill; date: LocalDate };
-type DuePosting = DuePaycheck | DueBill;
+interface PaycheckToPost {
+  kind: "paycheck";
+  customer: Customer;
+  payroll: Payroll;
+  date: LocalDate;
+}
+
+interface BillToPost {
+  kind: "bill";
+  customer: Customer;
+  bill: ScheduledBill;
+  date: LocalDate;
+}
 
 export function createSimulator(deps: {
   clock: SettableClock;
@@ -88,31 +98,27 @@ export function createSimulator(deps: {
 }): Simulator {
   const { clock, systemData, customerData } = deps;
 
-  /**
-   * Paychecks and bills due after `after` and on or before `through`. In date order; on each date,
-   * paychecks before bills, then in customer order and the order each was set up.
-   */
-  function postingsDue(after: LocalDate, through: LocalDate, kinds: DuePosting["kind"][]): DuePosting[] {
-    const customers = systemData.listCustomers();
-    const payrolls = kinds.includes("paycheck")
-      ? customers.flatMap((customer) => customerData.listPayrolls(customer).map((payroll) => ({ customer, payroll })))
-      : [];
-    const bills = kinds.includes("bill")
-      ? customers.flatMap((customer) => customerData.listScheduledBills(customer).map((bill) => ({ customer, bill })))
-      : [];
-    const due: DuePosting[] = [];
-    for (let date = addDays(after, 1); date <= through; date = addDays(date, 1)) {
-      for (const { customer, payroll } of payrolls) {
-        if (isPayday(payroll, date)) due.push({ kind: "paycheck", customer, payroll, date });
-      }
-      for (const { customer, bill } of bills) {
-        if (isBillDue(bill, date)) due.push({ kind: "bill", customer, bill, date });
-      }
-    }
-    return due;
+  /** Every customer's paychecks paid on `date`, in customer order and the order each payroll was set up. */
+  function paychecksOn(date: LocalDate): PaycheckToPost[] {
+    return systemData.listCustomers().flatMap((customer) =>
+      customerData
+        .listPayrolls(customer)
+        .filter((payroll) => isPayday(payroll, date))
+        .map((payroll) => ({ kind: "paycheck" as const, customer, payroll, date })),
+    );
   }
 
-  function postPaycheckDue({ customer, payroll, date }: DuePaycheck): PostedPaycheck {
+  /** Every customer's Scheduled bills due on `date`, in customer order and the order each bill was set up. */
+  function billsOn(date: LocalDate): BillToPost[] {
+    return systemData.listCustomers().flatMap((customer) =>
+      customerData
+        .listScheduledBills(customer)
+        .filter((bill) => isBillDue(bill, date))
+        .map((bill) => ({ kind: "bill" as const, customer, bill, date })),
+    );
+  }
+
+  function postPaycheckDue({ customer, payroll, date }: PaycheckToPost): PostedPaycheck {
     const employer = EMPLOYERS[payroll.employer];
     const posted = customerData.postLedgerTransaction(customer, {
       idempotencyKey: `payroll:${payroll.employer}:${date}`,
@@ -134,7 +140,7 @@ export function createSimulator(deps: {
     };
   }
 
-  function postBillDue({ customer, bill, date }: DueBill): PostedBill {
+  function postBillDue({ customer, bill, date }: BillToPost): PostedBill {
     const posted = customerData.postLedgerTransaction(customer, {
       idempotencyKey: `bill:${bill.id}:${date}`,
       description: `${bill.payee} bill`,
@@ -156,27 +162,26 @@ export function createSimulator(deps: {
     };
   }
 
-  function post(due: DuePosting): Posting {
-    return due.kind === "paycheck" ? postPaycheckDue(due) : postBillDue(due);
-  }
-
   return {
     postPaycheck() {
       const today = localDateOf(clock.now());
-      return postingsDue(addDays(today, -1), today, ["paycheck"])
-        .filter((due): due is DuePaycheck => due.kind === "paycheck")
-        .map(postPaycheckDue);
+      return paychecksOn(today).map(postPaycheckDue);
     },
     advanceClock() {
-      const before = clock.now();
-      const now = sameTimeNextDay(before);
-      const due = postingsDue(localDateOf(before), localDateOf(now), ["paycheck", "bill"]);
-      // The postings read the new time, so the clock moves inside the same transaction. A clock kept
-      // outside the database doesn't roll back with it, so it is put back by hand on failure.
+      // The clock is read, moved and posted against in one transaction, so two advances can't both start
+      // from the same day, and the postings read the new time. A clock kept outside the database doesn't
+      // roll back with the transaction, so it is put back by hand on failure.
       return customerData.inOneTransaction(() => {
+        const before = clock.now();
+        const now = sameTimeNextDay(before);
         clock.setTo(now);
         try {
-          return { now, postings: due.map(post) };
+          // On each date, paychecks post before bills.
+          const postings: Posting[] = [...datesAfterThrough(localDateOf(before), localDateOf(now))].flatMap((date) => [
+            ...paychecksOn(date).map(postPaycheckDue),
+            ...billsOn(date).map(postBillDue),
+          ]);
+          return { now, postings };
         } catch (error) {
           clock.setTo(before);
           throw error;

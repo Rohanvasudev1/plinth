@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createBank, type Bank } from "./bank";
 import { fixedClock } from "./clock";
 import { openTestDatabase } from "./db/database";
@@ -184,6 +184,22 @@ describe("Advance clock one day", () => {
 
     expect(again.postings).toEqual([expect.objectContaining({ kind: "bill", payee: "Rent", created: false })]);
     expect(samsBalances(bank).checking).toBe(227_00 - 1_450_00);
+  });
+
+  it("leaves the clock where it was and posts nothing when one of the day's postings fails", () => {
+    // 9am on Thursday 31 December; 1 January has Sam's paycheck, then rent.
+    const start = new Date("2026-12-31T14:00:00Z");
+    const bank = bankAt(start);
+    const post = bank.customerData.postLedgerTransaction.bind(bank.customerData);
+    vi.spyOn(bank.customerData, "postLedgerTransaction").mockImplementation((customer, transaction) => {
+      if (transaction.idempotencyKey.startsWith("bill:")) throw new Error("The Biller is down");
+      return post(customer, transaction);
+    });
+
+    expect(() => bank.advanceClock()).toThrow("The Biller is down");
+
+    expect(bank.clock.now()).toEqual(start);
+    expect(samsBalances(bank).checking).toBe(227_00);
   });
 
   it("has moved the clock to the new day by the time rules hear about the postings", () => {

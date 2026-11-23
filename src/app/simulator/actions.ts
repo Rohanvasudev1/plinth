@@ -22,11 +22,10 @@ function describePostings(customer: Customer, postings: Posting[]): string[] {
   return postings
     .filter((posting) => posting.customerId === customer.id)
     .map((posting) => {
-      const what =
+      const [done, what] =
         posting.kind === "paycheck"
-          ? `${posting.employerName} paycheck of ${formatDollars(posting.amount)} for ${posting.date}`
-          : `${posting.payee} bill of ${formatDollars(posting.amount)} due ${posting.date}`;
-      const done = posting.kind === "paycheck" ? "Posted" : "Paid";
+          ? ["Posted", `${posting.employerName} paycheck of ${formatDollars(posting.amount)} for ${posting.date}`]
+          : ["Paid", `${posting.payee} bill of ${formatDollars(posting.amount)} due ${posting.date}`];
       return posting.created ? `${done} your ${what}.` : `Your ${what} already posted. Nothing changed.`;
     });
 }

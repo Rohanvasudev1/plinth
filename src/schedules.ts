@@ -1,4 +1,4 @@
-import { addDays, daysBetween, daysInMonth, type LocalDate } from "./calendar";
+import { addDays, datesAfterThrough, dayOfMonth, daysBetween, daysInMonth, type LocalDate } from "./calendar";
 import type { Payroll, ScheduledBill } from "./customer-data";
 import { cents, type Cents } from "./money";
 
@@ -29,19 +29,14 @@ export function nextPayday(payrolls: Payroll[], today: LocalDate): LocalDate | n
 
 /** Whether the bill falls due on `date`: its day of the month, or the month's last day in a shorter month. */
 export function isBillDue(bill: ScheduledBill, date: LocalDate): boolean {
-  const day = Number(date.slice(8, 10));
-  return day === Math.min(bill.dayOfMonth, daysInMonth(date));
+  return dayOfMonth(date) === Math.min(bill.dayOfMonth, daysInMonth(date));
 }
 
 /** The bills falling due after `after` and on or before `through`, in date order, then in the order given. */
 export function billsDue(bills: ScheduledBill[], after: LocalDate, through: LocalDate): DueBill[] {
-  const due: DueBill[] = [];
-  for (let date = addDays(after, 1); date <= through; date = addDays(date, 1)) {
-    for (const bill of bills) {
-      if (isBillDue(bill, date)) due.push({ bill, dueDate: date });
-    }
-  }
-  return due;
+  return [...datesAfterThrough(after, through)].flatMap((date) =>
+    bills.filter((bill) => isBillDue(bill, date)).map((bill) => ({ bill, dueDate: date })),
+  );
 }
 
 export function totalOf(due: DueBill[]): Cents {
