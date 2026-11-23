@@ -24,6 +24,10 @@ _Avoid_: Notification, message
 A system-owned account for one simulated outside institution, which takes the opposite entry when money enters or leaves the bank.
 _Avoid_: Suspense account, external account
 
+**Opening balances account**:
+A system-owned account that funds the seeded starting balances, so that seeding is a ledger transaction like any other. It stands for no outside institution.
+_Avoid_: Equity account, suspense account
+
 **Goal**:
 A target amount attached to one of the customer's savings accounts, such as the House fund.
 _Avoid_: Target, pot
