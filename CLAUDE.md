@@ -24,3 +24,17 @@ A session that starts with `/implement #<issue>` works that one ticket:
 2. Work on the branch this session created. Don't touch other tickets.
 3. When `/code-review` passes, push the branch and open a pull request whose body starts with `Closes #<issue>`.
 4. Comment on the issue with the pull request link.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub Issues for `Rohanvasudev1/plinth`, reached through `gh api` REST calls. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five default labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: one `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
