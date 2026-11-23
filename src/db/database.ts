@@ -6,6 +6,7 @@ import * as schema from "./schema";
 
 export type Database = BetterSQLite3Database<typeof schema>;
 
+// Next.js bundles server code, so paths resolve from the project root, where every command runs.
 const migrationsFolder = path.join(process.cwd(), "drizzle");
 
 /** Opens the SQLite file at `file`, creating it if needed, and applies every pending migration. */

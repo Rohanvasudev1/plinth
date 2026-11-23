@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 import { defineConfig, devices } from "@playwright/test";
@@ -14,6 +15,6 @@ export default defineConfig({
     reuseExistingServer: false,
     timeout: 120_000,
     // Each end-to-end run starts from a fresh database.
-    env: { PLINTH_DB_PATH: path.join(os.tmpdir(), `plinth-e2e-${Date.now()}.db`) },
+    env: { PLINTH_DB_PATH: path.join(os.tmpdir(), `plinth-e2e-${randomUUID()}.db`) },
   },
 });

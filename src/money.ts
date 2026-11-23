@@ -15,8 +15,8 @@ export function cents(amount: number): Cents {
 export function formatDollars(amount: Cents): string {
   const sign = amount < 0 ? "-" : "";
   const absolute = Math.abs(amount);
-  const dollars = Math.trunc(absolute / 100);
   const remainder = absolute % 100;
+  const dollars = (absolute - remainder) / 100;
   const grouped = dollars.toLocaleString("en-US");
   return `${sign}$${grouped}.${String(remainder).padStart(2, "0")}`;
 }

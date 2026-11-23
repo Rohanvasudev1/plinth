@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import type { Clock } from "./clock";
 import type { Database } from "./db/database";
-import { simulatedClock as simulatedClockTable } from "./db/schema";
+import { simulatedClockTable } from "./db/schema";
 
 const ROW_ID = 1;
 
@@ -14,9 +14,9 @@ export interface SimulatedClock extends Clock {
  * The app's clock. Its time lives in the database so every request sees the same moment,
  * and it only moves when `setTo` is called. A database with no stored time starts at `start`.
  */
-export function simulatedClock(db: Database, options: { start: Date }): SimulatedClock {
+export function simulatedClock(db: Database, start: Date): SimulatedClock {
   db.insert(simulatedClockTable)
-    .values({ id: ROW_ID, nowMs: options.start.getTime() })
+    .values({ id: ROW_ID, nowMs: start.getTime() })
     .onConflictDoNothing()
     .run();
 
