@@ -111,7 +111,7 @@ A check that runs before any agent action and refuses it if it breaks a Rule or 
 _Avoid_: Validation, safety check
 
 **Decision log**:
-The customer-visible record of every agent action, with its trigger, the Rule it used, and its result, plus each Undo the customer made.
+The customer-visible record of every agent action, with its trigger, the Rule it used, and its result, plus each change the customer makes to the agent: Undo, a picked Option, a Rule or setting edit, and Pause.
 _Avoid_: Audit trail, history
 
 **Why**:
