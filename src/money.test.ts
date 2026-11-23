@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cents, formatDollars } from "./money";
+import { cents, formatDollars, parseDollars } from "./money";
 
 describe("money", () => {
   it("formats cents as dollars with thousands separators", () => {
@@ -16,5 +16,21 @@ describe("money", () => {
     expect(() => cents(12.5)).toThrow(RangeError);
     expect(() => cents(Number.NaN)).toThrow(RangeError);
     expect(() => cents(2 ** 53)).toThrow(RangeError);
+  });
+});
+
+describe("parseDollars", () => {
+  it("reads a dollar amount typed into a form as whole cents", () => {
+    expect(parseDollars("12")).toBe(12_00);
+    expect(parseDollars("12.5")).toBe(12_50);
+    expect(parseDollars(" $1,234.05 ")).toBe(1_234_05);
+    expect(parseDollars("0.07")).toBe(7);
+    expect(parseDollars(".99")).toBe(99);
+  });
+
+  it("rejects text that isn't a dollar amount to the cent", () => {
+    for (const text of ["", "abc", "1.234", "-5", "1e3", "12.3.4", "$"]) {
+      expect(() => parseDollars(text), text).toThrow(RangeError);
+    }
   });
 });

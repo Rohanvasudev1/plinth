@@ -17,6 +17,18 @@ export const SYSTEM_ACCOUNTS = {
 
 export type SystemAccount = keyof typeof SYSTEM_ACCOUNTS;
 
+/** The simulated employers that run payrolls, and the clearing account each pays through. */
+export const EMPLOYERS = {
+  "acme-corp": { name: "Acme Corp", clearingAccount: "acmePayroll" },
+} as const satisfies Record<string, { name: string; clearingAccount: SystemAccount }>;
+
+/** An employer's key, used in payroll idempotency keys such as `payroll:acme-corp:2026-11-20`. */
+export type Employer = keyof typeof EMPLOYERS;
+
+export function isEmployer(key: string): key is Employer {
+  return Object.hasOwn(EMPLOYERS, key);
+}
+
 /** Rows that belong to no customer: the customer list itself and the system accounts. */
 export interface SystemData {
   listCustomers(): Customer[];

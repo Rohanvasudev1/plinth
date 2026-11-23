@@ -20,3 +20,18 @@ export function formatDollars(amount: Cents): string {
   const grouped = dollars.toLocaleString("en-US");
   return `${sign}$${grouped}.${String(remainder).padStart(2, "0")}`;
 }
+
+const DOLLAR_TEXT = /^\$?(\d*)(?:\.(\d{1,2}))?$/;
+
+/**
+ * Reads a dollar amount someone typed, such as `12`, `12.5` or `$1,234.05`, as Cents without
+ * floating-point arithmetic. Throws RangeError for anything else, including negative amounts.
+ */
+export function parseDollars(text: string): Cents {
+  const match = DOLLAR_TEXT.exec(text.trim().replaceAll(",", ""));
+  const [, dollars = "", fraction = ""] = match ?? [];
+  if (!match || (dollars === "" && fraction === "")) {
+    throw new RangeError(`Not a dollar amount: ${JSON.stringify(text)}`);
+  }
+  return cents(Number(dollars || "0") * 100 + Number(fraction.padEnd(2, "0")));
+}

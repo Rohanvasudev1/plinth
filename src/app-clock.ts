@@ -1,3 +1,4 @@
+import { BANK_TIME_ZONE } from "./calendar";
 import { getAppDatabase } from "./db/app-database";
 import { simulatedClock, type SimulatedClock } from "./simulated-clock";
 
@@ -5,7 +6,7 @@ import { simulatedClock, type SimulatedClock } from "./simulated-clock";
 export const SIMULATION_START = new Date("2026-11-19T14:00:00Z");
 
 /** The time zone the app shows dates and times in. */
-export const DISPLAY_TIME_ZONE = "America/New_York";
+export const DISPLAY_TIME_ZONE = BANK_TIME_ZONE;
 
 let appClock: SimulatedClock | undefined;
 

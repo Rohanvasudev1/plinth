@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { localDate } from "./calendar";
+import { cents } from "./money";
 import { entriesMoving, openTestBank, signInByName } from "./test-bank";
 
 describe("customer scoping", () => {
@@ -84,5 +86,26 @@ describe("customer scoping", () => {
     expect(priya.posted.ledgerTransactionId).not.toBe(sam.posted.ledgerTransactionId);
     expect(sam.balance).toBe(3_467_00);
     expect(priya.balance).toBe(4_336_42);
+  });
+
+  it("Priya can't read Sam's payroll or set up a payroll into Sam's account", () => {
+    const bank = openTestBank();
+    const sam = signInByName(bank, "Sam Calloway");
+    const priya = signInByName(bank, "Priya Natarajan");
+    const [samsChecking] = bank.customerData.listAccounts(sam);
+    if (!samsChecking) throw new Error("Sam's checking is missing");
+
+    expect(bank.customerData.listPayrolls(sam)).toHaveLength(1);
+    expect(bank.customerData.listPayrolls(priya)).toEqual([]);
+    expect(() =>
+      bank.customerData.addPayroll(priya, {
+        accountId: samsChecking.id,
+        employer: "acme-corp",
+        amount: cents(1_00),
+        firstPayDate: localDate("2026-11-20"),
+        intervalDays: 14,
+      }),
+    ).toThrow();
+    expect(bank.customerData.listPayrolls(sam)).toHaveLength(1);
   });
 });

@@ -82,3 +82,30 @@ button { font: inherit; color: inherit; cursor: pointer; }
   font-weight: 500;
 }
 .customer:hover { border-color: var(--ink); }
+
+.card.simulator { border-style: dashed; display: flex; flex-direction: column; gap: 10px; }
+.amount.small { font-size: 1.25rem; }
+.button-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.button {
+  background: var(--ink);
+  color: var(--paper);
+  border: 0;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-weight: 600;
+}
+.button:disabled { opacity: 0.6; cursor: progress; }
+.stack { display: flex; flex-direction: column; gap: 10px; }
+.field { display: flex; flex-direction: column; gap: 4px; }
+.field span { color: var(--muted); font-size: 0.9rem; }
+.field input, .field select {
+  font: inherit;
+  color: inherit;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  min-width: 0;
+}
+.result { margin: 0; color: var(--good); }
+.result.refused { color: var(--ink); font-weight: 600; }
