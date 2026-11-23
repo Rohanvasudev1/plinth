@@ -1,7 +1,9 @@
 import { and, asc, eq, isNull } from "drizzle-orm";
+import { localDate, type LocalDate } from "./calendar";
 import type { Customer } from "./customer-data";
 import type { Database } from "./db/database";
-import { accountsTable, customersTable } from "./db/schema";
+import { accountsTable, customersTable, payrollsTable } from "./db/schema";
+import { cents, type Cents } from "./money";
 
 /**
  * System accounts: one clearing account per simulated outside institution, which takes the
@@ -17,6 +19,22 @@ export const SYSTEM_ACCOUNTS = {
 
 export type SystemAccount = keyof typeof SYSTEM_ACCOUNTS;
 
+/**
+ * A simulated employer's instruction to pay one customer. It belongs to the employer, the outside
+ * institution, so it lives with the system rows; the money it moves still posts through CustomerData.
+ */
+export interface Payroll {
+  id: number;
+  customerId: number;
+  accountId: number;
+  employer: string;
+  amount: Cents;
+  firstPayDate: LocalDate;
+  intervalDays: number;
+}
+
+export type NewPayroll = Omit<Payroll, "id">;
+
 /** Rows that belong to no customer: the customer list itself and the system accounts. */
 export interface SystemData {
   listCustomers(): Customer[];
@@ -24,6 +42,9 @@ export interface SystemData {
   createCustomer(name: string): Customer;
   /** Creates the system account if it doesn't exist yet, and returns its id. */
   ensureSystemAccount(account: SystemAccount): number;
+  addPayroll(payroll: NewPayroll): Payroll;
+  /** Every simulated employer's payrolls, in the order they were added. */
+  listPayrolls(): Payroll[];
 }
 
 export function createSystemData(db: Database): SystemData {
@@ -50,6 +71,37 @@ export function createSystemData(db: Database): SystemData {
         .get();
       if (!row) throw new Error(`System account ${key} is missing`);
       return row.id;
+    },
+    addPayroll(payroll) {
+      const row = db
+        .insert(payrollsTable)
+        .values({
+          customerId: payroll.customerId,
+          accountId: payroll.accountId,
+          employer: payroll.employer,
+          amountCents: payroll.amount,
+          firstPayDate: payroll.firstPayDate,
+          intervalDays: payroll.intervalDays,
+        })
+        .returning({ id: payrollsTable.id })
+        .get();
+      return { id: row.id, ...payroll };
+    },
+    listPayrolls() {
+      return db
+        .select()
+        .from(payrollsTable)
+        .orderBy(asc(payrollsTable.id))
+        .all()
+        .map((row) => ({
+          id: row.id,
+          customerId: row.customerId,
+          accountId: row.accountId,
+          employer: row.employer,
+          amount: cents(row.amountCents),
+          firstPayDate: localDate(row.firstPayDate),
+          intervalDays: row.intervalDays,
+        }));
     },
   };
 }

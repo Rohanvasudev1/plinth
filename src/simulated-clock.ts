@@ -1,14 +1,12 @@
 import { eq } from "drizzle-orm";
-import type { Clock } from "./clock";
+import type { SettableClock } from "./clock";
 import type { Database } from "./db/database";
 import { simulatedClockTable } from "./db/schema";
 
 const ROW_ID = 1;
 
-export interface SimulatedClock extends Clock {
-  /** Moves the simulated time to `at` for everyone who reads this database. */
-  setTo(at: Date): void;
-}
+/** A SettableClock whose `setTo` moves the time for everyone who reads the same database. */
+export type SimulatedClock = SettableClock;
 
 /**
  * The app's clock. Its time lives in the database so every request sees the same moment,

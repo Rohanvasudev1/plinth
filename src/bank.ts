@@ -1,9 +1,10 @@
-import type { Clock } from "./clock";
+import type { SettableClock } from "./clock";
 import { createCustomerData, type Account, type Customer, type CustomerData } from "./customer-data";
 import type { Database } from "./db/database";
 import { createLedgerEventDispatcher, type LedgerEventDispatcher } from "./ledger-events";
 import type { Cents } from "./money";
 import { seedDemoData } from "./seed";
+import { createSimulator, type Simulator } from "./simulator";
 import { createSystemData, type SystemData } from "./system-data";
 
 export interface GoalProgress {
@@ -30,8 +31,8 @@ export class UnknownCustomerError extends Error {
 }
 
 /** The server-side domain API the pages call. */
-export interface Bank {
-  clock: Clock;
+export interface Bank extends Simulator {
+  clock: SettableClock;
   customerData: CustomerData;
   systemData: SystemData;
   ledgerEvents: LedgerEventDispatcher;
@@ -44,14 +45,16 @@ export interface Bank {
 }
 
 /** Wires the bank to a migrated database and a clock, and seeds the demo customers if there are none. */
-export function createBank(deps: { db: Database; clock: Clock }): Bank {
+export function createBank(deps: { db: Database; clock: SettableClock }): Bank {
   const { db, clock } = deps;
   const ledgerEvents = createLedgerEventDispatcher();
   const customerData = createCustomerData({ db, clock, ledgerEvents });
   const systemData = createSystemData(db);
   seedDemoData(systemData, customerData);
+  const simulator = createSimulator({ clock, systemData, customerData });
 
   return {
+    ...simulator,
     clock,
     customerData,
     systemData,

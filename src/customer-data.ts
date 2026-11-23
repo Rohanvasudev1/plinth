@@ -76,6 +76,8 @@ export interface CustomerData {
    * ledger transaction and changes nothing, while another customer may use the same key.
    */
   postLedgerTransaction(customer: Customer, transaction: LedgerTransactionInput): PostedLedgerTransaction;
+  /** The customer's ledger transaction posted under this idempotency key, if there is one. */
+  findLedgerTransaction(customer: Customer, idempotencyKey: string): LedgerTransaction | undefined;
   /** Ledger transactions posted for the customer, oldest first, with every entry including the outside side. */
   listLedgerTransactions(customer: Customer): LedgerTransaction[];
 }
@@ -224,6 +226,41 @@ export function createCustomerData(deps: {
     return result.posted;
   }
 
+  function selectLedgerTransactions(customer: Customer, idempotencyKey?: string): LedgerTransaction[] {
+    const transactions = db
+      .select()
+      .from(ledgerTransactionsTable)
+      .where(
+        and(
+          eq(ledgerTransactionsTable.customerId, customer.id),
+          idempotencyKey === undefined ? undefined : eq(ledgerTransactionsTable.idempotencyKey, idempotencyKey),
+        ),
+      )
+      .orderBy(asc(ledgerTransactionsTable.id))
+      .all();
+    if (transactions.length === 0) return [];
+    const entries = db
+      .select()
+      .from(ledgerEntriesTable)
+      .where(
+        inArray(
+          ledgerEntriesTable.ledgerTransactionId,
+          transactions.map((transaction) => transaction.id),
+        ),
+      )
+      .orderBy(asc(ledgerEntriesTable.id))
+      .all();
+    return transactions.map((transaction) => ({
+      id: transaction.id,
+      idempotencyKey: transaction.idempotencyKey,
+      description: transaction.description,
+      postedAt: new Date(transaction.postedAtMs),
+      entries: entries
+        .filter((entry) => entry.ledgerTransactionId === transaction.id)
+        .map((entry) => ({ accountId: entry.accountId, amount: cents(entry.amountCents) })),
+    }));
+  }
+
   return {
     listAccounts: (customer) => selectAccounts(customer),
     getAccount,
@@ -238,34 +275,9 @@ export function createCustomerData(deps: {
       return opened;
     },
     postLedgerTransaction,
-    listLedgerTransactions(customer) {
-      const transactions = db
-        .select()
-        .from(ledgerTransactionsTable)
-        .where(eq(ledgerTransactionsTable.customerId, customer.id))
-        .orderBy(asc(ledgerTransactionsTable.id))
-        .all();
-      if (transactions.length === 0) return [];
-      const entries = db
-        .select()
-        .from(ledgerEntriesTable)
-        .where(
-          inArray(
-            ledgerEntriesTable.ledgerTransactionId,
-            transactions.map((transaction) => transaction.id),
-          ),
-        )
-        .orderBy(asc(ledgerEntriesTable.id))
-        .all();
-      return transactions.map((transaction) => ({
-        id: transaction.id,
-        idempotencyKey: transaction.idempotencyKey,
-        description: transaction.description,
-        postedAt: new Date(transaction.postedAtMs),
-        entries: entries
-          .filter((entry) => entry.ledgerTransactionId === transaction.id)
-          .map((entry) => ({ accountId: entry.accountId, amount: cents(entry.amountCents) })),
-      }));
+    findLedgerTransaction(customer, idempotencyKey) {
+      return selectLedgerTransactions(customer, idempotencyKey)[0];
     },
+    listLedgerTransactions: (customer) => selectLedgerTransactions(customer),
   };
 }
