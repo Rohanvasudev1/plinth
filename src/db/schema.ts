@@ -116,3 +116,28 @@ export const payrollsTable = sqliteTable(
     check("payrolls_interval_positive", sql`${table.intervalDays} > 0`),
   ],
 );
+
+/**
+ * A Scheduled bill: the customer pays `payee` a fixed amount from one of their accounts on the same day
+ * every month. In a month shorter than `day_of_month`, the bill falls due on the month's last day.
+ */
+export const scheduledBillsTable = sqliteTable(
+  "scheduled_bills",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    customerId: integer("customer_id")
+      .notNull()
+      .references(() => customersTable.id),
+    accountId: integer("account_id")
+      .notNull()
+      .references(() => accountsTable.id),
+    payee: text("payee").notNull(),
+    amountCents: integer("amount_cents").notNull(),
+    dayOfMonth: integer("day_of_month").notNull(),
+  },
+  (table) => [
+    index("scheduled_bills_customer_id").on(table.customerId),
+    check("scheduled_bills_amount_positive", sql`${table.amountCents} > 0`),
+    check("scheduled_bills_day_of_month", sql`${table.dayOfMonth} BETWEEN 1 AND 31`),
+  ],
+);

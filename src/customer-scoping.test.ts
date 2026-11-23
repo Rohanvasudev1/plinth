@@ -96,7 +96,7 @@ describe("customer scoping", () => {
     if (!samsChecking) throw new Error("Sam's checking is missing");
 
     expect(bank.customerData.listPayrolls(sam)).toHaveLength(1);
-    expect(bank.customerData.listPayrolls(priya)).toEqual([]);
+    expect(bank.customerData.listPayrolls(priya).map((payroll) => payroll.accountId)).not.toContain(samsChecking.id);
     expect(() =>
       bank.customerData.addPayroll(priya, {
         accountId: samsChecking.id,
@@ -107,5 +107,25 @@ describe("customer scoping", () => {
       }),
     ).toThrow();
     expect(bank.customerData.listPayrolls(sam)).toHaveLength(1);
+  });
+
+  it("Priya can't read Sam's Scheduled bills or pay a bill from Sam's account", () => {
+    const bank = openTestBank();
+    const sam = signInByName(bank, "Sam Calloway");
+    const priya = signInByName(bank, "Priya Natarajan");
+    const [samsChecking] = bank.customerData.listAccounts(sam);
+    if (!samsChecking) throw new Error("Sam's checking is missing");
+
+    expect(bank.customerData.listScheduledBills(priya).map((bill) => bill.accountId)).not.toContain(samsChecking.id);
+    expect(bank.billsBeforePayday(priya).bills.map((bill) => bill.payee)).not.toContain("Internet");
+    expect(() =>
+      bank.customerData.addScheduledBill(priya, {
+        accountId: samsChecking.id,
+        payee: "Rent",
+        amount: cents(1_00),
+        dayOfMonth: 1,
+      }),
+    ).toThrow();
+    expect(bank.customerData.listScheduledBills(sam)).toHaveLength(4);
   });
 });

@@ -39,6 +39,27 @@ export function addDays(date: LocalDate, days: number): LocalDate {
   return localDate(new Date(utcMidnight(date) + days * DAY_MS).toISOString().slice(0, 10));
 }
 
+function partsOf(date: LocalDate): { year: number; month: number; day: number } {
+  const [year, month, day] = date.split("-").map(Number);
+  return { year: year ?? NaN, month: month ?? NaN, day: day ?? NaN };
+}
+
+/** The day of the month, from 1 to 31. */
+export function dayOfMonth(date: LocalDate): number {
+  return partsOf(date).day;
+}
+
+/** How many days the month containing `date` has, from 28 to 31. */
+export function daysInMonth(date: LocalDate): number {
+  const { year, month } = partsOf(date);
+  return new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+
+/** Every date after `after` and on or before `through`, in order. */
+export function* datesAfterThrough(after: LocalDate, through: LocalDate): Generator<LocalDate> {
+  for (let date = addDays(after, 1); date <= through; date = addDays(date, 1)) yield date;
+}
+
 /** Whole days from `from` to `to`, negative when `to` is earlier. */
 export function daysBetween(from: LocalDate, to: LocalDate): number {
   return Math.round((utcMidnight(to) - utcMidnight(from)) / DAY_MS);
