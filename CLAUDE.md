@@ -25,12 +25,19 @@ Tests get a fresh, migrated in-memory database from `openTestDatabase()` and a p
 
 ## Implementer sessions
 
-A session that starts with `/implement #<issue>` works that one ticket:
+An implementer session works one ticket:
 
-1. Read the issue. If any issue in its "Blocked by" list is still open, stop and say which one.
+1. Read the issue, its comments, and the comments on its parent spec. Review decisions are recorded there. If any issue blocking it is still open, stop and say which one.
 2. Work on the branch this session created. Don't touch other tickets.
 3. When `/code-review` passes, push the branch and open a pull request whose body starts with `Closes #<issue>`.
 4. Comment on the issue with the pull request link.
+
+## Where things live
+
+- `src/bank.ts` is the domain API that pages and tests call.
+- `src/customer-data.ts` is the only place that reads or writes customer-owned rows (ADR 0004).
+- `src/simulator.ts` holds the simulated employer, billers and merchants.
+- `CODING_STANDARDS.md` lists the judgement-call rules the reviewer applies. `src/hard-rules.test.ts` checks the mechanical rules.
 
 ## Agent skills
 

@@ -36,6 +36,26 @@ _Avoid_: Target, pot
 The checking balance minus the Buffer minus Scheduled bills due before the next payday.
 _Avoid_: Available balance, spare cash
 
+**Employer**:
+A simulated outside company that pays a customer through its own Clearing account.
+_Avoid_: Payer, company
+
+**Payroll**:
+An Employer's promise to pay one customer a fixed amount on a fixed cycle into one account.
+_Avoid_: Salary, income stream
+
+**Paycheck**:
+One payment from a Payroll, posted on a payday.
+_Avoid_: Deposit, salary payment
+
+**Card purchase**:
+A payment from a customer's account to a merchant through the Merchant Clearing account.
+_Avoid_: Spend, charge
+
+**Simulator**:
+The testing page that plays the Employers, billers and merchants and moves the simulated clock.
+_Avoid_: Sandbox, admin page
+
 **Scheduled bill**:
 A payment the customer expects to make on a known date for a known amount, such as rent.
 _Avoid_: Upcoming payment, recurring charge
@@ -63,7 +83,7 @@ A check that runs before any agent action and refuses it if it breaks a Rule or 
 _Avoid_: Validation, safety check
 
 **Decision log**:
-The customer-visible record of every agent action, with its trigger, the Rule it used, and its result.
+The customer-visible record of every agent action, with its trigger, the Rule it used, and its result, plus each Undo the customer made.
 _Avoid_: Audit trail, history
 
 **Why**:
