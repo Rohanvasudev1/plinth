@@ -2,10 +2,13 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { DISPLAY_TIME_ZONE } from "@/app-clock";
 import { getAppBank } from "@/app-bank";
-import type { BillsBeforePayday, HomeAccount, SafeToSpend } from "@/bank";
+import type { AgentActionOnHome, BillsBeforePayday, HomeAccount, SafeToSpend } from "@/bank";
 import { formatLocalDate, type LocalDate } from "@/calendar";
 import { cents, formatDollars } from "@/money";
+import type { Decision } from "@/decisions";
 import { requireCustomer } from "@/session";
+import { AgentActionsToast, UndoButton } from "./agent-action-controls";
+import { WhyPanel } from "./why-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +18,56 @@ const dateFormat = new Intl.DateTimeFormat("en-GB", {
   month: "long",
   timeZone: DISPLAY_TIME_ZONE,
 });
+
+const actionTimeFormat = new Intl.DateTimeFormat("en-GB", {
+  weekday: "short",
+  day: "numeric",
+  month: "short",
+  hour: "numeric",
+  minute: "2-digit",
+  hour12: true,
+  timeZone: DISPLAY_TIME_ZONE,
+});
+
+function AgentActionsCard({ actions }: { actions: AgentActionOnHome[] }) {
+  return (
+    <section className="card" aria-labelledby="what-your-agent-did">
+      <h2 id="what-your-agent-did">What your agent did</h2>
+      {actions.length === 0 ? (
+        <p className="muted">Your agent hasn&rsquo;t done anything yet.</p>
+      ) : (
+        <ol className="agent-actions">
+          {actions.map(({ decision, state }) => (
+            <li key={decision.id}>
+              <article className="decision" aria-labelledby={`agent-action-${decision.id}`}>
+                <div className="decision-head">
+                  <h3 id={`agent-action-${decision.id}`} className={state === "Reversed" ? "undone" : undefined}>
+                    {decision.action}
+                  </h3>
+                  <span className={`pill ${state.toLowerCase()}`}>{state}</span>
+                </div>
+                <p className="muted">
+                  <time dateTime={decision.at.toISOString()}>{actionTimeFormat.format(decision.at)}</time> ·{" "}
+                  {decision.trigger.description}
+                </p>
+                <div className="agent-action-controls">
+                  <WhyPanel rows={decision.why} />
+                  {state === "Done" && <UndoButton decisionId={decision.id} action={decision.action} />}
+                </div>
+              </article>
+            </li>
+          ))}
+        </ol>
+      )}
+    </section>
+  );
+}
+
+function toastText(decision: Decision): string {
+  return decision.result === "Refused"
+    ? `Your agent didn’t act: ${decision.action} was refused`
+    : `Your agent: ${decision.action}`;
+}
 
 function SafeToSpendLine({ safe, nextPayday }: { safe: SafeToSpend; nextPayday: LocalDate | null }) {
   return (
@@ -124,7 +177,13 @@ export default async function HomePage() {
         </AccountCard>
       ))}
 
+      <AgentActionsCard actions={home.agentActions} />
+
       <BillsCard bills={home.billsBeforePayday} />
+
+      <AgentActionsToast
+        actions={home.unseenAgentActions.map((decision) => ({ id: decision.id, text: toastText(decision) }))}
+      />
     </main>
   );
 }

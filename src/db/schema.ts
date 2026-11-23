@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { check, index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { check, index, integer, sqliteTable, text, uniqueIndex, type AnySQLiteColumn } from "drizzle-orm/sqlite-core";
 
 /** The app's simulated time. It holds at most one row, with id 1. */
 export const simulatedClockTable = sqliteTable("simulated_clock", {
@@ -178,7 +178,8 @@ export const ruleVersionsTable = sqliteTable(
 );
 
 /**
- * The Decision log: one row per agent action, with what triggered it, the Rule version it used, and its result.
+ * The Decision log: one row per agent action, with what triggered it, the Rule version it used, and its result,
+ * plus one Reversed row, written by the customer, for each agent action they undo.
  * `why` is a JSON array of label and value pairs.
  */
 export const decisionsTable = sqliteTable(
@@ -189,7 +190,7 @@ export const decisionsTable = sqliteTable(
       .notNull()
       .references(() => customersTable.id),
     createdAtMs: integer("created_at_ms").notNull(),
-    actor: text("actor", { enum: ["agent"] }).notNull(),
+    actor: text("actor", { enum: ["agent", "customer"] }).notNull(),
     triggerLedgerEventId: integer("trigger_ledger_event_id").references(() => ledgerEventsTable.id),
     triggerDescription: text("trigger_description").notNull(),
     ruleId: integer("rule_id")
@@ -207,12 +208,15 @@ export const decisionsTable = sqliteTable(
     why: text("why", { mode: "json" }).notNull(),
     /** The ledger transaction that moved the money, on a Done or Reversed entry. */
     ledgerTransactionId: integer("ledger_transaction_id").references(() => ledgerTransactionsTable.id),
-    /** On a Reversed entry, the entry it reverses. */
-    reversesDecisionId: integer("reverses_decision_id"),
+    /** On a Reversed entry, the entry it reverses. Unique, so each action is undone at most once. */
+    reversesDecisionId: integer("reverses_decision_id").references((): AnySQLiteColumn => decisionsTable.id),
+    /** When the customer was first shown this agent action in a toast. Null until then. */
+    seenAtMs: integer("seen_at_ms"),
   },
   (table) => [
     index("decisions_customer_id").on(table.customerId),
     index("decisions_trigger_ledger_event_id").on(table.triggerLedgerEventId),
+    uniqueIndex("decisions_reverses_decision_id").on(table.reversesDecisionId),
     check("decisions_refused_by", sql`(${table.result} = 'Refused') = (${table.refusedBy} IS NOT NULL)`),
   ],
 );
