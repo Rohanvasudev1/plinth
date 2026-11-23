@@ -6,10 +6,11 @@ import { cents, formatDollars, formatDollarsBriefly } from "./money";
 export type UndoOutcome = { ok: true; reversal: Decision } | { ok: false; reason: string };
 
 /**
- * Undoes one of the customer's agent actions (ADR 0002): posts the opposite transfer under the key
+ * Undoes one of the customer's agent actions (ADR 0002): posts the reversing ledger transaction under the key
  * `undo:<decision id>` and writes a Reversed entry, by the customer, linked to the original, both in one
  * database transaction. Refused, with the reason and nothing moved, when the action isn't the customer's,
- * isn't an agent action that moved money, was already undone, or its destination no longer holds the amount.
+ * isn't an agent action that moved money, was already undone, or the account it moved money to no longer
+ * holds the amount.
  */
 export function undoAgentAction(customerData: CustomerData, customer: Customer, decisionId: number): UndoOutcome {
   return customerData.inOneTransaction((): UndoOutcome => {
@@ -18,15 +19,16 @@ export function undoAgentAction(customerData: CustomerData, customer: Customer, 
     if (original.actor !== "agent" || original.result !== "Done") {
       return refused("Only an agent action that moved money can be undone.");
     }
-    if (original.reversedByDecisionId !== null) return refused("This action was already undone.");
+    if (original.reversedByDecisionId !== null) return refused(ALREADY_UNDONE);
 
-    const source = original.toAccountId === null ? undefined : customerData.getAccount(customer, original.toAccountId);
-    const destination =
+    // The money goes back the way it came: out of the account the action moved it to, into the one it moved it from.
+    const movedTo = original.toAccountId === null ? undefined : customerData.getAccount(customer, original.toAccountId);
+    const movedFrom =
       original.fromAccountId === null ? undefined : customerData.getAccount(customer, original.fromAccountId);
-    if (!source || !destination) return refused("The accounts this action used are no longer yours.");
-    if (source.balance < original.amount) {
+    if (!movedTo || !movedFrom) return refused("The accounts this action used are no longer yours.");
+    if (movedTo.balance < original.amount) {
       return refused(
-        `${source.name} holds ${formatDollars(source.balance)}, less than the ${formatDollars(original.amount)} to move back.`,
+        `${movedTo.name} holds ${formatDollars(movedTo.balance)}, less than the ${formatDollars(original.amount)} to move back.`,
       );
     }
 
@@ -34,11 +36,11 @@ export function undoAgentAction(customerData: CustomerData, customer: Customer, 
       idempotencyKey: `undo:${original.id}`,
       description: `Undo: ${original.action}`,
       entries: [
-        { accountId: source.id, amount: cents(-original.amount) },
-        { accountId: destination.id, amount: original.amount },
+        { accountId: movedTo.id, amount: cents(-original.amount) },
+        { accountId: movedFrom.id, amount: original.amount },
       ],
     });
-    if (!posted.created) return refused("This action was already undone.");
+    if (!posted.created) return refused(ALREADY_UNDONE);
 
     const originalRule = original.why.find((row) => row.label === "Rule");
     const why: WhyRow[] = [
@@ -46,16 +48,16 @@ export function undoAgentAction(customerData: CustomerData, customer: Customer, 
       ...(originalRule ? [originalRule] : []),
       {
         label: "Checked by",
-        value: `Not undone before, and ${source.name} held ${formatDollars(source.balance)}, enough to move ${formatDollars(original.amount)} back`,
+        value: `Not undone before, and ${movedTo.name} held ${formatDollars(movedTo.balance)}, enough to move ${formatDollars(original.amount)} back`,
       },
     ];
     const reversal = customerData.recordDecision(customer, {
       actor: "customer",
       trigger: { ledgerEventId: null, description: "You pressed Undo" },
       rule: original.rule,
-      action: `Moved ${formatDollarsBriefly(original.amount)} back to ${destination.name}`,
-      fromAccountId: source.id,
-      toAccountId: destination.id,
+      action: `Moved ${formatDollarsBriefly(original.amount)} back to ${movedFrom.name}`,
+      fromAccountId: movedTo.id,
+      toAccountId: movedFrom.id,
       amount: original.amount,
       result: "Reversed",
       refusedBy: null,
@@ -66,6 +68,8 @@ export function undoAgentAction(customerData: CustomerData, customer: Customer, 
     return { ok: true, reversal };
   });
 }
+
+const ALREADY_UNDONE = "This action was already undone.";
 
 function refused(reason: string): UndoOutcome {
   return { ok: false, reason };

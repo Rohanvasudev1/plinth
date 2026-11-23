@@ -42,5 +42,6 @@ test("Journey 1: Sam's paycheck lands, the agent sweeps $340, Sam checks Why and
   await page.getByRole("link", { name: "Decision log" }).click();
   const reversal = page.getByRole("article", { name: "Moved $340 back to Checking" });
   await expect(reversal).toContainText("Reversed");
-  await expect(reversal).toContainText("You");
+  await expect(reversal).toContainText(" · You · Rule #");
+  await expect(page.getByRole("article", { name: "Moved $340 to House fund" })).toContainText("Reversed by you");
 });

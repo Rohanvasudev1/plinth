@@ -72,7 +72,7 @@ export interface Bank extends Simulator {
   billsBeforePayday(customer: Customer): BillsBeforePayday;
   /** Every action the customer's agent took or tried to take, and every Undo, newest first. */
   readDecisionLog(customer: Customer): Decision[];
-  /** Undoes one of the customer's agent actions by posting the opposite transfer (ADR 0002). */
+  /** Undoes one of the customer's agent actions by posting a reversing ledger transaction (ADR 0002). */
   undo(customer: Customer, decisionId: number): UndoOutcome;
   /** Marks agent actions as shown to the customer, so the toast shows them only once. */
   markAgentActionsSeen(customer: Customer, decisionIds: number[]): void;

@@ -31,7 +31,7 @@ function DecisionEntry({ decision }: { decision: Decision }) {
           <time dateTime={decision.at.toISOString()}>{timeFormat.format(decision.at)}</time> ·{" "}
           {decision.actor === "agent" ? "Your agent" : "You"} · Rule #{decision.rule.id} v{decision.rule.version} ·{" "}
           <span className="num">{formatDollars(decision.amount)}</span>
-          {decision.reversedByDecisionId !== null && <> · Undone</>}
+          {decision.reversedByDecisionId !== null && <> · Reversed by you</>}
         </p>
         <WhyPanel rows={decision.why} />
       </article>
