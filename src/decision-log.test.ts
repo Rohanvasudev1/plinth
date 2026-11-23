@@ -50,6 +50,7 @@ describe("Decision log", () => {
         ],
         ledgerTransactionId: sweep?.id,
         reversesDecisionId: null,
+        seenAt: null,
       },
     ]);
   });

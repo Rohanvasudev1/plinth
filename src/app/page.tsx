@@ -2,10 +2,11 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { DISPLAY_TIME_ZONE } from "@/app-clock";
 import { getAppBank } from "@/app-bank";
-import type { BillsBeforePayday, HomeAccount, SafeToSpend } from "@/bank";
+import type { AgentAction, BillsBeforePayday, HomeAccount, SafeToSpend } from "@/bank";
 import { formatLocalDate, type LocalDate } from "@/calendar";
 import { cents, formatDollars } from "@/money";
 import { requireCustomer } from "@/session";
+import { AgentToast, UndoControls } from "./home-forms";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +14,16 @@ const dateFormat = new Intl.DateTimeFormat("en-GB", {
   weekday: "long",
   day: "numeric",
   month: "long",
+  timeZone: DISPLAY_TIME_ZONE,
+});
+
+const timeFormat = new Intl.DateTimeFormat("en-GB", {
+  weekday: "short",
+  day: "numeric",
+  month: "short",
+  hour: "numeric",
+  minute: "2-digit",
+  hour12: true,
   timeZone: DISPLAY_TIME_ZONE,
 });
 
@@ -69,6 +80,58 @@ function BillsCard({ bills }: { bills: BillsBeforePayday }) {
   );
 }
 
+function AgentActionItem({ action }: { action: AgentAction }) {
+  return (
+    <li className="agent-action">
+      <div className="decision-head">
+        <h3>{action.action}</h3>
+        <span className={`pill ${action.state.toLowerCase()}`}>{action.state}</span>
+      </div>
+      <p className="muted">
+        <time dateTime={action.at.toISOString()}>{timeFormat.format(action.at)}</time> · Your agent
+      </p>
+      <details className="why">
+        <summary>Why?</summary>
+        <dl>
+          {action.why.map((row) => (
+            <div key={row.label}>
+              <dt>{row.label}</dt>
+              <dd>{row.value}</dd>
+            </div>
+          ))}
+        </dl>
+      </details>
+      <UndoControls decisionId={action.decisionId} canUndo={action.canUndo} />
+    </li>
+  );
+}
+
+function AgentActivityCard({ actions }: { actions: AgentAction[] }) {
+  return (
+    <section className="card" aria-labelledby="what-your-agent-did">
+      <h2 id="what-your-agent-did">What your agent did</h2>
+      <p className="muted">Every action can be explained or undone.</p>
+      {actions.length === 0 ? (
+        <p className="muted">Your agent hasn&rsquo;t done anything yet.</p>
+      ) : (
+        <ol className="agent-actions">
+          {actions.map((action) => (
+            <AgentActionItem key={action.decisionId} action={action} />
+          ))}
+        </ol>
+      )}
+    </section>
+  );
+}
+
+/** What the toast says about the actions the customer hasn't been shown yet, newest first. */
+function unseenMessage(unseen: AgentAction[]): string | null {
+  const [newest, ...rest] = unseen;
+  if (!newest) return null;
+  const more = rest.length === 1 ? ", and 1 more" : rest.length > 1 ? `, and ${rest.length} more` : "";
+  return `Your agent: ${newest.action}${more}`;
+}
+
 function AccountCard({ account, children }: { account: HomeAccount; children?: ReactNode }) {
   const headingId = `account-${account.id}`;
   return (
@@ -83,6 +146,7 @@ function AccountCard({ account, children }: { account: HomeAccount; children?: R
 export default async function HomePage() {
   const customer = await requireCustomer();
   const home = getAppBank().readHome(customer);
+  const toast = unseenMessage(home.unseenActions);
   return (
     <main className="page">
       <header className="top">
@@ -124,7 +188,11 @@ export default async function HomePage() {
         </AccountCard>
       ))}
 
+      <AgentActivityCard actions={home.agentActions} />
+
       <BillsCard bills={home.billsBeforePayday} />
+
+      {toast && <AgentToast message={toast} />}
     </main>
   );
 }

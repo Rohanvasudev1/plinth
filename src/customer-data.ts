@@ -139,10 +139,14 @@ export interface CustomerData {
   getRule(customer: Customer, ruleId: number, version?: number): Rule | undefined;
   /** Switches the customer's Rule on or off by writing its next version. Throws if the Rule isn't theirs. */
   switchRule(customer: Customer, ruleId: number, on: boolean): Rule;
-  /** Writes a Decision log entry, timed by the clock. */
+  /** Writes a Decision log entry, timed by the clock. Entries start unseen. */
   recordDecision(customer: Customer, decision: NewDecision): Decision;
   /** The customer's Decision log, newest first. */
   listDecisions(customer: Customer): Decision[];
+  /** The customer's Decision log entry with this id, or undefined if it doesn't exist or isn't theirs. */
+  getDecision(customer: Customer, decisionId: number): Decision | undefined;
+  /** Marks every one of the customer's unseen Decision log entries seen, timed by the clock. */
+  markDecisionsSeen(customer: Customer): void;
 }
 
 export class LedgerError extends Error {
@@ -468,6 +472,7 @@ export function createCustomerData(deps: {
           why: row.why as WhyRow[],
           ledgerTransactionId: row.ledgerTransactionId,
           reversesDecisionId: row.reversesDecisionId,
+          seenAt: row.seenAtMs === null ? null : new Date(row.seenAtMs),
         };
       });
   }
@@ -508,6 +513,13 @@ export function createCustomerData(deps: {
     return recorded;
   }
 
+  function markDecisionsSeen(customer: Customer): void {
+    db.update(decisionsTable)
+      .set({ seenAtMs: clock.now().getTime() })
+      .where(and(eq(decisionsTable.customerId, customer.id), isNull(decisionsTable.seenAtMs)))
+      .run();
+  }
+
   return {
     listAccounts: (customer) => selectAccounts(customer),
     getAccount,
@@ -536,6 +548,8 @@ export function createCustomerData(deps: {
     switchRule,
     recordDecision,
     listDecisions: (customer) => selectDecisions(customer),
+    getDecision: (customer, decisionId) => selectDecisions(customer, decisionId)[0],
+    markDecisionsSeen,
     addPayroll(customer, payroll) {
       if (!getAccount(customer, payroll.accountId)) {
         throw new LedgerError("A payroll must pay into the customer's own account");

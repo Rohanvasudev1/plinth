@@ -50,6 +50,13 @@
       "when": 1795471112536,
       "tag": "0006_rules_and_decisions",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1795471724265,
+      "tag": "0007_decisions_seen",
+      "breakpoints": true
     }
   ]
 }

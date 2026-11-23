@@ -1,0 +1,1 @@
+ALTER TABLE `decisions` ADD `seen_at_ms` integer;
