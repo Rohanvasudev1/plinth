@@ -32,7 +32,7 @@ export default async function SimulatorPage() {
           <p className="muted">Testing only. Plays the employer, the billers and the merchants. All money is imaginary.</p>
         </div>
         <p className="muted signed-in">
-          {customer.name} · <Link href="/">Home</Link>
+          {customer.name} · <Link href="/">Home</Link> · <Link href="/decision-log">Decision log</Link>
         </p>
       </header>
 

@@ -13,7 +13,7 @@ test("Sam signs in and sees Checking, the House fund and its Goal on Home at pho
   const checking = page.getByRole("region", { name: "Checking" });
   await expect(checking).toContainText("$227.00");
   // On the seed day, payday is tomorrow, so no bills fall before it.
-  await expect(checking).toContainText("Safe to spend: -$1,273.00 before payday on Fri 20 Nov");
+  await expect(checking).toContainText("Heads up: you’ll dip $1,273.00 below your buffer before payday");
   await expect(page.getByRole("region", { name: "Bills before payday" })).toContainText(
     "No bills due before payday on Fri 20 Nov.",
   );

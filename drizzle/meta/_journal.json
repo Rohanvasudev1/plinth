@@ -43,6 +43,13 @@
       "when": 1795469556554,
       "tag": "0005_scheduled_bills",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1795471112536,
+      "tag": "0006_rules_and_decisions",
+      "breakpoints": true
     }
   ]
 }
