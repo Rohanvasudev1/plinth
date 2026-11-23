@@ -39,6 +39,13 @@ export function addDays(date: LocalDate, days: number): LocalDate {
   return localDate(new Date(utcMidnight(date) + days * DAY_MS).toISOString().slice(0, 10));
 }
 
+/** How many days the month containing `date` has, from 28 to 31. */
+export function daysInMonth(date: LocalDate): number {
+  const year = Number(date.slice(0, 4));
+  const month = Number(date.slice(5, 7));
+  return new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+
 /** Whole days from `from` to `to`, negative when `to` is earlier. */
 export function daysBetween(from: LocalDate, to: LocalDate): number {
   return Math.round((utcMidnight(to) - utcMidnight(from)) / DAY_MS);

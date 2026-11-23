@@ -12,6 +12,11 @@ test("Sam signs in and sees Checking, the House fund and its Goal on Home at pho
   await expect(page.getByText("Thursday 19 November")).toBeVisible();
   const checking = page.getByRole("region", { name: "Checking" });
   await expect(checking).toContainText("$227.00");
+  // On the seed day, payday is tomorrow, so no bills fall before it.
+  await expect(checking).toContainText("Safe to spend: -$1,273.00 before payday on Fri 20 Nov");
+  await expect(page.getByRole("region", { name: "Bills before payday" })).toContainText(
+    "No bills due before payday on Fri 20 Nov.",
+  );
   const houseFund = page.getByRole("region", { name: "House fund" });
   await expect(houseFund).toContainText("$12,400.00");
   await expect(houseFund).toContainText("31% of $40,000.00");

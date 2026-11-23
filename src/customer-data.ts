@@ -8,6 +8,7 @@ import {
   ledgerEventsTable,
   ledgerTransactionsTable,
   payrollsTable,
+  scheduledBillsTable,
 } from "./db/schema";
 import type { LedgerEvent, LedgerEventDispatcher } from "./ledger-events";
 import { cents, type Cents } from "./money";
@@ -75,6 +76,18 @@ export interface Payroll {
 
 export type NewPayroll = Omit<Payroll, "id">;
 
+/** A Scheduled bill: the customer pays `payee` `amount` from one of their accounts on `dayOfMonth` every month. */
+export interface ScheduledBill {
+  id: number;
+  accountId: number;
+  payee: string;
+  amount: Cents;
+  /** 1 to 31. In a shorter month the bill falls due on the month's last day. */
+  dayOfMonth: number;
+}
+
+export type NewScheduledBill = Omit<ScheduledBill, "id">;
+
 /**
  * The one data-access layer for customer-owned rows (ADR 0004). Every method takes the customer
  * first, and no other module reads or writes customer accounts or the ledger.
@@ -91,12 +104,21 @@ export interface CustomerData {
    * ledger transaction and changes nothing, while another customer may use the same key.
    */
   postLedgerTransaction(customer: Customer, transaction: LedgerTransactionInput): PostedLedgerTransaction;
+  /**
+   * Runs `work` in one database transaction: if it throws, nothing it wrote is kept. Ledger events from
+   * ledger transactions posted inside go to subscribers only after the whole block commits.
+   */
+  inOneTransaction<T>(work: () => T): T;
   /** The customer's ledger transaction posted under this idempotency key, if there is one. */
   findLedgerTransaction(customer: Customer, idempotencyKey: string): LedgerTransaction | undefined;
   /** Sets up a payroll into one of the customer's own accounts. */
   addPayroll(customer: Customer, payroll: NewPayroll): Payroll;
   /** The customer's payrolls, in the order they were set up. */
   listPayrolls(customer: Customer): Payroll[];
+  /** Sets up a Scheduled bill paid from one of the customer's own accounts. */
+  addScheduledBill(customer: Customer, bill: NewScheduledBill): ScheduledBill;
+  /** The customer's Scheduled bills, in the order they were set up. */
+  listScheduledBills(customer: Customer): ScheduledBill[];
   /** Ledger transactions posted for the customer, oldest first, with every entry including the outside side. */
   listLedgerTransactions(customer: Customer): LedgerTransaction[];
 }
@@ -111,6 +133,29 @@ export function createCustomerData(deps: {
   ledgerEvents: LedgerEventDispatcher;
 }): CustomerData {
   const { db, clock, ledgerEvents } = deps;
+
+  /** Events posted inside an open `inOneTransaction` block, waiting for it to commit. Null outside one. */
+  let heldEvents: LedgerEvent[] | null = null;
+
+  function dispatchAfterCommit(event: LedgerEvent): void {
+    if (heldEvents) heldEvents.push(event);
+    else ledgerEvents.dispatch(event);
+  }
+
+  function inOneTransaction<T>(work: () => T): T {
+    if (heldEvents) return work();
+    heldEvents = [];
+    let result: T;
+    let events: LedgerEvent[];
+    try {
+      result = db.transaction(() => work(), { behavior: "immediate" });
+    } finally {
+      events = heldEvents;
+      heldEvents = null;
+    }
+    for (const event of events) ledgerEvents.dispatch(event);
+    return result;
+  }
 
   const balanceCents = sql<number>`coalesce(sum(${ledgerEntriesTable.amountCents}), 0)`;
 
@@ -241,7 +286,7 @@ export function createCustomerData(deps: {
       },
       { behavior: "immediate" },
     );
-    if (result.event) ledgerEvents.dispatch(result.event);
+    if (result.event) dispatchAfterCommit(result.event);
     return result.posted;
   }
 
@@ -294,6 +339,7 @@ export function createCustomerData(deps: {
       return opened;
     },
     postLedgerTransaction,
+    inOneTransaction,
     findLedgerTransaction(customer, idempotencyKey) {
       return selectLedgerTransactions(customer, idempotencyKey)[0];
     },
@@ -337,6 +383,41 @@ export function createCustomerData(deps: {
             intervalDays: row.intervalDays,
           };
         });
+    },
+    addScheduledBill(customer, bill) {
+      if (!getAccount(customer, bill.accountId)) {
+        throw new LedgerError("A Scheduled bill must be paid from the customer's own account");
+      }
+      if (bill.amount <= 0 || !Number.isInteger(bill.dayOfMonth) || bill.dayOfMonth < 1 || bill.dayOfMonth > 31) {
+        throw new LedgerError("A Scheduled bill needs an amount above zero and a day of the month from 1 to 31");
+      }
+      const row = db
+        .insert(scheduledBillsTable)
+        .values({
+          customerId: customer.id,
+          accountId: bill.accountId,
+          payee: bill.payee,
+          amountCents: bill.amount,
+          dayOfMonth: bill.dayOfMonth,
+        })
+        .returning({ id: scheduledBillsTable.id })
+        .get();
+      return { id: row.id, ...bill };
+    },
+    listScheduledBills(customer) {
+      return db
+        .select()
+        .from(scheduledBillsTable)
+        .where(eq(scheduledBillsTable.customerId, customer.id))
+        .orderBy(asc(scheduledBillsTable.id))
+        .all()
+        .map((row) => ({
+          id: row.id,
+          accountId: row.accountId,
+          payee: row.payee,
+          amount: cents(row.amountCents),
+          dayOfMonth: row.dayOfMonth,
+        }));
     },
   };
 }

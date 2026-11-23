@@ -176,3 +176,48 @@ describe("ledger", () => {
     expect(db.select().from(ledgerEntriesTable).all().length).toBeGreaterThan(0);
   });
 });
+
+describe("one transaction around several postings", () => {
+  it("keeps nothing and tells no subscriber when the block throws", () => {
+    const bank = openTestBank();
+    const { sam, checking, houseFund } = samAndAccounts(bank);
+    const heard: LedgerEvent[] = [];
+    bank.ledgerEvents.subscribe((event) => heard.push(event));
+
+    expect(() =>
+      bank.customerData.inOneTransaction(() => {
+        bank.customerData.postLedgerTransaction(sam, {
+          idempotencyKey: "test:in-block",
+          description: "Move $100",
+          entries: entriesMoving(100_00, checking.id, houseFund.id),
+        });
+        throw new Error("Something later in the block failed");
+      }),
+    ).toThrow("Something later in the block failed");
+
+    expect(balanceOf(bank, sam, checking.id)).toBe(227_00);
+    expect(bank.customerData.findLedgerTransaction(sam, "test:in-block")).toBeUndefined();
+    expect(heard).toEqual([]);
+  });
+
+  it("tells subscribers about every posting only once the whole block has committed", () => {
+    const bank = openTestBank();
+    const { sam, checking, houseFund } = samAndAccounts(bank);
+    const heard: string[] = [];
+    bank.ledgerEvents.subscribe(() => heard.push("event"));
+
+    bank.customerData.inOneTransaction(() => {
+      for (const key of ["test:first", "test:second"]) {
+        bank.customerData.postLedgerTransaction(sam, {
+          idempotencyKey: key,
+          description: "Move $1",
+          entries: entriesMoving(1_00, checking.id, houseFund.id),
+        });
+      }
+      heard.push("block done");
+    });
+
+    expect(heard).toEqual(["block done", "event", "event"]);
+    expect(balanceOf(bank, sam, checking.id)).toBe(225_00);
+  });
+});

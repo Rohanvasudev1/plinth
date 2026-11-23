@@ -29,7 +29,7 @@ export default async function SimulatorPage() {
       <header className="top">
         <div>
           <h1>Simulator</h1>
-          <p className="muted">Testing only. Plays the employer and the merchants. All money is imaginary.</p>
+          <p className="muted">Testing only. Plays the employer, the billers and the merchants. All money is imaginary.</p>
         </div>
         <p className="muted signed-in">
           {customer.name} · <Link href="/">Home</Link>
@@ -42,8 +42,8 @@ export default async function SimulatorPage() {
           <time dateTime={now.toISOString()}>{timeFormat.format(now)}</time> New York time
         </p>
         <p className="muted">
-          &ldquo;Post paycheck&rdquo; posts paychecks due today. Advancing the clock posts every paycheck whose date
-          it passes.
+          &ldquo;Post paycheck&rdquo; posts paychecks due today. Advancing the clock posts every paycheck and
+          Scheduled bill whose date it passes.
         </p>
         <ClockControls />
       </section>

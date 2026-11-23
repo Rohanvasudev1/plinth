@@ -54,7 +54,7 @@ describe("Post paycheck", () => {
     // 11:30pm on Friday 4 December in New York is already Saturday in UTC.
     const bank = bankAt(new Date("2026-12-05T04:30:00Z"));
 
-    expect(bank.postPaycheck()).toEqual([expect.objectContaining({ payDate: "2026-12-04", amount: 3_240_00 })]);
+    expect(bank.postPaycheck()).toEqual([expect.objectContaining({ date: "2026-12-04", amount: 3_240_00 })]);
   });
 
   it("posts nothing when today isn't a payday", () => {
@@ -82,14 +82,14 @@ describe("Advance clock one day", () => {
 
     const advanced = bank.advanceClock();
 
-    expect(advanced.paychecks).toEqual([expect.objectContaining({ payDate: "2026-11-20", created: true })]);
+    expect(advanced.postings).toEqual([expect.objectContaining({ kind: "paycheck", date: "2026-11-20", created: true })]);
     expect(samsBalances(bank).checking).toBe(3_467_00);
   });
 
   it("posts nothing on days it passes that aren't paydays", () => {
     const bank = bankAt(FIRST_PAYDAY_9AM);
 
-    expect(bank.advanceClock().paychecks).toEqual([]);
+    expect(bank.advanceClock().postings).toEqual([]);
     expect(samsBalances(bank).checking).toBe(227_00);
   });
 
@@ -116,22 +116,84 @@ describe("Advance clock one day", () => {
     expect(bank.advanceClock().now.toISOString()).toBe("2027-11-08T05:30:00.000Z");
   });
 
-  it("pays every 14 days across several pay cycles, in date order", () => {
+  it("pays every 14 days and pays bills as they fall due, in date order across several pay cycles", () => {
     const bank = openTestBank();
     const sam = signInByName(bank, "Sam Calloway");
 
     for (let day = 0; day < 30; day++) bank.advanceClock();
 
-    const payrollKeys = bank.customerData
+    const keys = bank.customerData
       .listLedgerTransactions(sam)
       .map((transaction) => transaction.idempotencyKey)
-      .filter((key) => key.startsWith("payroll:"));
-    expect(payrollKeys).toEqual([
+      .filter((key) => !key.startsWith("opening:"));
+    const [rent, internet, phone, power] = bank.customerData.listScheduledBills(sam).map((bill) => bill.id);
+    expect(keys).toEqual([
       "payroll:acme-corp:2026-11-20",
+      `bill:${rent}:2026-12-01`,
+      `bill:${internet}:2026-12-02`,
+      `bill:${phone}:2026-12-03`,
+      `bill:${power}:2026-12-03`,
       "payroll:acme-corp:2026-12-04",
       "payroll:acme-corp:2026-12-18",
     ]);
-    expect(samsBalances(bank).checking).toBe(227_00 + 3 * 3_240_00);
+    expect(samsBalances(bank).checking).toBe(227_00 + 3 * 3_240_00 - 1_627_00);
+  });
+
+  it("pays a bill that falls due from checking through the Biller clearing account", () => {
+    // 9am on Monday 30 November; rent is due tomorrow.
+    const bank = bankAt(new Date("2026-11-30T14:00:00Z"));
+    const sam = signInByName(bank, "Sam Calloway");
+    const [checking] = bank.customerData.listAccounts(sam);
+    const [rent] = bank.customerData.listScheduledBills(sam);
+    const biller = bank.systemData.ensureSystemAccount("biller");
+
+    const advanced = bank.advanceClock();
+
+    expect(advanced.postings).toEqual([
+      expect.objectContaining({ kind: "bill", customerId: sam.id, payee: "Rent", date: "2026-12-01", amount: 1_450_00, created: true }),
+    ]);
+    const posted = bank.customerData.findLedgerTransaction(sam, `bill:${rent?.id}:2026-12-01`);
+    expect(posted?.entries).toEqual([
+      { accountId: checking?.id, amount: -1_450_00 },
+      { accountId: biller, amount: 1_450_00 },
+    ]);
+    expect(posted?.postedAt.toISOString()).toBe("2026-12-01T14:00:00.000Z");
+    expect(samsBalances(bank).checking).toBe(227_00 - 1_450_00);
+  });
+
+  it("posts the paycheck before the bills on a day that has both", () => {
+    // 9am on Thursday 31 December; 1 January is both a payday and rent day.
+    const bank = bankAt(new Date("2026-12-31T14:00:00Z"));
+    const sam = signInByName(bank, "Sam Calloway");
+
+    const samsPostings = bank
+      .advanceClock()
+      .postings.filter((posting) => posting.customerId === sam.id)
+      .map((posting) => `${posting.kind} ${posting.date}`);
+
+    expect(samsPostings).toEqual(["paycheck 2027-01-01", "bill 2027-01-01"]);
+  });
+
+  it("doesn't pay a bill twice when the clock passes its due date again", () => {
+    const start = new Date("2026-11-30T14:00:00Z");
+    const bank = bankAt(start);
+
+    bank.advanceClock();
+    bank.clock.setTo(start);
+    const again = bank.advanceClock();
+
+    expect(again.postings).toEqual([expect.objectContaining({ kind: "bill", payee: "Rent", created: false })]);
+    expect(samsBalances(bank).checking).toBe(227_00 - 1_450_00);
+  });
+
+  it("has moved the clock to the new day by the time rules hear about the postings", () => {
+    const bank = openTestBank();
+    const clockSeenByRules: string[] = [];
+    bank.ledgerEvents.subscribe(() => clockSeenByRules.push(bank.clock.now().toISOString()));
+
+    bank.advanceClock();
+
+    expect(clockSeenByRules).toEqual(["2026-11-20T14:00:00.000Z"]);
   });
 });
 
