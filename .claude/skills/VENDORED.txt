@@ -1,0 +1,9 @@
+Skills in this folder are copied from these repositories (shallow clone, default branch):
+
+https://github.com/mattpocock/skills
+commit abeeaf95660ba9e8b7c753eb38f441ca707a8823
+copied: every folder under skills/engineering/ and skills/productivity/
+
+https://github.com/backnotprop/pstack
+commit c3464c11c60b1352d5e8f5f0428a3a6943837568
+copied: skills/unslop only (pstack's tdd and teach would clash with mattpocock's)

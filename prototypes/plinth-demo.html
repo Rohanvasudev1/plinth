@@ -1,0 +1,1123 @@
+<title>Plinth Bank App</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@112,600;112,800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: app shell. Left nav, main column (summary first, then what the agent did), right assistant panel. Same tokens and type as the system map. */
+:root{
+  --bg:#eef2f1; --paper:#fbfcfc; --ink:#14201f; --muted:#56635f; --line:#cfd8d5; --soft:#e4eae8;
+  --z-surface:#1f7a8c; --z-agent:#4b55b5; --z-product:#b7791f; --z-intel:#2f8a57; --z-core:#5a6670; --z-trust:#c2423b;
+  --tint-agent:#e8e9f7; --tint-intel:#e2f1e8; --tint-trust:#f8e4e2; --tint-product:#f7eedf; --tint-surface:#e3f0f3;
+  --good:#2f8a57; --warn:#b7791f; --bad:#c2423b;
+  --f-display:"Archivo","Helvetica Neue",Arial,sans-serif;
+  --f-body:"IBM Plex Sans",system-ui,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f1615; --paper:#18211f; --ink:#e6eeeb; --muted:#97a6a1; --line:#2c3836; --soft:#1f2a28;
+  --z-surface:#4fb3c6; --z-agent:#8f97ee; --z-product:#e0a64a; --z-intel:#5cc287; --z-core:#9aa7b1; --z-trust:#f07a70;
+  --tint-agent:#1d2036; --tint-intel:#16281e; --tint-trust:#311b19; --tint-product:#2c2416; --tint-surface:#16292d;
+  --good:#5cc287; --warn:#e0a64a; --bad:#f07a70; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f1615; --paper:#18211f; --ink:#e6eeeb; --muted:#97a6a1; --line:#2c3836; --soft:#1f2a28;
+  --z-surface:#4fb3c6; --z-agent:#8f97ee; --z-product:#e0a64a; --z-intel:#5cc287; --z-core:#9aa7b1; --z-trust:#f07a70;
+  --tint-agent:#1d2036; --tint-intel:#16281e; --tint-trust:#311b19; --tint-product:#2c2416; --tint-surface:#16292d;
+  --good:#5cc287; --warn:#e0a64a; --bad:#f07a70; color-scheme:dark}
+
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:14.5px;line-height:1.5}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid var(--z-agent);outline-offset:2px}
+h1,h2,h3{font-family:var(--f-display);font-stretch:112%;margin:0;text-wrap:balance}
+.num{font-variant-numeric:tabular-nums}
+.mono{font-family:var(--f-mono)}
+
+.demo{background:var(--ink);color:var(--bg);font-size:.8rem;padding-block:7px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.demo label{display:flex;gap:8px;align-items:center;cursor:pointer}
+.demo input{accent-color:var(--z-intel)}
+
+.shell{display:grid;grid-template-columns:210px minmax(0,1fr) 340px;max-width:1440px;margin:0 auto;min-height:calc(100% - 36px)}
+nav.side{border-right:1px solid var(--line);padding:22px 14px;display:flex;flex-direction:column;gap:4px;padding-left:max(14px,env(safe-area-inset-left,0px))}
+.brand{display:flex;align-items:center;gap:9px;margin:0 8px 22px}
+.brand b{font-family:var(--f-display);font-stretch:112%;font-weight:800;font-size:1.25rem}
+nav.side a{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;color:var(--ink);text-decoration:none;font-weight:500}
+nav.side a:hover{background:var(--soft)}
+nav.side a[aria-current="page"]{background:var(--paper);box-shadow:inset 0 0 0 1px var(--line)}
+nav.side svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.7}
+nav.side .count{margin-left:auto;font:500 .7rem var(--f-mono);background:var(--z-agent);color:var(--paper);border-radius:9px;padding:1px 6px}
+.agent-state{margin-top:auto;border:1px solid var(--line);border-radius:8px;padding:10px;font-size:.8rem;display:flex;flex-direction:column;gap:6px;background:var(--paper)}
+.agent-state .dot{width:8px;height:8px;border-radius:50%;background:var(--good);display:inline-block;margin-right:6px}
+.agent-state.paused .dot{background:var(--bad)}
+
+main{padding:26px 28px 48px;display:flex;flex-direction:column;gap:22px;min-width:0}
+.top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap}
+.top h1{font-size:1.7rem;font-weight:800}
+.top p{margin:2px 0 0;color:var(--muted)}
+
+.card{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:18px;min-width:0;position:relative}
+.card h2{font-size:1rem;font-weight:600;display:flex;align-items:center;gap:8px}
+.card-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:12px;flex-wrap:wrap}
+.card-head small{color:var(--muted);font-size:.8rem}
+
+/* summary */
+.summary{display:grid;grid-template-columns:1.4fr 1fr;gap:16px}
+.bal{display:flex;flex-direction:column;gap:2px}
+.bal .label{font-size:.8rem;color:var(--muted)}
+.bal .amt{font-family:var(--f-display);font-stretch:112%;font-weight:800;font-size:2.3rem;line-height:1.1}
+.bal .amt span{font-size:1.2rem;color:var(--muted)}
+.safe{display:inline-flex;gap:6px;align-items:center;font-size:.82rem;background:var(--tint-intel);color:var(--ink);border-radius:999px;padding:3px 10px;margin-top:8px;width:fit-content}
+.safe i{width:7px;height:7px;border-radius:50%;background:var(--good)}
+#forecast{width:100%;height:150px;display:block;margin-top:10px}
+.accts{display:flex;flex-direction:column;gap:10px}
+.acct{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--soft)}
+.acct:last-child{border-bottom:none}
+.acct small{display:block;color:var(--muted);font-size:.78rem}
+.goal-bar{height:6px;background:var(--soft);border-radius:3px;margin-top:6px;overflow:hidden}
+.goal-bar div{height:100%;background:var(--z-intel);border-radius:3px;transition:width .5s}
+
+/* approval */
+.ask{border:1.5px solid var(--z-agent);background:var(--tint-agent)}
+.ask-row{display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap}
+.ask p{margin:4px 0 0;color:var(--muted);max-width:62ch}
+.ask .btns{margin-left:auto;display:flex;gap:8px;align-items:center}
+.btn{border:1px solid var(--line);background:var(--paper);border-radius:7px;padding:7px 13px;font-weight:500;font-size:.88rem}
+.btn:hover{border-color:var(--ink)}
+.btn.primary{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.btn.small{padding:4px 10px;font-size:.8rem}
+.btn.danger{color:var(--bad);border-color:var(--bad)}
+
+/* feed */
+.feed{display:flex;flex-direction:column}
+.item{display:grid;grid-template-columns:34px minmax(0,1fr) auto;gap:12px;padding:12px 0;border-top:1px solid var(--soft);align-items:start}
+.item:first-child{border-top:none}
+.ico{width:34px;height:34px;border-radius:8px;display:grid;place-items:center;background:var(--soft)}
+.ico svg{width:18px;height:18px;fill:none;stroke-width:1.8;stroke:currentColor}
+.ico.save{background:var(--tint-intel);color:var(--good)}
+.ico.block{background:var(--tint-trust);color:var(--bad)}
+.ico.cut{background:var(--tint-product);color:var(--warn)}
+.ico.pay{background:var(--tint-surface);color:var(--z-surface)}
+.item .t{font-weight:600}
+.item .m{font-size:.8rem;color:var(--muted)}
+.item .why{margin-top:8px;font-size:.84rem;background:var(--bg);border-radius:7px;padding:10px 12px;border-left:3px solid var(--z-agent)}
+.item .why dl{display:grid;grid-template-columns:90px 1fr;gap:3px 10px;margin:0}
+.item .why dt{color:var(--muted)}
+.item .why dd{margin:0}
+.item .acts{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.item.undone .t{text-decoration:line-through;color:var(--muted)}
+.pill{font:500 .7rem var(--f-mono);border-radius:999px;padding:2px 8px;white-space:nowrap}
+.pill.done{background:var(--tint-intel);color:var(--good)}
+.pill.stopped{background:var(--tint-trust);color:var(--bad)}
+.pill.undo{background:var(--soft);color:var(--muted)}
+
+.two{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.bill{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid var(--soft);font-size:.9rem}
+.bill:last-child{border-bottom:none}
+.bill .d{font:500 .75rem var(--f-mono);color:var(--muted);width:52px;display:inline-block}
+
+/* activity */
+table{width:100%;border-collapse:collapse;font-size:.9rem}
+th{text-align:left;font:500 .7rem var(--f-mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:6px 8px;border-bottom:1px solid var(--line)}
+td{padding:10px 8px;border-bottom:1px solid var(--soft);vertical-align:middle}
+td.amt{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+td.amt.in{color:var(--good)}
+.cat{font-size:.75rem;color:var(--muted)}
+.tag{font:500 .68rem var(--f-mono);border-radius:4px;padding:1px 6px;background:var(--tint-agent);color:var(--z-agent);margin-left:6px;white-space:nowrap}
+.scroll{overflow-x:auto}
+
+/* agent */
+.rule{display:flex;gap:14px;align-items:center;padding:12px 0;border-top:1px solid var(--soft)}
+.rule:first-of-type{border-top:none}
+.rule div{flex:1;min-width:0}
+.rule small{display:block;color:var(--muted);font-size:.8rem}
+.switch{width:40px;height:22px;border-radius:11px;background:var(--line);border:none;position:relative;flex:none;padding:0}
+.switch::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:var(--paper);transition:left .15s}
+.switch[aria-checked="true"]{background:var(--good)}
+.switch[aria-checked="true"]::after{left:21px}
+.mandate{border:1px solid var(--line);border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:8px}
+.mandate .row{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.limits{display:flex;flex-wrap:wrap;gap:6px}
+.limits span{font-size:.78rem;background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:2px 8px}
+.meter{height:6px;background:var(--soft);border-radius:3px;overflow:hidden}
+.meter div{height:100%;background:var(--z-agent)}
+.kill{border:1.5px solid var(--bad);background:var(--tint-trust)}
+
+/* split */
+.split-sum{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.stat{display:flex;flex-direction:column;gap:2px}
+.stat .label{font-size:.8rem;color:var(--muted)}
+.stat b{font-family:var(--f-display);font-stretch:112%;font-weight:800;font-size:1.6rem}
+.groups{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
+.members{font-size:.8rem;color:var(--muted)}
+.person{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--soft)}
+.person:first-of-type{border-top:none}
+.person > div{flex:1;min-width:0}
+.avatar{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;font-weight:600;font-size:.82rem;background:var(--tint-surface);color:var(--z-surface);flex:none}
+.owes-you{color:var(--good);font-size:.84rem}
+.you-owe{color:var(--bad);font-size:.84rem}
+.even{color:var(--muted);font-size:.84rem}
+.exp-title{font:500 .7rem var(--f-mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:14px 0 2px}
+.exp{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid var(--soft);font-size:.86rem}
+.exp:last-child{border-bottom:none}
+.exp small{display:block;color:var(--muted);font-size:.76rem}
+.exp .r{text-align:right;white-space:nowrap}
+.exp.settle{color:var(--good)}
+form.add{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr) minmax(0,1fr) auto;gap:8px;align-items:end}
+form.add label{display:flex;flex-direction:column;gap:4px;font-size:.78rem;color:var(--muted);min-width:0}
+form.add input,form.add select{border:1px solid var(--line);background:var(--bg);border-radius:7px;padding:8px 10px;font:inherit;font-size:.9rem;color:var(--ink);min-width:0}
+.hint{font-size:.8rem;color:var(--muted);margin:8px 0 0}
+
+/* shared bits for new views */
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.kpis .card{display:flex;flex-direction:column;gap:2px;padding:14px 16px}
+.kpis .label{font-size:.78rem;color:var(--muted)}
+.kpis b{font-family:var(--f-display);font-stretch:112%;font-weight:800;font-size:1.35rem}
+.kpis small{font-size:.76rem;color:var(--muted)}
+.chart{width:100%;display:block}
+.lines-legend{display:flex;flex-wrap:wrap;gap:14px;font-size:.8rem;color:var(--muted);margin-top:8px}
+.lines-legend span{display:flex;align-items:center;gap:6px}
+.lines-legend i{width:16px;height:3px;border-radius:2px;display:inline-block}
+.cat-row{display:grid;grid-template-columns:120px minmax(0,1fr) 150px;gap:12px;align-items:center;padding:6px 0;font-size:.88rem}
+.cat-bars{display:flex;flex-direction:column;gap:3px}
+.cat-bars div{height:7px;border-radius:3px}
+.cat-row .vals{text-align:right;font-variant-numeric:tabular-nums;font-size:.82rem}
+.cat-row .vals .up{color:var(--bad)}
+.cat-row .vals .down{color:var(--good)}
+.story{font-size:.95rem;display:flex;flex-direction:column;gap:8px;margin-top:12px}
+.story p{margin:0;max-width:72ch}
+.range{display:flex;flex-direction:column;gap:6px;margin-top:14px;background:var(--bg);border-radius:8px;padding:12px}
+.range input{width:100%;accent-color:var(--z-agent)}
+.alloc{display:flex;height:26px;border-radius:5px;overflow:hidden}
+.alloc div{height:100%}
+.alloc-legend{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:10px;font-size:.8rem}
+.alloc-legend span{display:flex;flex-direction:column}
+.alloc-legend i{width:10px;height:10px;border-radius:2px;display:inline-block;margin-right:6px}
+.alloc-legend small{color:var(--muted)}
+.note-card{border-left:3px solid var(--warn);background:var(--tint-product)}
+.shield{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.shield div{display:flex;gap:10px;align-items:flex-start;font-size:.86rem}
+.shield svg{width:20px;height:20px;flex:none;stroke:var(--good);fill:none;stroke-width:1.8}
+.shield b{display:block}
+.shield span{color:var(--muted)}
+.linker{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px}
+
+/* discoveries: findings with options, the user decides */
+.ftag{font:500 .68rem var(--f-mono);text-transform:uppercase;letter-spacing:.06em;color:var(--z-agent);background:var(--tint-agent);padding:2px 7px;border-radius:4px;display:inline-block}
+.fmeta{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.evidence{font:500 .72rem var(--f-mono);color:var(--muted)}
+.fbody{margin:6px 0 12px;color:var(--muted);max-width:72ch}
+.choices{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:8px}
+.choice{text-align:left;border:1px solid var(--line);background:var(--paper);border-radius:8px;padding:9px 11px;display:flex;flex-direction:column;gap:2px}
+.choice:hover{border-color:var(--ink)}
+.choice b{font-size:.88rem}
+.choice small{color:var(--muted);font-size:.78rem;line-height:1.35}
+.frow{display:flex;gap:16px;flex-wrap:wrap;align-items:center;margin-top:12px}
+.textlink{background:none;border:none;padding:0;color:var(--z-agent);font-size:.84rem;text-decoration:underline;text-underline-offset:2px}
+.textlink.quiet{color:var(--muted)}
+.lean{border-left:3px solid var(--z-agent);background:var(--bg);padding:8px 12px;border-radius:6px;font-size:.86rem;margin-top:10px;max-width:72ch}
+.chosen{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:.88rem}
+.mission{display:flex;flex-direction:column;gap:6px;padding:12px 0;border-top:1px solid var(--soft)}
+.mission:first-child{border-top:none}
+.mission .row{display:flex;justify-content:space-between;gap:10px;align-items:baseline;flex-wrap:wrap}
+.mission small{color:var(--muted);font-size:.78rem}
+.mission .meter div{transition:width .5s}
+.found-link{display:flex;gap:14px;align-items:center;text-decoration:none;color:inherit}
+.found-link:hover{border-color:var(--ink)}
+
+/* setup survey */
+.wiz-back{position:fixed;inset:0;background:color-mix(in srgb,var(--ink) 50%,transparent);z-index:30;display:grid;place-items:center;padding:calc(16px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) calc(16px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+.wiz{background:var(--paper);border:1px solid var(--line);border-radius:14px;width:min(620px,100%);max-height:100%;overflow:auto;padding:24px;display:flex;flex-direction:column;gap:16px}
+.wiz h2{font-size:1.35rem;font-weight:800}
+.wiz p.q{margin:0;color:var(--muted)}
+.wiz-prog{display:flex;gap:4px}
+.wiz-prog i{flex:1;height:4px;border-radius:2px;background:var(--soft)}
+.wiz-prog i.on{background:var(--z-agent)}
+.opts{display:grid;gap:8px}
+.opts.cols{grid-template-columns:1fr 1fr}
+.opt{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:8px;padding:10px 12px;cursor:pointer}
+.opt:has(input:checked){border-color:var(--z-agent);background:var(--tint-agent)}
+.opt input{margin-top:4px;accent-color:var(--z-agent)}
+.opt small{display:block;color:var(--muted);font-size:.8rem}
+.slider{display:flex;flex-direction:column;gap:4px}
+.slider input{width:100%;accent-color:var(--z-agent)}
+.slider .v{font-family:var(--f-display);font-stretch:112%;font-weight:800;font-size:1.3rem}
+.slider small{color:var(--muted);font-size:.8rem}
+.wiz-foot{display:flex;justify-content:space-between;gap:8px;align-items:center}
+.sum-list{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px}
+.sub-q{font-weight:600;margin-top:4px}
+
+/* assistant */
+aside.chat{border-left:1px solid var(--line);display:flex;flex-direction:column;background:var(--paper);min-height:0;padding-right:max(0px,env(safe-area-inset-right,0px));position:relative}
+.chat-head{padding:20px 18px 12px;border-bottom:1px solid var(--line)}
+.chat-head h2{font-size:1rem}
+.chat-head p{margin:2px 0 0;font-size:.8rem;color:var(--muted)}
+.msgs{flex:1;overflow-y:auto;padding:16px 18px;display:flex;flex-direction:column;gap:10px;min-height:260px;max-height:calc(100vh - 220px)}
+.msg{max-width:88%;padding:9px 12px;border-radius:10px;font-size:.9rem}
+.msg.me{align-self:flex-end;background:var(--ink);color:var(--bg);border-bottom-right-radius:3px}
+.msg.bank{align-self:flex-start;background:var(--bg);border-bottom-left-radius:3px}
+.msg.bank .card-mini{background:var(--paper);border:1px solid var(--line);border-radius:7px;padding:9px 10px;margin-top:8px;font-size:.84rem;display:flex;flex-direction:column;gap:4px}
+.msg.bank .card-mini .row{display:flex;justify-content:space-between;gap:10px}
+.msg.bank .card-mini .row span:first-child{color:var(--muted)}
+.msg.bank .card-mini .row b{white-space:nowrap;text-align:right}
+.msg .note{font-size:.75rem;color:var(--muted);margin-top:6px}
+.sugs{display:flex;flex-wrap:wrap;gap:6px;padding:0 18px 10px}
+.sugs button{background:var(--bg);border:1px solid var(--line);border-radius:999px;padding:4px 10px;font-size:.8rem}
+.sugs button:hover{border-color:var(--ink)}
+form.input{display:flex;gap:8px;padding:12px 18px 18px;border-top:1px solid var(--line)}
+form.input input{flex:1;min-width:0;border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:9px 12px;font:inherit;color:var(--ink)}
+
+/* architecture overlay */
+[data-box]{position:relative}
+.boxtag{display:none;position:absolute;top:-9px;right:10px;z-index:5;font:500 .66rem var(--f-mono);padding:1px 6px;border-radius:4px;color:var(--paper);white-space:nowrap;pointer-events:none}
+body.arch .boxtag{display:block}
+body.arch [data-box]{outline:1.5px dashed var(--z-agent);outline-offset:3px}
+
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);border-radius:8px;padding:9px 16px;font-size:.88rem;z-index:20;transition:opacity .2s}
+
+@media (max-width:1180px){.shell{grid-template-columns:190px minmax(0,1fr)} aside.chat{grid-column:1 / -1;border-left:none;border-top:1px solid var(--line)} .msgs{max-height:420px}}
+@media (max-width:820px){
+  .shell{grid-template-columns:minmax(0,1fr)}
+  nav.side{flex-direction:row;flex-wrap:wrap;border-right:none;border-bottom:1px solid var(--line);padding:12px max(16px,env(safe-area-inset-right,0px)) 12px max(16px,env(safe-area-inset-left,0px));align-items:center}
+  .brand{margin:0 10px 0 0}
+  .agent-state{display:none}
+  main{padding:20px max(16px,env(safe-area-inset-right,0px)) 32px max(16px,env(safe-area-inset-left,0px))}
+  .summary,.two,.groups,.shield{grid-template-columns:minmax(0,1fr)}
+  .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .cat-row{grid-template-columns:96px minmax(0,1fr) 120px}
+  .opts.cols{grid-template-columns:minmax(0,1fr)}
+  form.add{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+  .chat-head,.msgs,.sugs,form.input{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+}
+@media (max-width:480px){.split-sum{grid-template-columns:minmax(0,1fr)} nav.side a span.lbl{display:none} .item{grid-template-columns:30px minmax(0,1fr)} .item .acts{grid-column:2;justify-content:flex-start}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="demo">
+  <span>Example app with made-up account data. Plinth is a fictional bank.</span>
+  <span style="display:flex;gap:16px;flex-wrap:wrap;align-items:center"><button type="button" id="rerun-setup" style="background:none;border:1px solid currentColor;border-radius:5px;padding:2px 8px;color:inherit;font-size:.78rem">Run setup again</button>
+  <label for="arch-toggle"><input type="checkbox" id="arch-toggle"> Show which map boxes power each part</label></span>
+</div>
+
+<div class="shell">
+  <nav class="side" aria-label="Main">
+    <div class="brand"><svg width="26" height="26" viewBox="0 0 26 26"><rect x="2" y="16" width="22" height="7" rx="1.5" fill="var(--ink)"/><rect x="6" y="9" width="14" height="6" rx="1.5" fill="var(--z-agent)"/><rect x="10" y="3" width="6" height="5" rx="1.5" fill="var(--z-intel)"/></svg><b>Plinth</b></div>
+    <a href="#home" data-view="home"><svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg><span class="lbl">Home</span></a>
+    <a href="#discover" data-view="discover"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></svg><span class="lbl">Discoveries</span><span class="count" id="disc-count">4</span></a>
+    <a href="#activity" data-view="activity"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg><span class="lbl">Activity</span></a>
+    <a href="#accounts" data-view="accounts"><svg viewBox="0 0 24 24"><path d="M3 10l9-6 9 6M5 10v8M10 10v8M14 10v8M19 10v8M3 21h18"/></svg><span class="lbl">All accounts</span></a>
+    <a href="#forecast" data-view="forecast"><svg viewBox="0 0 24 24"><path d="M3 20h18M5 16l4-5 4 3 6-8"/></svg><span class="lbl">Forecast</span></a>
+    <a href="#invest" data-view="invest"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 4v8l6 4"/></svg><span class="lbl">Invest</span></a>
+    <a href="#split" data-view="split"><svg viewBox="0 0 24 24"><circle cx="8" cy="9" r="3"/><circle cx="16" cy="9" r="3"/><path d="M2 20c.8-3 3.2-5 6-5s5.2 2 6 5M14 15.3c.6-.2 1.3-.3 2-.3 2.8 0 5.2 2 6 5"/></svg><span class="lbl">Split</span><span class="count" id="split-count">1</span></a>
+    <a href="#agent" data-view="agent"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg><span class="lbl">Agent &amp; limits</span><span class="count" id="nav-count">1</span></a>
+    <a href="#privacy" data-view="privacy"><svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg><span class="lbl">Privacy</span></a>
+    <div class="agent-state" id="agent-state"><div><span class="dot"></span><b id="agent-state-label">Agent active</b></div><span class="m" id="agent-state-sub" style="color:var(--muted)">Acting within 4 rules and 2 mandates</span></div>
+  </nav>
+
+  <main>
+    <!-- HOME -->
+    <div id="view-home" class="view">
+      <div style="display:flex;flex-direction:column;gap:20px">
+        <div class="top"><div><h1>Good morning, Sam</h1><p>Monday, 23 November · your agent did 4 things since Friday</p></div></div>
+
+        <div class="card ask" data-box="AG-04" id="approval">
+          <div class="ask-row">
+            <div class="ico pay"><svg viewBox="0 0 24 24"><path d="M3 12h18M13 6l6 6-6 6"/></svg></div>
+            <div style="flex:1;min-width:220px">
+              <span class="ftag">Found</span><h2 style="margin-top:6px">The same internet speed is available for $20 less a month</h2>
+              <p>Your provider has a 500 Mbps plan for $55. You pay $75, and you've never used more than 300 Mbps. Switching changes your contract, so nothing happens unless you choose it.</p>
+            </div>
+            <div class="btns"><button class="btn" id="approve-no" type="button">Keep my plan</button><button class="btn primary" id="approve-yes" type="button">Switch to $55</button></div>
+          </div>
+        </div>
+
+        <a class="card found-link" href="#discover" data-box="AG-01">
+          <div class="ico pay"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></svg></div>
+          <div style="flex:1;min-width:0"><b>Your agents found <span id="home-found">4 things</span> this week</b><div class="m" style="font-size:.84rem;color:var(--muted)">Lower 401(k) fees, cheaper car insurance quotes, a $30 price drop and a question about your subscriptions. Nothing changes unless you choose.</div></div>
+          <span class="textlink" style="white-space:nowrap">See them</span>
+        </a>
+
+        <div class="summary">
+          <div class="card" data-box="IN-05">
+            <div class="card-head"><h2>Checking</h2><small>30-day forecast</small></div>
+            <div class="bal"><span class="label">Available now</span><span class="amt num">$3,420<span>.40</span></span>
+              <span class="safe"><i></i><span id="safe-text">Safe to spend: $73 until payday on Fri 4 Dec</span></span></div>
+            <svg id="forecast" role="img" aria-label="Balance forecast for the next 30 days"></svg>
+          </div>
+          <div class="card" data-box="CP-04">
+            <div class="card-head"><h2>Accounts &amp; goals</h2></div>
+            <div class="accts">
+              <div class="acct"><div>House fund<small>Goal $40,000 by June 2028</small><div class="goal-bar"><div id="house-bar" style="width:45.85%"></div></div></div><b class="num" id="house-amt">$18,340.00</b></div>
+              <div class="acct"><div>Emergency fund<small>Full: 3 months of essentials</small><div class="goal-bar"><div style="width:100%"></div></div></div><b class="num">$6,000.00</b></div>
+              <div class="acct"><div>Credit card<small>Autopays in full on 15 Dec</small></div><b class="num">−$418.22</b></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" data-box="AG-01 · TR-02">
+          <div class="card-head"><h2>What your agent did</h2><small>Every action can be explained or undone</small></div>
+          <div class="feed" id="feed"></div>
+        </div>
+
+        <div class="two">
+          <div class="card" data-box="IN-05">
+            <div class="card-head"><h2>Coming up before payday</h2></div>
+            <div class="bill"><span><span class="d">28 Nov</span>Phone</span><b class="num">$65.00</b></div>
+            <div class="bill"><span><span class="d">30 Nov</span>Electricity (estimated)</span><b class="num">$112.00</b></div>
+            <div class="bill"><span><span class="d">1 Dec</span>Rent</span><b class="num">$1,450.00</b></div>
+            <div class="bill"><span><span class="d">daily</span>Usual spending</span><b class="num">~$20.00</b></div>
+          </div>
+          <div class="card" data-box="SF-03 · AG-04">
+            <div class="card-head"><h2>Connected agents</h2><a href="#agent" style="font-size:.82rem;color:var(--z-agent)">Manage</a></div>
+            <div class="bill"><span>Trip planner<br><span class="cat">Travel only · up to $1,500 · ends Sun 29 Nov</span></span><b class="num">$1,180 used</b></div>
+            <div class="bill"><span>Grocery shopper<br><span class="cat">Groceries only · up to $200 a week</span></span><b class="num">$0 used</b></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ACTIVITY -->
+    <div id="view-activity" class="view" hidden>
+      <div style="display:flex;flex-direction:column;gap:20px">
+        <div class="top"><div><h1>Activity</h1><p>Posted the moment they happen. Nothing stays pending.</p></div></div>
+        <div class="card" data-box="CO-01">
+          <div class="scroll"><table>
+            <thead><tr><th>Date</th><th>Description</th><th style="text-align:right">Amount</th><th></th></tr></thead>
+            <tbody id="tx"></tbody>
+          </table></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- DISCOVERIES -->
+    <div id="view-discover" class="view" hidden>
+      <div style="display:flex;flex-direction:column;gap:20px">
+        <div class="top"><div><h1>Discoveries</h1><p>Your agents look around and report back with facts and options. They don't act on what they find unless you choose to.</p></div></div>
+        <div class="card" data-box="AG-02 · AG-01">
+          <div class="card-head"><h2>Send an agent to look into something</h2><small>It reports back. It won't act on what it finds</small></div>
+          <form class="input" id="mission-form" style="padding:0;border:none"><input id="mission-input" autocomplete="off" placeholder="e.g. Am I paying too much for my phone?"><button class="btn primary" type="submit">Look into it</button></form>
+          <div class="sugs" id="mission-sugs" style="padding:10px 0 0">
+            <button type="button">Find a better rate for my emergency fund</button>
+            <button type="button">Could I afford to move somewhere cheaper?</button>
+            <button type="button">What would a $500 a month raise change?</button>
+          </div>
+          <div class="exp-title">In progress</div>
+          <div id="missions"></div>
+        </div>
+        <div class="card-head" style="margin:0"><h2 style="font-size:1.1rem">Found this week</h2><small>Newest first</small></div>
+        <div id="findings" style="display:flex;flex-direction:column;gap:14px"></div>
+        <div class="two">
+          <div class="card" data-box="AG-05"><div class="card-head"><h2>What your agents keep an eye on</h2></div><div id="standing"></div></div>
+          <div class="card" data-box="TR-03"><div class="card-head"><h2>How they report back</h2></div>
+            <div class="opts" id="adv-opts">
+              <label class="opt"><input type="radio" name="adv2" value="none"><span>Facts and options only<small>Agents never say what they'd pick</small></span></label>
+              <label class="opt"><input type="radio" name="adv2" value="ask" checked><span>Facts and options, and their view if I ask<small>A link under each finding shows it</small></span></label>
+              <label class="opt"><input type="radio" name="adv2" value="tell"><span>Facts, options and what they'd pick<small>Shown under every finding</small></span></label>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ALL ACCOUNTS -->
+    <div id="view-accounts" class="view" hidden>
+      <div style="display:flex;flex-direction:column;gap:20px">
+        <div class="top"><div><h1>All accounts</h1><p>Plinth plus your accounts at other banks, linked with your permission over open banking.</p></div></div>
+        <div class="kpis" data-box="CO-04 · IN-02">
+          <div class="card"><span class="label">Net worth</span><b class="num" id="nw-total"></b><small>Everything you own minus what you owe</small></div>
+          <div class="card"><span class="label">Cash</span><b class="num" id="nw-cash"></b><small>Checking and savings</small></div>
+          <div class="card"><span class="label">Investments</span><b class="num" id="nw-inv"></b><small>Including your 401(k)</small></div>
+          <div class="card"><span class="label">Debt</span><b class="num" id="nw-debt" style="color:var(--bad)"></b><small>Cards and loans</small></div>
+        </div>
+        <div class="card ask" id="acct-insight" data-box="AG-01">
+          <div class="ask-row">
+            <div class="ico cut"><svg viewBox="0 0 24 24"><path d="M5 12h14"/><circle cx="12" cy="12" r="8"/></svg></div>
+            <div style="flex:1;min-width:220px"><span class="ftag">Found</span><h2 style="margin-top:6px">$2,140 is sitting idle while Summit Card charges 24.9%</h2>
+              <p>Harbor checking pays 0.01% and you haven't spent from it in 3 months. Summit's balance is $2,310.55. Here's what each choice does:</p>
+              <div class="choices" style="margin-top:10px" id="ins-choices">
+                <button class="choice" type="button" data-amt="2000"><b>Pay $2,000 off</b><small>About $41 a month less interest. Harbor keeps $140.</small></button>
+                <button class="choice" type="button" data-amt="1000"><b>Pay $1,000 off</b><small>About $21 a month less interest. Harbor keeps $1,140.</small></button>
+                <button class="choice" type="button" data-amt="0"><b>Leave it</b><small>This won't come up again for 3 months.</small></button>
+              </div></div>
+          </div>
+        </div>
+        <div class="card" data-box="CO-04 · TR-01">
+          <div class="card-head"><h2>Accounts</h2><small>Balances update live at Plinth and every few minutes elsewhere</small></div>
+          <div class="scroll"><table><thead><tr><th>Bank</th><th>Account</th><th style="text-align:right">Balance</th><th>Plinth can</th><th></th></tr></thead><tbody id="accts"></tbody></table></div>
+          <div class="linker" id="linker"><button class="btn" type="button" id="link-start">Link another bank</button></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FORECAST -->
+    <div id="view-forecast" class="view" hidden>
+      <div style="display:flex;flex-direction:column;gap:20px">
+        <div class="top"><div><h1>Forecast</h1><p>What comes in, what goes out, and where your current pace takes you.</p></div></div>
+        <div class="kpis" data-box="IN-05">
+          <div class="card"><span class="label">Comes in each month</span><b class="num" style="color:var(--good)">$6,480</b><small>Two paychecks of $3,240</small></div>
+          <div class="card"><span class="label">Usual spending</span><b class="num">$5,108</b><small>Average of the last 6 months</small></div>
+          <div class="card"><span class="label">November, on pace for</span><b class="num" style="color:var(--bad)">$5,890</b><small>$782 more than usual</small></div>
+          <div class="card"><span class="label">Left to save</span><b class="num">$1,372 <span style="font-size:.9rem;color:var(--muted)">→ $590</span></b><small>Usual, then November's pace</small></div>
+        </div>
+        <div class="card" data-box="IN-05 · IN-02">
+          <div class="card-head"><h2>November compared with your usual month</h2><small>Grey is usual, colored is November's pace</small></div>
+          <div id="cats"></div>
+        </div>
+        <div class="card" data-box="IN-05 · AG-01">
+          <div class="card-head"><h2>If you carry on like this</h2><small>House fund, assuming everything you save goes there</small></div>
+          <svg class="chart" id="plan-chart" height="220" role="img" aria-label="House fund projection over the next 3 years"></svg>
+          <div class="lines-legend"><span><i style="background:var(--good)"></i>Your usual month</span><span><i style="background:var(--bad)"></i>Every month like November</span><span><i style="background:var(--z-agent)"></i>November with your changes</span></div>
+          <div class="story" id="plan-story"></div>
+          <div class="range"><label for="cut" style="font-weight:600">Try it: cut eating out and shopping by <span id="cut-v">20</span>%</label><input type="range" id="cut" min="0" max="60" step="5" value="20"><span style="font-size:.8rem;color:var(--muted)" id="cut-note"></span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- INVEST -->
+    <div id="view-invest" class="view" hidden>
+      <div style="display:flex;flex-direction:column;gap:20px">
+        <div class="top"><div><h1>Invest</h1><p>Your agent manages this portfolio inside the limits you set, and explains every trade.</p></div></div>
+        <div class="kpis" data-box="CP-04">
+          <div class="card"><span class="label">Portfolio</span><b class="num">$24,870</b><small>Managed by your agent</small></div>
+          <div class="card"><span class="label">This year</span><b class="num" style="color:var(--good)">+$2,140</b><small>+9.4% after fees</small></div>
+          <div class="card"><span class="label">Your plan</span><b id="inv-profile">Balanced growth</b><small id="inv-mix">70% stocks, 30% bonds</small></div>
+          <div class="card"><span class="label">Fees</span><b class="num">0.08%</b><small>About $20 a year</small></div>
+        </div>
+        <div class="card" data-box="CP-04 · IN-03">
+          <div class="card-head"><h2>Mix</h2><small>Target, then today. The agent rebalances when anything drifts 3 points</small></div>
+          <div id="alloc"></div>
+        </div>
+        <div class="card" data-box="AG-01 · TR-02">
+          <div class="card-head"><h2>What your investing agent did</h2><small>Every trade with its reason</small></div>
+          <div class="feed" id="trades"></div>
+        </div>
+        <div class="card" data-box="AG-05 · TR-05">
+          <div class="card-head"><h2>Investing limits</h2><small>Set in your setup; the agent can't change these</small></div>
+          <div class="rule"><div><b>Only diversified index funds and bonds</b><small>No single stocks, crypto, options or leverage</small></div><button class="switch" role="switch" aria-checked="true" aria-label="Index funds only"></button></div>
+          <div class="rule"><div><b id="rule-drop">Stop and ask me if the portfolio falls 15% in a month</b><small>Trading pauses until you reply. Rebalancing resumes after</small></div><button class="switch" role="switch" aria-checked="true" aria-label="Pause on large falls"></button></div>
+          <div class="rule"><div><b>Invest idle cash above my buffers</b><small>Only from the House fund overflow, up to $500 a month</small></div><button class="switch" role="switch" aria-checked="true" aria-label="Invest idle cash"></button></div>
+          <div class="rule"><div><b>Harvest tax losses</b><small>Sells a fund at a loss and buys a near-identical one to cut your tax bill</small></div><button class="switch" role="switch" aria-checked="true" aria-label="Harvest tax losses"></button></div>
+        </div>
+        <div class="card ask" id="drop-brief" data-box="AG-01 · TR-03" hidden>
+          <div class="card-head"><h2>Example briefing: your portfolio is down 15% this month</h2><small>What you'd get before anything happens</small></div>
+          <div style="display:flex;flex-direction:column;gap:12px;font-size:.9rem;max-width:74ch">
+            <div><b>What happened.</b> US stocks fell 24% over three weeks after a surprise rate rise. International stocks fell 20%. Your bonds rose 2%, so your portfolio is down 15%, from $24,870 to $21,090.</div>
+            <div><b>How it compares.</b> Falls of 15% or more have happened many times in US stock market history. Every one so far has recovered, some within months and some only after several years. Nobody knows which kind this is.</div>
+            <div><b>What it means for you.</b> You told me you need this money in more than 10 years. Your House fund and emergency fund are in cash, so this fall doesn't touch your house plans.</div>
+            <div><b>Your options.</b> Nothing happens until you pick one.</div>
+            <div class="choices" id="brief-choices">
+              <button class="choice" type="button" data-choice="Hold, no trades"><b>Hold, no trades</b><small>Your mix stays at 64% stocks. No losses locked in.</small></button>
+              <button class="choice" type="button" data-choice="Rebalance to 70% stocks"><b>Rebalance to your 70% target</b><small>Sells about $1,250 of bonds and buys stocks at today's prices.</small></button>
+              <button class="choice" type="button" data-choice="Move 20% more into bonds"><b>Move 20% more into bonds</b><small>Smaller swings from here and smaller gains in a recovery. Locks in about $1,190 of losses.</small></button>
+              <button class="choice" type="button" data-choice="Sell everything to cash"><b>Sell everything to cash</b><small>No further falls and no recovery. Locks in the $3,780 loss.</small></button>
+              <button class="choice" type="button" data-choice="Talk to an adviser"><b>Talk to a human adviser</b><small>A call within the hour. Nothing changes meanwhile.</small></button>
+            </div>
+            <div><button class="textlink" type="button" id="brief-lean-btn">What would the agent pick?</button>
+              <div class="lean" id="brief-lean" hidden>If it were up to the agent: rebalance. You said you won't need this money for more than 10 years, and rebalancing is what your plan was set up to do. It's your call.</div></div>
+            <small style="color:var(--muted)">This is an example with made-up market moves. The agent takes no action until you choose.</small>
+          </div>
+        </div>
+        <div class="card note-card">
+          <h2>What the agent can and can't do</h2>
+          <p style="margin:6px 0 0;max-width:70ch;color:var(--muted)">No person or AI can reliably predict where markets go next, and agents that trade often tend to lose money to fees and taxes. Your agent's job is narrower: keep you diversified, keep costs low, rebalance on schedule, cut your tax bill, and stop panic-selling when markets drop. Past returns don't guarantee future ones.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- SPLIT -->
+    <div id="view-split" class="view" hidden>
+      <div style="display:flex;flex-direction:column;gap:20px">
+        <div class="top"><div><h1>Split</h1><p>Shared costs with flatmates and friends. Everyone settles by instant bank transfer.</p></div></div>
+
+        <div class="split-sum" data-box="CP-01">
+          <div class="card stat"><span class="label">You're owed</span><b class="num" id="s-owed" style="color:var(--good)">$0</b></div>
+          <div class="card stat"><span class="label">You owe</span><b class="num" id="s-owe" style="color:var(--bad)">$0</b></div>
+          <div class="card stat"><span class="label">Overall</span><b class="num" id="s-net">$0</b></div>
+        </div>
+
+        <div class="card ask" id="split-suggest" data-box="AG-01 · IN-02">
+          <div class="ask-row">
+            <div class="ico pay"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M3 10h18"/></svg></div>
+            <div style="flex:1;min-width:220px">
+              <h2>Split the Coastline Air flights with Priya?</h2>
+              <p>The $1,180 booking on 21 Nov has two passengers, you and Priya Shah. Priya is in your Lisbon trip group. Her half would be $590.</p>
+            </div>
+            <div class="btns"><button class="btn" id="split-no" type="button">Not shared</button><button class="btn primary" id="split-yes" type="button">Split 50/50</button></div>
+          </div>
+        </div>
+
+        <div class="groups" id="groups"></div>
+
+        <div class="card" data-box="AG-05">
+          <div class="card-head"><h2>Automatic splits</h2><small>Your agent follows these for shared bills</small></div>
+          <div class="rule"><div><b>Split household bills with Flatmates</b><small>When electricity or internet posts, add it to Flatmates and send each person a request</small></div><button class="switch" role="switch" aria-checked="true" aria-label="Split household bills automatically"></button></div>
+          <div class="rule"><div><b>Remind people after 7 days</b><small>One friendly reminder, then I leave it to you</small></div><button class="switch" role="switch" aria-checked="true" aria-label="Send reminders"></button></div>
+        </div>
+
+        <div class="card" data-box="CP-01">
+          <div class="card-head"><h2>Add a shared cost</h2><small>You paid; split equally</small></div>
+          <form class="add" id="split-form">
+            <label for="split-desc">What for<input id="split-desc" placeholder="e.g. Takeaway on Friday" required></label>
+            <label for="split-amt">Amount ($)<input id="split-amt" type="number" min="0.01" step="0.01" placeholder="48.00" required></label>
+            <label for="split-group">Group<select id="split-group"><option value="flat">Flatmates</option><option value="lisbon">Lisbon trip</option></select></label>
+            <button class="btn primary" type="submit">Add</button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- AGENT -->
+    <div id="view-agent" class="view" hidden>
+      <div style="display:flex;flex-direction:column;gap:20px">
+        <div class="top"><div><h1>Agent &amp; limits</h1><p>What your agent may do on its own, what needs your OK, and who else can act for you.</p></div></div>
+
+        <div class="card" data-box="AG-05">
+          <div class="card-head"><h2>Your rules</h2><small>Your agent can't act outside these</small></div>
+          <div class="rule"><div><b id="rule-buffer">Keep a $1,500 buffer in checking</b><small>After upcoming bills, move anything above it to the House fund</small></div><button class="switch" role="switch" aria-checked="true" aria-label="Keep a buffer"></button></div>
+          <div class="rule"><div><b id="rule-payee">Ask before paying anyone new over $500</b><small>Applies to you, your agent and connected agents</small></div><button class="switch" role="switch" aria-checked="true" aria-label="Ask before new payees"></button></div>
+          <div class="rule"><div><b>Check in about my subscriptions</b><small>Every 6 months, asks which ones you still use. Cancels only the ones you pick</small></div><button class="switch" role="switch" aria-checked="true" aria-label="Subscription check-ins"></button></div>
+          <div class="rule"><div><b>Negotiate bills</b><small>Always asks you before changing a contract</small></div><button class="switch" role="switch" aria-checked="true" aria-label="Negotiate bills"></button></div>
+          <div class="rule"><div><b>Round up purchases to the emergency fund</b><small>Off: the fund is full</small></div><button class="switch" role="switch" aria-checked="false" aria-label="Round up purchases"></button></div>
+        </div>
+
+        <div class="card" data-box="SF-03 · TR-01">
+          <div class="card-head"><h2>Connected agents</h2><small>Outside AI agents you've allowed to pay on your behalf</small></div>
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <div class="mandate"><div class="row"><b>Trip planner</b><button class="btn small danger" type="button" data-revoke>Revoke</button></div>
+              <div class="limits"><span>Travel merchants only</span><span>Up to $1,500 in total</span><span>Ends Sun 29 Nov</span><span>Single-use cards</span></div>
+              <div class="row" style="font-size:.8rem;color:var(--muted)"><span>$1,180 of $1,500 used</span><span>1 payment</span></div><div class="meter"><div style="width:78.7%"></div></div></div>
+            <div class="mandate"><div class="row"><b>Grocery shopper</b><button class="btn small danger" type="button" data-revoke>Revoke</button></div>
+              <div class="limits"><span>Grocery stores only</span><span>Up to $200 a week</span><span>No end date</span></div>
+              <div class="row" style="font-size:.8rem;color:var(--muted)"><span>$0 of $200 used this week</span><span>Resets Monday</span></div><div class="meter"><div style="width:0%"></div></div></div>
+          </div>
+        </div>
+
+        <div class="card kill" data-box="TR-05">
+          <div class="ask-row"><div style="flex:1;min-width:220px"><h2>Pause my agent</h2><p style="margin:4px 0 0;color:var(--muted)">Stops every automatic action and every connected agent straight away. Scam protection stays on. You can turn it back on any time.</p></div>
+          <button class="btn danger" type="button" id="pause">Pause agent</button></div>
+        </div>
+
+        <div class="card" data-box="TR-02">
+          <div class="card-head"><h2>Decision log</h2><small>Every action, the rule behind it, and what happened</small></div>
+          <div class="scroll"><table>
+            <thead><tr><th>When</th><th>Action</th><th>Allowed by</th><th>Result</th></tr></thead>
+            <tbody id="log"></tbody>
+          </table></div>
+        </div>
+      </div>
+    </div>
+    <!-- PRIVACY -->
+    <div id="view-privacy" class="view" hidden>
+      <div style="display:flex;flex-direction:column;gap:20px">
+        <div class="top"><div><h1>Privacy</h1><p>You decide who sees what. Every access to your data is logged here.</p></div></div>
+        <div class="card" data-box="TR-01">
+          <div class="card-head"><h2>Your choices</h2><small>Off unless you turn it on</small></div>
+          <div class="rule"><div><b>Use my transactions to give me advice</b><small>Needed for forecasts and your agent. Processed inside Plinth only</small></div><button class="switch" role="switch" aria-checked="true" aria-label="Use transactions for advice" id="pv-advice"></button></div>
+          <div class="rule"><div><b>Let Plinth train its AI models on my data</b><small>Off by default. If on, your data is anonymised first</small></div><button class="switch" role="switch" aria-checked="false" aria-label="Allow model training" id="pv-train"></button></div>
+          <div class="rule"><div><b>Share my data with partners for offers</b><small>Off by default. Plinth never sells your data</small></div><button class="switch" role="switch" aria-checked="false" aria-label="Share with partners" id="pv-share"></button></div>
+          <div class="rule"><div><b>Let connected agents see my balances</b><small>Off: they only get a single-use card number and your name</small></div><button class="switch" role="switch" aria-checked="false" aria-label="Connected agents see balances" id="pv-agents"></button></div>
+          <div class="rule"><div><b>Keep my chat history</b><small id="pv-chat-sub">Deleted automatically after 90 days</small></div><button class="switch" role="switch" aria-checked="true" aria-label="Keep chat history" id="pv-chat"></button></div>
+        </div>
+        <div class="card" data-box="CO-06 · TR-04">
+          <div class="card-head"><h2>How your data is protected</h2></div>
+          <div class="shield">
+            <div><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg><span><b>Encrypted everywhere</b>Stored and sent encrypted, with keys held in hardware security modules.</span></div>
+            <div><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 9h6v6H9z"/></svg><span><b>AI runs in sealed hardware</b>Your agent runs in confidential computing. Plinth staff can't read your prompts or its reasoning.</span></div>
+            <div><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M8 12h8"/></svg><span><b>Least data per agent</b>Each agent and app gets only the fields its task needs, for as long as the task lasts.</span></div>
+            <div><svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z"/></svg><span><b>Staff access is logged</b>An employee sees your data only when you ask for help or the law requires it, and it shows in the log below.</span></div>
+            <div><svg viewBox="0 0 24 24"><path d="M4 12h4l3-7 4 14 3-7h2"/></svg><span><b>Private statistics</b>Reports across customers use differential privacy, so no single person can be picked out.</span></div>
+            <div><svg viewBox="0 0 24 24"><circle cx="8" cy="12" r="4"/><path d="M12 12h9M18 12v3"/></svg><span><b>Passkeys, no passwords</b>Sign-in uses your device's passkey, so there's no password to steal or phish.</span></div>
+          </div>
+        </div>
+        <div class="card" data-box="TR-02">
+          <div class="card-head"><h2>Who saw your data</h2><small>Every read by a person, agent or app</small></div>
+          <div class="scroll"><table><thead><tr><th>When</th><th>Who</th><th>What they saw</th><th>Why</th></tr></thead><tbody id="access"></tbody></table></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h2>Your data</h2></div>
+          <div class="linker" id="data-actions"><button class="btn" type="button" id="export">Export everything</button><button class="btn danger" type="button" id="delete">Delete my data</button></div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <aside class="chat" data-box="SF-02 · AG-02">
+    <div class="chat-head"><h2>Ask Plinth</h2><p>Ask anything, or tell it what to do. It acts only within your rules.</p></div>
+    <div class="msgs" id="msgs" aria-live="polite"></div>
+    <div class="sugs" id="sugs">
+      <button type="button">Can I afford a $9,000 car repair loan?</button>
+      <button type="button">Why is my balance lower than usual?</button>
+      <button type="button">Dispute the Brightcart order</button>
+      <button type="button">Who owes me money?</button>
+    </div>
+    <form class="input" id="chat-form"><input id="chat-input" autocomplete="off" placeholder="e.g. Move $200 to my house fund"><button class="btn primary" type="submit">Send</button></form>
+  </aside>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+
+<div class="wiz-back" id="wiz" hidden role="dialog" aria-modal="true" aria-labelledby="wiz-title">
+  <form class="wiz" id="wiz-form">
+    <div class="wiz-prog" id="wiz-prog"></div>
+    <div class="step" data-step="0">
+      <div class="eyebrow" style="font:500 .72rem var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)">Set up your agent · about 2 minutes</div>
+      <h2 id="wiz-title">Before your agent does anything, tell it how you want to be looked after</h2>
+      <p class="q" style="margin-top:8px">Six questions. Your answers become the rules your agent can't break. You can change any of them later in Agent &amp; limits.</p>
+    </div>
+    <div class="step" data-step="1" hidden>
+      <h2>What are you working toward?</h2><p class="q">Pick any. Your agent puts spare money toward these, in this order.</p>
+      <div class="opts cols">
+        <label class="opt"><input type="checkbox" name="goal" value="Buy a home" checked><span>Buy a home<small>Grow the House fund</small></span></label>
+        <label class="opt"><input type="checkbox" name="goal" value="Emergency cushion" checked><span>Emergency cushion<small>3 to 6 months of essentials</small></span></label>
+        <label class="opt"><input type="checkbox" name="goal" value="Clear debt"><span>Clear debt<small>Cards first, then loans</small></span></label>
+        <label class="opt"><input type="checkbox" name="goal" value="Invest for the long term" checked><span>Invest for the long term<small>Retirement and beyond</small></span></label>
+        <label class="opt"><input type="checkbox" name="goal" value="Travel"><span>Travel<small>Save for trips</small></span></label>
+        <label class="opt"><input type="checkbox" name="goal" value="Spend less"><span>Spend less<small>Flag overspending early</small></span></label>
+      </div>
+    </div>
+    <div class="step" data-step="2" hidden>
+      <h2>How much should your agent do on its own?</h2>
+      <div class="opts">
+        <label class="opt"><input type="radio" name="auto" value="ask"><span>Ask me before everything<small>It suggests; you approve each action</small></span></label>
+        <label class="opt"><input type="radio" name="auto" value="small" checked><span>Handle small things, ask about big ones<small>Acts below your limit and tells you after</small></span></label>
+        <label class="opt"><input type="radio" name="auto" value="rules"><span>Act on anything within my rules<small>Tells you after, with Undo</small></span></label>
+      </div>
+      <p class="sub-q">When your agents find something, they should:</p>
+      <div class="opts">
+        <label class="opt"><input type="radio" name="adv" value="none"><span>Give me the facts and options only<small>They never say what they'd pick</small></span></label>
+        <label class="opt"><input type="radio" name="adv" value="ask" checked><span>Facts and options, and their view only if I ask</span></label>
+        <label class="opt"><input type="radio" name="adv" value="tell"><span>Facts, options and what they'd pick</span></label>
+      </div>
+    </div>
+    <div class="step" data-step="3" hidden>
+      <h2>Set your limits</h2>
+      <div class="slider"><label for="w-buf" class="sub-q">Always keep this much in checking</label><span class="v num" id="w-buf-v">$1,500</span><input type="range" id="w-buf" min="500" max="5000" step="100" value="1500"><small>Your agent never moves money below this</small></div>
+      <div class="slider"><label for="w-cap" class="sub-q">Largest payment it can make without asking</label><span class="v num" id="w-cap-v">$500</span><input type="range" id="w-cap" min="0" max="2000" step="50" value="500"><small>Anything bigger, or to someone new, needs your OK</small></div>
+    </div>
+    <div class="step" data-step="4" hidden>
+      <h2>Investing: how do you feel about risk?</h2>
+      <p class="sub-q">If your investments fell 20% in a month, you would:</p>
+      <div class="opts">
+        <label class="opt"><input type="radio" name="drop" value="0"><span>Sell to stop losing more</span></label>
+        <label class="opt"><input type="radio" name="drop" value="1" checked><span>Wait it out</span></label>
+        <label class="opt"><input type="radio" name="drop" value="2"><span>Buy more while prices are low</span></label>
+        <label class="opt"><input type="radio" name="drop" value="a"><span>Show me what's going on and your advice, then I'll decide<small>Your agent pauses, sends a short briefing with its recommendation, and waits for you</small></span></label>
+      </div>
+      <p class="sub-q">When will you need this money?</p>
+      <div class="opts cols">
+        <label class="opt"><input type="radio" name="hz" value="0"><span>Within 3 years</span></label>
+        <label class="opt"><input type="radio" name="hz" value="1"><span>In 3 to 10 years</span></label>
+        <label class="opt"><input type="radio" name="hz" value="2" checked><span>More than 10 years</span></label>
+      </div>
+    </div>
+    <div class="step" data-step="5" hidden>
+      <h2>Your data</h2><p class="q">Plinth only uses your data for you, unless you say otherwise.</p>
+      <div class="opts">
+        <label class="opt"><input type="checkbox" name="train"><span>Let Plinth train its AI models on my data<small>Anonymised first. Off by default</small></span></label>
+        <label class="opt"><input type="checkbox" name="share"><span>Share my data with partners for offers<small>Off by default</small></span></label>
+        <label class="opt"><input type="checkbox" name="chat" checked><span>Keep my chat history for 90 days<small>So your agent remembers recent conversations</small></span></label>
+      </div>
+    </div>
+    <div class="step" data-step="6" hidden>
+      <h2>Here are your agent's rules</h2><p class="q">Plain words, exactly as your agent will follow them.</p>
+      <ul class="sum-list" id="wiz-sum"></ul>
+    </div>
+    <div class="wiz-foot">
+      <button class="btn" type="button" id="wiz-back">Back</button>
+      <span style="display:flex;gap:8px"><button class="btn" type="button" id="wiz-skip">Skip for now</button><button class="btn primary" type="submit" id="wiz-next">Start</button></span>
+    </div>
+  </form>
+</div>
+
+<script>
+const $=s=>document.querySelector(s);
+const fmt=n=>(n<0?'−':'')+'$'+Math.abs(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+let paused=false, houseFund=18340, BUF=1500, CAP=500;
+
+/* architecture tags */
+const zoneColor={SF:'--z-surface',AG:'--z-agent',CP:'--z-product',IN:'--z-intel',CO:'--z-core',TR:'--z-trust'};
+document.querySelectorAll('[data-box]').forEach(el=>{
+  const t=document.createElement('span');t.className='boxtag';t.textContent=el.dataset.box;
+  t.style.background=`var(${zoneColor[el.dataset.box.slice(0,2)]})`;el.appendChild(t);
+});
+$('#arch-toggle').addEventListener('change',e=>document.body.classList.toggle('arch',e.target.checked));
+
+/* toast */
+let tt;function toast(m){const t=$('#toast');t.textContent=m;t.hidden=false;clearTimeout(tt);tt=setTimeout(()=>t.hidden=true,2600)}
+
+/* views */
+function show(){const v=(location.hash||'#home').slice(1);const name=['home','discover','activity','accounts','forecast','invest','split','agent','privacy'].includes(v)?v:'home';
+  document.querySelectorAll('.view').forEach(x=>x.hidden=x.id!=='view-'+name);
+  document.querySelectorAll('nav.side a').forEach(a=>{if(a.dataset.view===name)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current')});
+}
+window.addEventListener('hashchange',show);show();
+
+/* forecast chart */
+function drawForecast(){
+  const svg=$('#forecast');const W=svg.clientWidth||520,H=150,pl=44,pr=8,pt=10,pb=22;
+  const start=new Date(2026,10,23);let bal=3420.40;const pts=[];
+  const ev={'2026-11-28':-65,'2026-11-30':-112,'2026-12-01':-1450,'2026-12-04':3240,'2026-12-15':-418.22,'2026-12-18':3240};
+  for(let i=0;i<30;i++){const d=new Date(start);d.setDate(d.getDate()+i);const k=d.toISOString().slice(0,10);
+    if(i>0)bal-=20;if(ev[k])bal+=ev[k];
+    if(k==='2026-12-04'||k==='2026-12-18'){const sweep=Math.max(0,bal-BUF-1650);bal-=sweep}
+    pts.push({d,b:bal})}
+  const lo=0,hi=Math.max(4000,BUF+1000);const x=i=>pl+i*(W-pl-pr)/29,y=b=>pt+(hi-b)*(H-pt-pb)/(hi-lo);
+  const css=getComputedStyle(document.documentElement);
+  let g='';[0,1500,3000].forEach(v=>{g+=`<line x1="${pl}" x2="${W-pr}" y1="${y(v)}" y2="${y(v)}" stroke="var(--soft)"/><text x="${pl-6}" y="${y(v)+4}" text-anchor="end" font-size="10" fill="var(--muted)" font-family="var(--f-mono)">${v===0?'$0':'$'+(v/1000)+'k'}</text>`});
+  g+=`<line x1="${pl}" x2="${W-pr}" y1="${y(BUF)}" y2="${y(BUF)}" stroke="var(--z-agent)" stroke-dasharray="4 4"/><text x="${W-pr}" y="${y(BUF)-5}" text-anchor="end" font-size="10" fill="var(--z-agent)">your ${fmt(BUF).replace('.00','')} buffer</text>`;
+  const line=pts.map((p,i)=>`${i?'L':'M'}${x(i).toFixed(1)},${y(p.b).toFixed(1)}`).join(' ');
+  g+=`<path d="${line} L${x(29)},${y(0)} L${x(0)},${y(0)} Z" fill="var(--tint-intel)"/><path d="${line}" fill="none" stroke="var(--good)" stroke-width="2"/>`;
+  let mi=0;pts.forEach((p,i)=>{if(p.b<pts[mi].b)mi=i});
+  g+=`<circle cx="${x(mi)}" cy="${y(pts[mi].b)}" r="4" fill="var(--paper)" stroke="var(--good)" stroke-width="2"/><text x="${x(mi)+7}" y="${y(pts[mi].b)+14}" font-size="10" fill="var(--ink)">lowest ${fmt(pts[mi].b).replace('.00','')} on 3 Dec</text>`;
+  g+=`<circle cx="${x(0)}" cy="${y(pts[0].b)}" r="4" fill="var(--good)"/>`;
+  [[0,'23 Nov','start'],[8,'1 Dec rent','end'],[11,'4 Dec payday','start'],[25,'18 Dec payday','middle']].forEach(([i,l,a])=>g+=`<text x="${x(i)}" y="${H-6}" font-size="10" fill="var(--muted)" text-anchor="${a}">${l}</text>`);
+  svg.setAttribute('viewBox',`0 0 ${W} ${H}`);svg.innerHTML=g;
+  const spare=pts[mi].b-BUF;
+  $('#safe-text').textContent=spare>=0?`Safe to spend: ${fmt(spare)} extra before payday on Fri 4 Dec`:`Heads up: you'll dip ${fmt(-spare)} below your buffer before payday`;
+}
+new ResizeObserver(drawForecast).observe($('#forecast'));
+
+/* feed */
+const FEED=[
+  {id:'sweep',ico:'save',t:'Moved $340 to House fund',m:'Fri 20 Nov, 6:04am · after your paycheck arrived',state:'done',undo:true,
+   why:[['Trigger','Paycheck of $3,240 posted at 6:02am'],['Forecast','Bills before 4 Dec: $1,627. $340 above your buffer'],['Rule','Keep a $1,500 buffer, move the rest'],['Checked by','Guardrails: own accounts, within rule']]},
+  {id:'trip',ico:'pay',t:'Trip planner paid $1,180 to Coastline Air',m:'Sat 21 Nov, 2:15pm · single-use card, locked to the airline',state:'done',
+   why:[['Requested by','Trip planner (connected agent)'],['Mandate','Travel only, up to $1,500, ends 29 Nov'],['Card','Single-use virtual card, now closed'],['Checked by','Mandate active, merchant is an airline']]},
+  {id:'scam',ico:'block',t:'Held a $2,400 transfer to “Secure Acct Services”',m:'Thu 19 Nov, 11:42am · you confirmed it was a scam',state:'stopped',
+   why:[['Signals','You were on a call; new payee; 5× your usual transfer'],['Model','Matches a bank-impersonation scam'],['Rule','Ask before paying anyone new over $500'],['Outcome','You cancelled it after talking to our fraud team']]},
+  {id:'sub',ico:'cut',t:'Cancelled StreamMax, as you asked',m:'Wed 18 Nov · you said you no longer use it · saves $15.99 a month',state:'done',undo:true,
+   why:[['Trigger','Your 6-month subscription check-in on 11 Nov'],['Your answer','You said you no longer use StreamMax'],['Action','Cancelled at the end of the billing period'],['Rule','Check in about my subscriptions']]}
+];
+const ICONS={save:'<path d="M12 4v12M6 10l6 6 6-6M4 20h16"/>',pay:'<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M3 10h18"/>',block:'<circle cx="12" cy="12" r="8"/><path d="M6.5 6.5l11 11"/>',cut:'<path d="M5 12h14"/><circle cx="12" cy="12" r="8"/>'};
+function renderFeed(){
+  $('#feed').innerHTML=FEED.map(f=>`<div class="item ${f.state==='undone'?'undone':''}" data-id="${f.id}">
+    <div class="ico ${f.ico}"><svg viewBox="0 0 24 24">${ICONS[f.ico]}</svg></div>
+    <div style="min-width:0"><div class="t">${f.t}</div><div class="m">${f.m}</div>
+      <div class="why" hidden><dl>${f.why.map(([a,b])=>`<dt>${a}</dt><dd>${b}</dd>`).join('')}</dl></div></div>
+    <div class="acts"><span class="pill ${f.state==='done'?'done':f.state==='stopped'?'stopped':'undo'}">${f.state==='done'?'Done':f.state==='stopped'?'Stopped':'Undone'}</span>
+      <button class="btn small" type="button" data-why>Why?</button>${f.undo&&f.state==='done'?'<button class="btn small" type="button" data-undo>Undo</button>':''}</div></div>`).join('');
+}
+$('#feed').addEventListener('click',e=>{
+  const item=e.target.closest('.item');if(!item)return;const f=FEED.find(x=>x.id===item.dataset.id);
+  if(e.target.matches('[data-why]')){const w=item.querySelector('.why');w.hidden=!w.hidden;e.target.textContent=w.hidden?'Why?':'Hide'}
+  if(e.target.matches('[data-undo]')){f.state='undone';
+    if(f.id==='sweep'){houseFund-=340;$('#house-amt').textContent=fmt(houseFund);$('#house-bar').style.width=(houseFund/400)+'%';toast('Moved $340 back to checking')}
+    else toast('StreamMax will be restarted');
+    addLog('Now','Undo: '+f.t,'You','Reversed');renderFeed()}
+});
+renderFeed();
+
+/* approval */
+$('#approve-yes').onclick=()=>{$('#approval').innerHTML='<div class="ask-row"><div class="ico save"><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg></div><div><h2>Internet plan switched</h2><p>Your new $55 plan starts on 1 December. Saving $240 a year.</p></div></div>';$('#nav-count').hidden=true;addLog('Now','Switch internet plan to $55','Your approval','Done');toast('Plan switch approved')};
+$('#approve-no').onclick=()=>{$('#approval').hidden=true;$('#nav-count').hidden=true;toast('OK. I won’t ask again for 30 days')};
+
+/* activity */
+const TX=[['23 Nov','Corner Coffee','Food & drink',-4.80],['22 Nov','Brightcart (online order)','Shopping',-86.20,'dispute'],['21 Nov','Coastline Air','Travel',-1180,'agent splitme'],['20 Nov','Transfer to House fund','Savings',-340,'agent'],['20 Nov','Acme Corp payroll','Income',3240],['19 Nov','Greenleaf Market','Groceries',-62.15,'shared'],['18 Nov','StreamMax','Subscriptions',-15.99],['17 Nov','City Transit','Transport',-2.90]];
+$('#tx').innerHTML=TX.map(([d,n,c,a,f=''])=>`<tr><td class="mono" style="font-size:.78rem;color:var(--muted)">${d}</td><td>${n}${f.includes('agent')?'<span class="tag">by agent</span>':''}${f.includes('shared')?'<span class="tag">split with Flatmates</span>':''}<div class="cat">${c}</div></td><td class="amt ${a>0?'in':''}">${a>0?'+':''}${fmt(a)}</td><td style="text-align:right">${f.includes('dispute')?'<button class="btn small" type="button" data-dispute>Dispute</button>':''}${f.includes('splitme')?'<a class="btn small" href="#split" style="text-decoration:none">Split</a>':''}</td></tr>`).join('');
+$('#tx').addEventListener('click',e=>{if(e.target.matches('[data-dispute]'))ask('Dispute the Brightcart order')});
+
+/* split */
+const ME='Sam';
+const GROUPS={flat:{name:'Flatmates',members:['Sam','Jordan','Alex']},lisbon:{name:'Lisbon trip',members:['Sam','Priya']}};
+const EXP=[
+  {g:'flat',d:'30 Oct',desc:'Electricity',by:'Sam',amt:112},
+  {g:'flat',d:'5 Nov',desc:'Internet',by:'Jordan',amt:75},
+  {g:'flat',d:'12 Nov',desc:'Cleaning supplies',by:'Alex',amt:24},
+  {g:'flat',d:'19 Nov',desc:'Greenleaf Market',by:'Sam',amt:62.15},
+  {g:'lisbon',d:'15 Nov',desc:'Apartment, 4 nights',by:'Priya',amt:640}
+];
+const pending=new Set();
+const r2=n=>Math.round(n*100)/100;
+function net(g){const n={};GROUPS[g].members.forEach(m=>{if(m!==ME)n[m]=0});
+  EXP.filter(e=>e.g===g).forEach(e=>{const among=e.among||GROUPS[g].members;const share=e.amt/among.length;
+    among.forEach(m=>{if(m===e.by)return;if(e.by===ME)n[m]+=share;else if(m===ME)n[e.by]-=share})});
+  Object.keys(n).forEach(k=>n[k]=r2(n[k]));return n}
+function renderSplit(){
+  let owed=0,owe=0;
+  $('#groups').innerHTML=Object.entries(GROUPS).map(([g,G])=>{const n=net(g);
+    const people=Object.entries(n).map(([p,v])=>{owed+=v>0?v:0;owe+=v<0?-v:0;const key=g+'|'+p;
+      const status=Math.abs(v)<0.01?'<span class="even">Settled up</span>':v>0?`<span class="owes-you">Owes you ${fmt(v)}</span>`:`<span class="you-owe">You owe ${fmt(-v)}</span>`;
+      const btn=Math.abs(v)<0.01?'':v>0?(pending.has(key)?'<span class="pill undo">Requested</span>':`<button class="btn small" type="button" data-req="${key}">Request</button>`):`<button class="btn small primary" type="button" data-pay="${key}">Pay now</button>`;
+      return `<div class="person"><span class="avatar">${p[0]}</span><div><b>${p}</b><br>${status}</div>${btn}</div>`}).join('');
+    const exps=EXP.filter(e=>e.g===g).slice(-5).reverse().map(e=>{
+      if(e.settle)return `<div class="exp settle"><span>${e.desc}<small>${e.d} · instant transfer</small></span><span class="r num">${fmt(e.amt)}</span></div>`;
+      const among=e.among||G.members;const share=e.amt/among.length;
+      return `<div class="exp"><span>${e.desc}<small>${e.d} · paid by ${e.by===ME?'you':e.by}</small></span><span class="r num">${fmt(e.amt)}<small>your share ${fmt(r2(share))}</small></span></div>`}).join('');
+    return `<div class="card" data-box="CP-01 · CO-03"><div class="card-head"><h2>${G.name}</h2><span class="members">${G.members.map(m=>m===ME?'You':m).join(', ')}</span></div>${people}<div class="exp-title">Recent</div>${exps}</div>`}).join('');
+  $('#s-owed').textContent=fmt(r2(owed));$('#s-owe').textContent=fmt(r2(owe));
+  const nt=r2(owed-owe);$('#s-net').textContent=(nt>=0?'+':'')+fmt(nt);$('#s-net').style.color=nt>=0?'var(--good)':'var(--bad)';
+  document.querySelectorAll('#groups [data-box]').forEach(el=>{const t=document.createElement('span');t.className='boxtag';t.textContent=el.dataset.box;t.style.background='var(--z-product)';el.appendChild(t)});
+}
+$('#groups').addEventListener('click',e=>{
+  const req=e.target.dataset.req,pay=e.target.dataset.pay;
+  if(req){const [g,p]=req.split('|');const v=net(g)[p];pending.add(req);renderSplit();
+    toast(`Payment request for ${fmt(v)} sent to ${p}`);addLog('Now',`Request ${fmt(v)} from ${p}`,'Your request','Done');
+    setTimeout(()=>{EXP.push({g,d:'Today',desc:`${p} paid you`,by:p,amt:v,among:[ME],settle:true});pending.delete(req);renderSplit();toast(`${p} paid you ${fmt(v)}`)},2500)}
+  if(pay){const [g,p]=pay.split('|');const v=-net(g)[p];
+    EXP.push({g,d:'Today',desc:`You paid ${p}`,by:ME,amt:v,among:[p],settle:true});renderSplit();
+    toast(`Paid ${p} ${fmt(v)} instantly`);addLog('Now',`Pay ${p} ${fmt(v)}`,'Your request','Done')}
+});
+$('#split-yes').onclick=()=>{EXP.push({g:'lisbon',d:'21 Nov',desc:'Coastline Air flights',by:ME,amt:1180});renderSplit();
+  $('#split-suggest').innerHTML='<div class="ask-row"><div class="ico save"><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg></div><div><h2>Flights split with Priya</h2><p>Her share is $590. She already paid $640 for the apartment, so overall she owes you $270.</p></div></div>';
+  $('#split-count').hidden=true;addLog('Now','Split Coastline Air flights with Priya','Your approval','Done');toast('Added to Lisbon trip')};
+$('#split-no').onclick=()=>{$('#split-suggest').hidden=true;$('#split-count').hidden=true;toast('OK. I’ll treat it as yours alone')};
+$('#split-form').addEventListener('submit',e=>{e.preventDefault();const amt=r2(+$('#split-amt').value);const desc=$('#split-desc').value.trim();if(!(amt>0)||!desc)return;
+  const g=$('#split-group').value;EXP.push({g,d:'Today',desc,by:ME,amt});renderSplit();
+  toast(`Added. Each share is ${fmt(r2(amt/GROUPS[g].members.length))}`);$('#split-desc').value='';$('#split-amt').value=''});
+renderSplit();
+
+/* agent page */
+document.querySelectorAll('.switch').forEach(s=>s.addEventListener('click',()=>{const on=s.getAttribute('aria-checked')!=='true';s.setAttribute('aria-checked',on);toast(on?'Rule turned on':'Rule turned off')}));
+document.querySelectorAll('[data-revoke]').forEach(b=>b.addEventListener('click',()=>{const m=b.closest('.mandate');m.style.opacity=.5;b.replaceWith(Object.assign(document.createElement('span'),{className:'pill stopped',textContent:'Revoked'}));addLog('Now','Revoked '+m.querySelector('b').textContent,'You','Done');toast('Access revoked')}));
+$('#pause').addEventListener('click',()=>{paused=!paused;
+  $('#pause').textContent=paused?'Resume agent':'Pause agent';$('#agent-state').classList.toggle('paused',paused);
+  $('#agent-state-label').textContent=paused?'Agent paused':'Agent active';$('#agent-state-sub').textContent=paused?'No automatic actions until you resume':'Acting within 4 rules and 2 mandates';
+  addLog('Now',paused?'Agent paused':'Agent resumed','You','Done');toast(paused?'Agent paused. Nothing will happen automatically':'Agent resumed')});
+const LOG=[['Sat 21 Nov 14:15','Pay $1,180 to Coastline Air','Trip planner mandate','Done'],['Fri 20 Nov 06:04','Move $340 to House fund','Buffer rule','Done'],['Thu 19 Nov 11:42','Hold $2,400 transfer','New-payee rule + scam model','Stopped'],['Wed 18 Nov 09:00','Cancel StreamMax','Your answer to a check-in','Done']];
+function addLog(...r){LOG.unshift(r);renderLog()}
+function renderLog(){$('#log').innerHTML=LOG.map(([w,a,b,r])=>`<tr><td class="mono" style="font-size:.76rem;color:var(--muted);white-space:nowrap">${w}</td><td>${a}</td><td style="color:var(--muted)">${b}</td><td><span class="pill ${r==='Stopped'?'stopped':r==='Reversed'?'undo':'done'}">${r}</span></td></tr>`).join('')}
+renderLog();
+
+/* ALL ACCOUNTS */
+const ACCTS=[
+  {inst:'Plinth',name:'Checking',bal:3420.40,type:'cash',access:'Everything'},
+  {inst:'Plinth',name:'House fund',bal:()=>houseFund,type:'cash',access:'Everything'},
+  {inst:'Plinth',name:'Emergency fund',bal:6000,type:'cash',access:'Everything'},
+  {inst:'Plinth',name:'Invest, managed by your agent',bal:24870,type:'inv',access:'Everything'},
+  {inst:'Plinth',name:'Credit card',bal:-418.22,type:'debt',access:'Everything'},
+  {inst:'Harbor Credit Union',name:'Checking',bal:2140,type:'cash',access:'See and move money',ext:'Consent ends 23 May 2027 · synced 2 min ago',id:'harbor'},
+  {inst:'Summit Card',name:'Credit card, 24.9% APR',bal:-2310.55,type:'debt',access:'See only',ext:'Consent ends 23 May 2027 · synced 5 min ago',id:'summit'},
+  {inst:'Northwind',name:'401(k)',bal:41200,type:'inv',access:'See only',ext:'Consent ends 2 Feb 2027 · synced 1 hr ago'},
+  {inst:'Student loan servicer',name:'Student loan, 5.5%',bal:-14800,type:'debt',access:'See only',ext:'Consent ends 2 Feb 2027 · synced daily'}
+];
+const bv=a=>typeof a.bal==='function'?a.bal():a.bal;
+function renderAccts(){let c=0,i=0,d=0;
+  ACCTS.forEach(a=>{const v=bv(a);if(a.type==='cash')c+=v;else if(a.type==='inv')i+=v;else d+=v});
+  $('#nw-total').textContent=fmt(c+i+d).replace(/\.\d\d$/,'');$('#nw-cash').textContent=fmt(c).replace(/\.\d\d$/,'');$('#nw-inv').textContent=fmt(i).replace(/\.\d\d$/,'');$('#nw-debt').textContent=fmt(d).replace(/\.\d\d$/,'');
+  $('#accts').innerHTML=ACCTS.map((a,k)=>`<tr><td><b>${a.inst}</b>${a.ext?`<div class="cat">${a.ext}</div>`:'<div class="cat">Live</div>'}</td><td>${a.name}</td><td class="amt ${bv(a)>0?'':'out'}" style="${bv(a)<0?'color:var(--bad)':''}">${fmt(bv(a))}</td><td><span class="pill ${a.access==='See only'?'undo':'done'}">${a.access}</span></td><td style="text-align:right">${a.ext?`<button class="btn small danger" type="button" data-unlink="${k}">Unlink</button>`:''}</td></tr>`).join('')}
+$('#accts').addEventListener('click',e=>{const k=e.target.dataset.unlink;if(k===undefined)return;const a=ACCTS[k];ACCTS.splice(k,1);renderAccts();
+  addAccess('Now','Plinth','Access ended','You unlinked '+a.inst);addLog('Now','Unlink '+a.inst,'You','Done');toast(a.inst+' unlinked. Plinth deleted its copy of that data')});
+$('#ins-choices').addEventListener('click',e=>{const b=e.target.closest('[data-amt]');if(!b)return;const amt=+b.dataset.amt;
+  if(!amt){$('#acct-insight').hidden=true;toast('Left as it is');return}
+  const h=ACCTS.find(a=>a.id==='harbor'),s=ACCTS.find(a=>a.id==='summit');if(h)h.bal-=amt;if(s)s.bal+=amt;renderAccts();
+  $('#acct-insight').innerHTML=`<div class="ask-row"><div class="ico save"><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg></div><div><h2>${fmt(amt).replace('.00','')} paid to Summit Card</h2><p>Sent from Harbor over the instant payment network, as you chose.</p></div></div>`;
+  addLog('Now',`Pay ${fmt(amt).replace('.00','')} to Summit Card from Harbor`,'Your choice','Done');toast(`Paid ${fmt(amt).replace('.00','')} off Summit Card`)});
+$('#link-start').onclick=()=>{$('#linker').innerHTML='<span style="font-size:.85rem;color:var(--muted)">Choose your bank. You\'ll sign in on its own site, and Plinth never sees your password:</span><button class="btn small" type="button" data-bank="Lakeside Bank">Lakeside Bank</button><button class="btn small" type="button" data-bank="Pioneer Savings">Pioneer Savings</button><button class="btn small" type="button" data-bank="cancel">Cancel</button>'};
+$('#linker').addEventListener('click',e=>{const b=e.target.dataset.bank;if(!b)return;
+  if(b!=='cancel'){ACCTS.push({inst:b,name:'Savings',bal:5200,type:'cash',access:'See only',ext:'Consent ends 23 Nov 2027 · synced just now'});renderAccts();
+    addAccess('Now',b,'Balance and 24 months of transactions','You linked the account');toast(`${b} linked. Plinth can see it but not move money`)}
+  $('#linker').innerHTML='<button class="btn" type="button" id="link-start2">Link another bank</button>';$('#link-start2').onclick=$('#link-start').onclick});
+
+/* FORECAST */
+const CATS=[['Rent',1450,1450],['Groceries',520,505],['Eating out',610,850],['Shopping',690,1000],['Travel',520,640],['Transport',180,170],['Bills',252,252],['Subscriptions',96,80],['Student loan',450,450],['Other',340,493]];
+$('#cats').innerHTML=CATS.map(([n,u,t])=>{const d=t-u;const w=v=>(v/1450*100).toFixed(1)+'%';
+  return `<div class="cat-row"><span>${n}</span><div class="cat-bars"><div style="width:${w(u)};background:var(--line)"></div><div style="width:${w(t)};background:${d>50?'var(--bad)':'var(--z-intel)'}"></div></div><span class="vals">${fmt(t).replace('.00','')} ${d===0?'<span style="color:var(--muted)">same</span>':`<span class="${d>0?'up':'down'}">${d>0?'+':'−'}${fmt(Math.abs(d)).replace('.00','')}</span>`}</span></div>`}).join('');
+const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const monthName=k=>{const m=(10+k)%12,y=2026+Math.floor((10+k)/12);return MONTHS[m]+' '+y};
+function drawPlan(){
+  const cut=+$('#cut').value;$('#cut-v').textContent=cut;
+  const usual=1372,pace=590,changed=pace+Math.round((850+1000)*cut/100);
+  $('#cut-note').textContent=`Saves ${fmt((850+1000)*cut/100).replace('.00','')} a month, so you'd put away ${fmt(changed).replace('.00','')} instead of ${fmt(pace).replace('.00','')}.`;
+  const svg=$('#plan-chart');const W=svg.clientWidth||600,H=220,pl=48,pr=10,pt=12,pb=24,N=36,GOAL=40000;
+  const x=i=>pl+i*(W-pl-pr)/N,y=v=>pt+(50000-v)*(H-pt-pb)/50000;
+  const series=s=>Array.from({length:N+1},(_,i)=>Math.min(50000,houseFund+s*i));
+  const path=a=>a.map((v,i)=>`${i?'L':'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+  let g='';[0,10000,20000,30000,40000,50000].forEach(v=>g+=`<line x1="${pl}" x2="${W-pr}" y1="${y(v)}" y2="${y(v)}" stroke="var(--soft)"/><text x="${pl-6}" y="${y(v)+4}" text-anchor="end" font-size="10" fill="var(--muted)">$${v/1000}k</text>`);
+  g+=`<line x1="${pl}" x2="${W-pr}" y1="${y(GOAL)}" y2="${y(GOAL)}" stroke="var(--ink)" stroke-dasharray="5 4"/><text x="${pl+4}" y="${y(GOAL)-5}" font-size="10" fill="var(--ink)">Goal $40,000 by Jun 2028</text>`;
+  const goalIdx=19;g+=`<line x1="${x(goalIdx)}" x2="${x(goalIdx)}" y1="${pt}" y2="${H-pb}" stroke="var(--line)"/>`;
+  [[usual,'var(--good)'],[pace,'var(--bad)'],[changed,'var(--z-agent)']].forEach(([s,c])=>{g+=`<path d="${path(series(s))}" fill="none" stroke="${c}" stroke-width="2.5"/>`;
+    const m=Math.ceil((GOAL-houseFund)/s);if(m<=N)g+=`<circle cx="${x(m)}" cy="${y(GOAL)}" r="4.5" fill="var(--paper)" stroke="${c}" stroke-width="2.5"/>`});
+  [0,12,24,36].forEach(i=>g+=`<text x="${x(i)}" y="${H-6}" font-size="10" fill="var(--muted)" text-anchor="${i===0?'start':i===36?'end':'middle'}">${i===0?'Now':monthName(i)}</text>`);
+  svg.setAttribute('viewBox',`0 0 ${W} ${H}`);svg.innerHTML=g;
+  const when=s=>{const m=Math.ceil((GOAL-houseFund)/s);return {m,name:monthName(m),diff:m-19}};
+  const a=when(usual),b=when(pace),c=when(changed);
+  const rel=d=>d<=0?`${-d} month${d===-1?'':'s'} early`:`${d} month${d===1?'':'s'} late`;
+  $('#plan-story').innerHTML=`<p><b style="color:var(--good)">At your usual pace</b> you save ${fmt(usual).replace('.00','')} a month and reach $40,000 in <b>${a.name}</b>, ${rel(a.diff)}. A year from now you'd have ${fmt(houseFund+usual*12).replace('.00','')}.</p>
+    <p><b style="color:var(--bad)">If every month looked like November</b> you'd save ${fmt(pace).replace('.00','')} and reach it in <b>${b.name}</b>, ${rel(b.diff)}. Most of the gap is eating out (+$240) and shopping (+$310).</p>
+    <p><b style="color:var(--z-agent)">With your changes</b> you'd get there in <b>${c.name}</b>, ${rel(c.diff)}.</p>`;
+}
+$('#cut').addEventListener('input',drawPlan);
+new ResizeObserver(drawPlan).observe($('#plan-chart'));
+
+/* INVEST */
+let PROFILE={name:'Balanced growth',stocks:70};
+function renderAlloc(){const s=PROFILE.stocks,b=100-s-5;
+  const target=[['US stocks',Math.round(s*.6),'var(--z-agent)'],['International stocks',s-Math.round(s*.6),'var(--z-surface)'],['Bonds',b,'var(--z-product)'],['Cash',5,'var(--z-core)']];
+  const today=target.map(([n,v,c],i)=>[n,Math.max(0,v+[3,-1,-2,0][i]),c]);
+  const bar=a=>`<div class="alloc">${a.map(([n,v,c])=>`<div style="width:${v}%;background:${c}" title="${n} ${v}%"></div>`).join('')}</div>`;
+  $('#alloc').innerHTML=`<div style="font-size:.8rem;color:var(--muted);margin-bottom:4px">Target</div>${bar(target)}<div style="font-size:.8rem;color:var(--muted);margin:10px 0 4px">Today</div>${bar(today)}
+    <div class="alloc-legend">${target.map(([n,v,c],i)=>`<span><span><i style="background:${c}"></i>${n}</span><small>${v}% target · ${today[i][1]}% today</small></span>`).join('')}</div>`;
+  $('#inv-profile').textContent=PROFILE.name;$('#inv-mix').textContent=`${s}% stocks, ${100-s}% bonds and cash`}
+const TRADES=[
+  {id:'t1',ico:'save',t:'Invested $500 of idle cash',m:'Mon 23 Nov, 9:31am · bought US and international index funds',state:'done',
+   why:[['Trigger','House fund overflow above your buffers'],['Rule','Invest idle cash, up to $500 a month'],['Bought','$300 US index fund, $200 international index fund'],['Cost','$0 commission']]},
+  {id:'t2',ico:'cut',t:'Harvested an $840 tax loss',m:'Tue 17 Nov · sold an international fund at a loss, bought a near-identical one',state:'done',
+   why:[['Why','The fund was $840 below what you paid'],['Effect','Cuts next year\'s tax by about $200 at your rate'],['Exposure','Unchanged: the new fund tracks a near-identical index'],['Rule','Harvest tax losses']]},
+  {id:'t3',ico:'block',t:'Held steady when markets fell 6%',m:'Thu 12 Nov · no trades',state:'stopped',
+   why:[['What happened','US stocks fell 6% over two days'],['Plan says','Hold. You said you\'d wait out a 20% fall'],['Limit','Stop and ask only if the portfolio falls 15% in a month'],['Result','Markets recovered 4% by 20 Nov']]},
+  {id:'t4',ico:'pay',t:'Rebalanced back to your target',m:'Mon 2 Nov · stocks had drifted to 74%',state:'done',
+   why:[['Trigger','Stocks drifted 4 points above target'],['Trades','Sold $990 of US stocks fund, bought $990 of bonds fund'],['Tax','Used a tax-free account first, so no tax due']]}
+];
+function renderTrades(){$('#trades').innerHTML=TRADES.map(f=>`<div class="item" data-id="${f.id}"><div class="ico ${f.ico}"><svg viewBox="0 0 24 24">${ICONS[f.ico]}</svg></div>
+  <div style="min-width:0"><div class="t">${f.t}</div><div class="m">${f.m}</div><div class="why" hidden><dl>${f.why.map(([a,b])=>`<dt>${a}</dt><dd>${b}</dd>`).join('')}</dl></div></div>
+  <div class="acts"><span class="pill ${f.state==='done'?'done':'undo'}">${f.state==='done'?'Done':'No trade'}</span><button class="btn small" type="button" data-why>Why?</button></div></div>`).join('')}
+$('#trades').addEventListener('click',e=>{if(!e.target.matches('[data-why]'))return;const w=e.target.closest('.item').querySelector('.why');w.hidden=!w.hidden;e.target.textContent=w.hidden?'Why?':'Hide'});
+renderAlloc();renderTrades();
+$('#brief-lean-btn').onclick=()=>{$('#brief-lean').hidden=!$('#brief-lean').hidden};
+$('#brief-choices').addEventListener('click',e=>{const b=e.target.closest('[data-choice]');if(!b)return;const c=b.dataset.choice;
+  $('#brief-choices').innerHTML=`<span class="pill done">You chose: ${c}</span>`;addLog('Now','Market-drop decision: '+c,'Your decision after briefing','Done');
+  toast(c==='Talk to an adviser'?'An adviser will call you within the hour':'Done. Your agent will follow your choice')});
+
+/* PRIVACY */
+const ACCESS=[['Today 09:12','Your agent','30 days of transactions','Updated your forecast'],['Sat 21 Nov 14:15','Trip planner','Your name and a single-use card number','Paid Coastline Air'],['Fri 20 Nov 06:03','Your agent','Paycheck and upcoming bills','Savings sweep'],['Thu 19 Nov 11:44','Maria, Plinth fraud team','The held transfer and call notes','Scam review you asked for'],['Thu 19 Nov 06:00','Harbor Credit Union link','Balance and new transactions','Daily sync you allowed']];
+function addAccess(...r){ACCESS.unshift(r);renderAccess()}
+function renderAccess(){$('#access').innerHTML=ACCESS.map(([w,who,what,why])=>`<tr><td class="mono" style="font-size:.76rem;color:var(--muted);white-space:nowrap">${w}</td><td><b>${who}</b></td><td>${what}</td><td style="color:var(--muted)">${why}</td></tr>`).join('')}
+renderAccess();renderAccts();
+$('#pv-chat').addEventListener('click',()=>setTimeout(()=>$('#pv-chat-sub').textContent=$('#pv-chat').getAttribute('aria-checked')==='true'?'Deleted automatically after 90 days':'Deleted at the end of each conversation'));
+$('#export').onclick=()=>toast('Your export is being prepared. It will appear in Documents within an hour');
+$('#delete').onclick=()=>{$('#data-actions').innerHTML='<span style="font-size:.88rem">This closes your accounts and deletes your data, except records the law makes banks keep for 5 years.</span><button class="btn small" type="button" id="del-cancel">Keep my account</button><button class="btn small danger" type="button" id="del-ok">Yes, delete</button>';
+  $('#del-cancel').onclick=()=>{$('#data-actions').innerHTML='<button class="btn" type="button" id="export">Export everything</button><button class="btn danger" type="button" id="delete">Delete my data</button>';toast('Nothing deleted')};
+  $('#del-ok').onclick=()=>toast('Demo only: nothing was deleted')};
+
+/* DISCOVERIES */
+let ADVICE='ask';
+const ADVTXT={none:'When you find something, give me the facts and options only.',ask:'When you find something, give me the facts and options, and your view only if I ask.',tell:'When you find something, give me the facts, the options and what you would pick.'};
+const STANDING=[
+  {k:'rates',t:'Better rates for my cash',s:'Checks insured savings accounts every week',on:true},
+  {k:'bills',t:'Bills and contracts before they renew',s:'Starts 45 days before each renewal',on:true},
+  {k:'fees',t:'Fees in all my accounts',s:'Monthly, including linked accounts',on:true},
+  {k:'refunds',t:'Price drops and refunds I\'m owed',s:'Daily, using each store\'s price-adjustment policy',on:true},
+  {k:'subs',t:'Subscription price rises and check-ins',s:'Flags price rises and trials turning paid. Asks which you use every 6 months',on:true},
+  {k:'open',t:'Anything else worth $20 a month or more',s:'Open-ended. Reports only',on:true}
+];
+const FINDINGS=[
+  {id:'fee',k:'fees',tag:'Fees',title:'Your 401(k) fund costs 0.85% a year. Your plan offers the same market for 0.04%',
+   body:'Your Northwind 401(k) holds $41,200 in an actively managed US stock fund. Your plan also offers an index fund that tracks the same market. The difference is about $334 a year now, and roughly $30,000 by retirement at 6% growth, before new contributions.',
+   ev:'Read from Northwind with your permission · fund documents checked 22 Nov',
+   opts:[['Show me how to switch','Steps for Northwind\'s site. Plinth can only see this account','Steps saved to your Documents'],['Remind me in a month','It comes back on 23 Dec','Reminder set for 23 Dec'],['Keep my current fund','It won\'t come up again','Noted. It won\'t come up again']],
+   lean:'If it were up to the agent: switch. It\'s the same market at a lower cost, and the higher fee hasn\'t bought better returns over the last 10 years.'},
+  {id:'ins',k:'bills',tag:'Bills',title:'Car insurance renews on 12 Jan at $1,284, up 18%',
+   body:'An agent asked 4 insurers to quote the same cover, excess and drivers. Their prices range from $968 to $1,120. Your current insurer has the best claims rating of the five.',
+   ev:'Quotes collected 22 Nov · valid until 20 Dec · shared only the details you allowed',
+   opts:[['See all 5 side by side','Price, cover, excess and claims ratings','Comparison saved to your Documents'],['Ask my insurer to match $968','The agent sends them the lowest quote and reports back','Request sent to your insurer'],['Renew as it is','$1,284 from 12 Jan','Noted. The renewal goes ahead']],
+   lean:'If it were up to the agent: ask your insurer to match first. You keep their claims record and could still save over $300.'},
+  {id:'lamp',k:'refunds',tag:'Refund',title:'The Halden desk lamp you bought for $129 is now $99',
+   body:'You bought it from Brightcart on 2 Nov. Their policy refunds price drops within 30 days, so you can claim $30 until 2 Dec.',
+   ev:'Price checked today at 08:40 · Brightcart price-adjustment policy',
+   opts:[['Claim the $30','The agent sends the claim with your receipt','Claim sent. Brightcart usually refunds within 3 days'],['Not worth it','Price drops under $30 won\'t be chased','Noted']],
+   lean:'If it were up to the agent: claim it. It takes no effort from you.'},
+  {id:'subs',k:'subs',tag:'Subscriptions',title:'You pay $40.97 a month for 3 streaming services',
+   body:'Reelbox went up $2 in October. Clipline started as a free trial in August and has charged $12.99 a month since. Plinth can see what you pay, not what you watch, so tick the ones you still use.',
+   ev:'From your card charges since January',
+   pick:[{n:'Tunewave',amt:11.99,note:'Paying since 2021'},{n:'Reelbox',amt:15.99,note:'Up from $13.99 in October'},{n:'Clipline',amt:12.99,note:'Free trial turned paid on 14 Aug'}],
+   opts:[['Cancel the ones I didn\'t tick','',''],['Ask me again next month','Nothing changes until then','Noted. You\'ll be asked again on 23 Dec']],
+   lean:'The agent can\'t see what you watch, so it has no view on which to keep.'}
+];
+const MISSIONS=[{id:'m0',q:'Could I take 3 months off work next summer?',who:'Started by you yesterday',p:75,step:'Checking the numbers against your forecast'}];
+const STEPS=['Reading your last 12 months of transactions','Gathering public prices and rates','Checking the numbers against your forecast','Writing up what it found'];
+function missionResult(q){
+  if(/rate|sav|interest|emergency/i.test(q))return {k:'rates',tag:'Rates',title:'3 insured accounts pay more than your emergency fund',body:'Your $6,000 emergency fund earns 4.1% at Plinth with instant access. Three insured accounts pay 4.4% to 4.6%, which is $18 to $30 more a year before tax. Two of them take 1 to 2 days to withdraw from.',ev:'Compared 41 insured savings accounts today',opts:[['Keep it at Plinth','Instant access stays','Noted'],['See the 3 accounts','Rates, access times and terms side by side','Comparison saved to your Documents'],['Move it to the top rate','Opens the account and moves $6,000. Withdrawals take 2 days','Account opening started. You\'ll confirm the transfer']],lean:'If it were up to the agent: keep it at Plinth. $30 a year may not be worth slower access to emergency money.'};
+  if(/afford|move|cheaper|rent|city/i.test(q))return {k:'open',tag:'Planning',title:'What a move to a cheaper area would do to your money',body:'Using your last 12 months of spending, renting in your two closest cheaper areas would cut costs by $380 to $610 a month. Commuting would add $90 to $140. Your House fund goal would land 2 to 5 months earlier.',ev:'Your spending, public rent listings and transit fares · checked today',opts:[['Read the full report','Sources, assumptions and each area\'s numbers','Report saved to your Documents'],['Compare another area','Send the agent again with a place in mind','Ready when you are'],['Not now','Nothing is saved','Noted']],lean:'The agent has no strong view. It depends on what you\'d give up by moving, which the numbers can\'t measure.'};
+  if(/raise|salary|income|earn/i.test(q))return {k:'open',tag:'Planning',title:'What $500 a month more would change',body:'After tax that\'s about $360 a month. If it all went to the House fund, you\'d reach $40,000 in January 2028, 2 months sooner than now. If half went to spending, it would be February 2028.',ev:'Your forecast, current tax rates · checked today',opts:[['Read the full report','Includes the effect on your 401(k) match','Report saved to your Documents'],['Not now','Nothing is saved','Noted']],lean:'The agent has no view on this. It\'s a question about what you want.'};
+  return {k:'open',tag:'Report',title:'Report: '+q.replace(/</g,'&lt;'),body:'The agent went through your transactions, bills and linked accounts, plus public prices, and wrote up what it found with its sources. It makes no recommendation unless you ask.',ev:'Checked today',opts:[['Read the report','Saved to your Documents','Report opened'],['Dismiss','Nothing is kept','Dismissed']],lean:'The agent hasn\'t formed a view on this one.'};
+}
+const nameList=a=>a.length<2?a.join(''):a.slice(0,-1).join(', ')+' and '+a[a.length-1];
+function pickHtml(f){return `<div class="opts" style="margin-bottom:10px">${f.pick.map((s,i)=>`<label class="opt"><input type="checkbox" data-pi="${i}" ${s.use?'checked':''}><span>I use ${s.n} · ${fmt(s.amt)} a month<small>${s.note}</small></span></label>`).join('')}</div>`}
+function subsLabel(f){const cut=f.pick.filter(s=>!s.use);const sum=cut.reduce((a,s)=>a+s.amt,0);
+  return cut.length?[`Cancel ${nameList(cut.map(s=>s.n))}`,`Saves ${fmt(sum)} a month. Each runs to the end of its billing period`]:['Keep all three','You use them all. You\'ll be asked again in 6 months']}
+$('#findings').addEventListener('change',e=>{const i=e.target.dataset.pi;if(i===undefined)return;const card=e.target.closest('[data-id]');const f=FINDINGS.find(x=>x.id===card.dataset.id);
+  f.pick[+i].use=e.target.checked;const l=subsLabel(f);card.querySelector('[data-dyn]').innerHTML=`<b>${l[0]}</b><small>${l[1]}</small>`});
+function renderFindings(){
+  const open=FINDINGS.filter(f=>!f.state&&!f.gone);
+  $('#disc-count').textContent=open.length;$('#disc-count').hidden=!open.length;$('#home-found').textContent=open.length+(open.length===1?' thing':' things');
+  $('#findings').innerHTML=FINDINGS.filter(f=>!f.gone).map(f=>{
+    if(f.state)return `<div class="card" data-id="${f.id}"><div class="fmeta"><span class="ftag">${f.tag}</span></div><h2 style="margin-top:8px">${f.title}</h2><div class="chosen" style="margin-top:10px"><span class="pill done">You chose: ${f.state}</span><span style="color:var(--muted)">${f.result}</span></div></div>`;
+    const st=STANDING.find(s=>s.k===f.k);
+    return `<div class="card" data-id="${f.id}" data-box="AG-01 · TR-03"><div class="fmeta"><span class="ftag">${f.tag}</span><span class="evidence">${f.ev}</span></div><h2 style="margin-top:8px">${f.title}</h2><p class="fbody">${f.body}</p>
+      ${f.pick?pickHtml(f):''}<div class="choices">${f.opts.map((o,i)=>{const l=f.pick&&i===0?subsLabel(f):o;return `<button class="choice" type="button" data-opt="${i}"${f.pick&&i===0?' data-dyn':''}><b>${l[0]}</b><small>${l[1]}</small></button>`}).join('')}</div>
+      ${ADVICE==='tell'?`<div class="lean">${f.lean}</div>`:''}<div class="lean" data-lean hidden>${f.lean}</div>
+      <div class="frow">${ADVICE==='ask'?'<button class="textlink" type="button" data-showlean>What would the agent pick?</button>':''}<button class="textlink quiet" type="button" data-dismiss>Dismiss</button>${st&&st.k!=='open'?`<button class="textlink quiet" type="button" data-stop="${st.k}">Stop looking at ${st.t[0].toLowerCase()+st.t.slice(1)}</button>`:''}</div></div>`}).join('');
+  if(document.body.classList.contains('arch'))document.querySelectorAll('#findings [data-box]').forEach(el=>{const t=document.createElement('span');t.className='boxtag';t.textContent=el.dataset.box;t.style.background='var(--z-agent)';el.appendChild(t)});
+}
+$('#findings').addEventListener('click',e=>{const card=e.target.closest('[data-id]');if(!card)return;const f=FINDINGS.find(x=>x.id===card.dataset.id);
+  const opt=e.target.closest('[data-opt]');
+  if(opt&&f.pick&&opt.dataset.opt==='0'){const cut=f.pick.filter(s=>!s.use);const sum=cut.reduce((a,s)=>a+s.amt,0);const names=nameList(cut.map(s=>s.n));
+    f.state=cut.length?'Cancel '+names:'Keep all three';f.result=cut.length?`Cancelled ${names}. Saving ${fmt(sum)} a month`:'Nothing cancelled. You\'ll be asked again in 6 months';
+    addLog('Now',cut.length?'Cancel '+names:'Keep all subscriptions','Your answer to a check-in','Done');toast(f.result);renderFindings();return}
+  if(opt){const o=f.opts[+opt.dataset.opt];f.state=o[0];f.result=o[2];addLog('Now',`${f.tag}: ${o[0]}`,'Your choice','Done');toast(o[2]);renderFindings();return}
+  if(e.target.matches('[data-showlean]')){const l=card.querySelector('[data-lean]');l.hidden=!l.hidden;e.target.textContent=l.hidden?'What would the agent pick?':'Hide the agent\'s view'}
+  if(e.target.matches('[data-dismiss]')){f.gone=true;renderFindings();toast('Dismissed')}
+  if(e.target.dataset.stop){const s=STANDING.find(x=>x.k===e.target.dataset.stop);s.on=false;f.gone=true;renderStanding();renderFindings();toast(`Agents will stop looking at ${s.t[0].toLowerCase()+s.t.slice(1)}`)}
+});
+function renderStanding(){$('#standing').innerHTML=STANDING.map(s=>`<div class="rule"><div><b>${s.t}</b><small>${s.s}</small></div><button class="switch" role="switch" type="button" aria-checked="${s.on}" aria-label="${s.t}" data-k="${s.k}"></button></div>`).join('')}
+$('#standing').addEventListener('click',e=>{const k=e.target.dataset.k;if(!k)return;const s=STANDING.find(x=>x.k===k);s.on=!s.on;renderStanding();toast(s.on?'Agents will look at this':'Agents will stop looking at this')});
+function renderMissions(){$('#missions').innerHTML=MISSIONS.length?MISSIONS.map(m=>`<div class="mission"><div class="row"><b>${m.q.replace(/</g,'&lt;')}</b><button class="textlink quiet" type="button" data-stopm="${m.id}">Stop</button></div><small>${m.who} · ${m.step}</small><div class="meter"><div style="width:${m.p}%"></div></div></div>`).join(''):'<div class="mission"><small>Nothing in progress. Ask about anything above.</small></div>'}
+$('#missions').addEventListener('click',e=>{const id=e.target.dataset.stopm;if(!id)return;const i=MISSIONS.findIndex(m=>m.id===id);if(i>-1)MISSIONS.splice(i,1);renderMissions();toast('Stopped. Nothing was kept')});
+let mid=1;
+function sendMission(q){q=q.trim();if(!q)return;const m={id:'m'+(mid++),q,who:'Started by you just now',p:5,step:STEPS[0]};MISSIONS.unshift(m);renderMissions();addLog('Now','Look into: '+q,'Your request','Started');toast('An agent is looking into it');
+  let i=0;const tick=setInterval(()=>{if(!MISSIONS.includes(m)){clearInterval(tick);return}i++;m.p=Math.min(100,5+i*24);m.step=STEPS[Math.min(i,STEPS.length-1)];renderMissions();
+    if(i>=4){clearInterval(tick);MISSIONS.splice(MISSIONS.indexOf(m),1);renderMissions();const r=missionResult(q);FINDINGS.unshift(Object.assign({id:'f'+m.id},r));renderFindings();toast('Your agent reported back')}},1100)}
+$('#mission-form').addEventListener('submit',e=>{e.preventDefault();sendMission($('#mission-input').value);$('#mission-input').value=''});
+$('#mission-sugs').addEventListener('click',e=>{if(e.target.tagName==='BUTTON')sendMission(e.target.textContent)});
+function applyAdvice(){document.querySelectorAll('[name=adv2]').forEach(r=>r.checked=r.value===ADVICE);
+  $('#brief-lean-btn').hidden=ADVICE!=='ask';$('#brief-lean').hidden=ADVICE!=='tell';renderFindings()}
+$('#adv-opts').addEventListener('change',e=>{ADVICE=e.target.value;applyAdvice();toast({none:'Agents will give facts and options only',ask:'Agents will share their view only when you ask',tell:'Agents will say what they would pick'}[ADVICE])});
+renderStanding();renderMissions();applyAdvice();
+
+/* SETUP SURVEY */
+let step=0;const LAST=6;
+const wiz=$('#wiz');
+function wizShow(){document.querySelectorAll('#wiz .step').forEach(s=>s.hidden=+s.dataset.step!==step);
+  $('#wiz-prog').innerHTML=Array.from({length:LAST},(_,i)=>`<i class="${i<step?'on':''}"></i>`).join('');
+  $('#wiz-back').style.visibility=step?'visible':'hidden';$('#wiz-next').textContent=step===0?'Start':step===LAST?'Turn on my agent':'Next';
+  if(step===LAST)$('#wiz-sum').innerHTML=summary().map(s=>`<li>${s}</li>`).join('')}
+function answers(){const f=$('#wiz-form');const goals=[...f.querySelectorAll('[name=goal]:checked')].map(i=>i.value);
+  const auto=(f.querySelector('[name=auto]:checked')||{}).value||'small';const dropRaw=(f.querySelector('[name=drop]:checked')||{}).value||'1';const drop=dropRaw==='a'?'a':+dropRaw;const hz=+((f.querySelector('[name=hz]:checked')||{}).value||2);
+  const score=(drop==='a'?1:drop)+hz;const prof=score<=1?{name:'Cautious',stocks:40}:score===2?{name:'Steady',stocks:55}:score===3?{name:'Balanced growth',stocks:70}:{name:'Growth',stocks:85};
+  return {adv:(f.querySelector('[name=adv]:checked')||{}).value||'ask',goals,auto,buf:+$('#w-buf').value,cap:+$('#w-cap').value,prof,drop,train:f.querySelector('[name=train]').checked,share:f.querySelector('[name=share]').checked,chat:f.querySelector('[name=chat]').checked}}
+function summary(){const a=answers();const autoTxt={ask:'Suggest everything and wait for my OK.',small:`Act on its own for anything up to ${fmt(a.cap).replace('.00','')}, and tell me after.`,rules:'Act on anything within these rules, and tell me after with an Undo.'}[a.auto];
+  return [`Put spare money toward: ${a.goals.length?a.goals.join(', '):'nothing yet'}.`,autoTxt,ADVTXT[a.adv],`Never let checking fall below ${fmt(a.buf).replace('.00','')}.`,`Ask me before any payment over ${fmt(a.cap).replace('.00','')}, or to anyone new.`,
+    `Invest using the ${a.prof.name} plan: ${a.prof.stocks}% stocks.`,`If investments fall 15% in a month, ${a.drop===0?'move to safer funds and tell me':a.drop==='a'?'pause, send me a briefing on what\'s happening with your advice, and wait for my decision':'stop trading and ask me'}.`,
+    a.train?'Plinth may train its models on my anonymised data.':'Never train AI models on my data.',a.share?'Partners may see my data for offers.':'Never share my data with partners.',a.chat?'Keep chat history for 90 days.':'Delete chats at the end of each conversation.']}
+function applyAnswers(){const a=answers();BUF=a.buf;CAP=a.cap;PROFILE=a.prof;
+  $('#rule-buffer').textContent=`Keep a ${fmt(BUF).replace('.00','')} buffer in checking`;$('#rule-payee').textContent=`Ask before paying anyone new, or any payment over ${fmt(CAP).replace('.00','')}`;
+  $('#agent-state-sub').textContent={ask:'Asks you before every action',small:`Acts alone up to ${fmt(CAP).replace('.00','')}`,rules:'Acts within your rules'}[a.auto];
+  $('#pv-train').setAttribute('aria-checked',a.train);$('#pv-share').setAttribute('aria-checked',a.share);$('#pv-chat').setAttribute('aria-checked',a.chat);
+  $('#pv-chat-sub').textContent=a.chat?'Deleted automatically after 90 days':'Deleted at the end of each conversation';
+  $('#rule-drop').textContent=a.drop===0?'Move to safer funds if the portfolio falls 15% in a month':a.drop==='a'?'Brief me and wait for my decision if the portfolio falls 15% in a month':'Stop and ask me if the portfolio falls 15% in a month';
+  $('#drop-brief').hidden=a.drop!=='a';
+  ADVICE=a.adv;applyAdvice();
+  renderAlloc();drawForecast();addLog('Now','Setup finished: rules updated','You','Done')}
+function openWiz(){step=0;wizShow();wiz.hidden=false}
+function closeWiz(){wiz.hidden=true;try{localStorage.setItem('plinth-setup','done')}catch(e){}}
+$('#wiz-form').addEventListener('submit',e=>{e.preventDefault();if(step<LAST){step++;wizShow()}else{applyAnswers();closeWiz();toast('Your agent is on, with your rules')}});
+$('#wiz-back').onclick=()=>{if(step>0){step--;wizShow()}};
+$('#wiz-skip').onclick=()=>{closeWiz();toast('Using standard rules. Run setup again from the top bar')};
+['w-buf','w-cap'].forEach(id=>$('#'+id).addEventListener('input',e=>$('#'+id+'-v').textContent=fmt(+e.target.value).replace('.00','')));
+$('#rerun-setup').onclick=openWiz;
+let seen=null;try{seen=localStorage.getItem('plinth-setup')}catch(e){}
+if(!seen)openWiz();
+
+/* assistant */
+const msgs=$('#msgs');
+function say(who,html){const d=document.createElement('div');d.className='msg '+who;d.innerHTML=html;msgs.appendChild(d);msgs.scrollTop=msgs.scrollHeight}
+say('bank','Morning, Sam. Your paycheck arrived Friday and I moved the extra $340 to your House fund. Your agents also found 4 things worth a look in Discoveries. Nothing changes unless you choose.');
+const R=[
+  [/loan|afford|car/i,()=>`Yes. Based on the last 6 months of your income and spending, a $9,000 loan over 36 months fits comfortably.
+    <div class="card-mini"><div class="row"><span>Monthly payment</span><b>$283</b></div><div class="row"><span>APR</span><b>8.9%</b></div><div class="row"><span>Your spare cash each month</span><b>~$690</b></div><div class="row"><span>After the payment</span><b>~$407</b></div></div>
+    <div class="note">Why this rate: steady income for 4 years, no missed payments, savings cover 3 months. Nothing is applied for until you sign.</div>`],
+  [/balance|lower|usual/i,()=>`It's about $1,180 lower than usual because your trip planner booked flights on Saturday. Everything else is normal. After rent on 1 Dec you'll still be above your $1,500 buffer.`],
+  [/dispute|brightcart|order/i,()=>`I found it: <b>Brightcart, $86.20 on 22 Nov</b>. The tracking shows “label created” with no movement for 9 days, and the seller hasn't replied to two messages.
+    <div class="card-mini"><div class="row"><span>Claim type</span><b>Item not received</b></div><div class="row"><span>Evidence attached</span><b>Order, tracking, messages</b></div><div class="row"><span>Provisional credit</span><b>$86.20 today</b></div></div>
+    <div class="note">I've filed it and credited you while it's reviewed. A specialist will check it because the seller usually ships late.</div>`],
+  [/split|owe|priya|jordan|alex|flatmate/i,()=>{const rows=[];Object.keys(GROUPS).forEach(g=>Object.entries(net(g)).forEach(([p,v])=>{if(Math.abs(v)>=0.01)rows.push(`<div class="row"><span>${p} (${GROUPS[g].name})</span><b>${v>0?'owes you '+fmt(v):'you owe '+fmt(-v)}</b></div>`)}));
+    return rows.length?`Here's where things stand:<div class="card-mini">${rows.join('')}</div><div class="note">Open <a href="#split">Split</a> to request or pay. Anyone at a bank on the instant-payment network gets the money in seconds.</div>`:'Everyone is settled up.'}],
+  [/move|transfer|save/i,q=>{const m=q.match(/\$?\s?(\d[\d,]*)/);const n=m?+m[1].replace(/,/g,''):200;
+    if(paused)return 'Your agent is paused, so I can\'t move money automatically. Resume it in Agent &amp; limits, or move it yourself from Activity.';
+    houseFund+=n;$('#house-amt').textContent=fmt(houseFund);$('#house-bar').style.width=Math.min(100,houseFund/400)+'%';addLog('Now',`Move $${n} to House fund`,'Your request','Done');
+    return `Done. Moved $${n} to your House fund. You'll still be above your buffer after rent.<div class="note">Logged in your decision log.</div>`}],
+];
+function ask(q){if(!q.trim())return;say('me',q.replace(/</g,'&lt;'));
+  const hit=R.find(([re])=>re.test(q));setTimeout(()=>say('bank',hit?hit[1](q):`I can help with payments, savings, loans, disputes and your bills. Try asking whether you can afford something, or tell me to move money.`),350)}
+$('#chat-form').addEventListener('submit',e=>{e.preventDefault();ask($('#chat-input').value);$('#chat-input').value=''});
+$('#sugs').addEventListener('click',e=>{if(e.target.tagName==='BUTTON')ask(e.target.textContent)});
+</script>
