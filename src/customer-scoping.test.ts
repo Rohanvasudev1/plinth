@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cents } from "./money";
-import { openTestBank, signInByName } from "./test-bank";
+import { entriesMoving, openTestBank, signInByName } from "./test-bank";
 
 describe("customer scoping", () => {
   it("Priya can't read Sam's accounts", () => {
@@ -56,10 +55,7 @@ describe("customer scoping", () => {
       bank.customerData.postLedgerTransaction(priya, {
         idempotencyKey: "test:steal",
         description: "Take Sam's money",
-        entries: [
-          { accountId: samsChecking.id, amount: cents(-100_00) },
-          { accountId: priyasChecking.id, amount: cents(100_00) },
-        ],
+        entries: entriesMoving(100_00, samsChecking.id, priyasChecking.id),
       }),
     ).toThrow(/own account/);
     expect(bank.customerData.getAccount(sam, samsChecking.id)?.balance).toBe(227_00);
@@ -77,10 +73,7 @@ describe("customer scoping", () => {
       bank.customerData.postLedgerTransaction(priya, {
         idempotencyKey: samsFirst.idempotencyKey,
         description: "Collide",
-        entries: [
-          { accountId: priyasChecking.id, amount: cents(-1_00) },
-          { accountId: priyasTravelFund.id, amount: cents(1_00) },
-        ],
+        entries: entriesMoving(1_00, priyasChecking.id, priyasTravelFund.id),
       }),
     ).toThrow(/another customer/);
   });

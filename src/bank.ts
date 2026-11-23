@@ -36,6 +36,8 @@ export interface Bank {
   systemData: SystemData;
   ledgerEvents: LedgerEventDispatcher;
   listCustomers(): Customer[];
+  /** The customer with this id, or undefined if there is none. */
+  findCustomer(customerId: number): Customer | undefined;
   /** The customer to sign in as, or throws UnknownCustomerError. */
   signIn(customerId: number): Customer;
   readHome(customer: Customer): HomeView;
@@ -55,6 +57,7 @@ export function createBank(deps: { db: Database; clock: Clock }): Bank {
     systemData,
     ledgerEvents,
     listCustomers: () => systemData.listCustomers(),
+    findCustomer: (customerId) => systemData.findCustomer(customerId),
     signIn(customerId) {
       const customer = systemData.findCustomer(customerId);
       if (!customer) throw new UnknownCustomerError(`No customer with id ${customerId}`);
@@ -71,7 +74,7 @@ export function createBank(deps: { db: Database; clock: Clock }): Bank {
           .filter((account) => account.kind === "savings")
           .map((account) => ({
             ...homeAccount(account),
-            goal: account.goal === null ? null : goalProgress(account.balance, account.goal),
+            goal: account.goalTarget === null ? null : goalProgress(account.balance, account.goalTarget),
           })),
       };
     },

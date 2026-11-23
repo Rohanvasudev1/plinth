@@ -1,6 +1,8 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { DISPLAY_TIME_ZONE } from "@/app-clock";
 import { getAppBank } from "@/app-bank";
+import type { HomeAccount } from "@/bank";
 import { formatDollars } from "@/money";
 import { requireCustomer } from "@/session";
 
@@ -12,6 +14,17 @@ const dateFormat = new Intl.DateTimeFormat("en-GB", {
   month: "long",
   timeZone: DISPLAY_TIME_ZONE,
 });
+
+function AccountCard({ account, children }: { account: HomeAccount; children?: ReactNode }) {
+  const headingId = `account-${account.id}`;
+  return (
+    <section className="card" aria-labelledby={headingId}>
+      <h2 id={headingId}>{account.name}</h2>
+      <p className="amount">{formatDollars(account.balance)}</p>
+      {children}
+    </section>
+  );
+}
 
 export default async function HomePage() {
   const customer = await requireCustomer();
@@ -28,17 +41,10 @@ export default async function HomePage() {
         </p>
       </header>
 
-      {home.checking && (
-        <section className="card" aria-labelledby={`account-${home.checking.id}`}>
-          <h2 id={`account-${home.checking.id}`}>{home.checking.name}</h2>
-          <p className="amount">{formatDollars(home.checking.balance)}</p>
-        </section>
-      )}
+      {home.checking && <AccountCard account={home.checking} />}
 
       {home.savings.map((account) => (
-        <section key={account.id} className="card" aria-labelledby={`account-${account.id}`}>
-          <h2 id={`account-${account.id}`}>{account.name}</h2>
-          <p className="amount">{formatDollars(account.balance)}</p>
+        <AccountCard key={account.id} account={account}>
           {account.goal && (
             <>
               <div
@@ -56,7 +62,7 @@ export default async function HomePage() {
               </p>
             </>
           )}
-        </section>
+        </AccountCard>
       ))}
     </main>
   );

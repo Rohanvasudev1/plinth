@@ -25,13 +25,13 @@ export interface Account {
   /** The sum of every ledger entry on the account. */
   balance: Cents;
   /** The Goal's target amount, if this is a savings account with a Goal. */
-  goal: Cents | null;
+  goalTarget: Cents | null;
 }
 
 export interface NewAccount {
   kind: CustomerAccountKind;
   name: string;
-  goal?: Cents;
+  goalTarget?: Cents;
 }
 
 export interface LedgerEntryInput {
@@ -70,7 +70,7 @@ export interface CustomerData {
   getAccount(customer: Customer, accountId: number): Account | undefined;
   openAccount(customer: Customer, account: NewAccount): Account;
   /**
-   * Posts entries that sum to zero, plus a ledger event, in one database transaction, then hands
+   * Posts a pair of entries that sum to zero, plus a ledger event, in one database transaction, then hands
    * the event to subscribers. Each entry must be on the customer's own account or a system account.
    * Reusing an idempotency key returns the existing ledger transaction and changes nothing.
    */
@@ -119,7 +119,7 @@ export function createCustomerData(deps: {
         kind: row.kind,
         name: row.name,
         balance: cents(row.balanceCents),
-        goal: row.goalCents === null ? null : cents(row.goalCents),
+        goalTarget: row.goalCents === null ? null : cents(row.goalCents),
       };
     });
   }
@@ -131,7 +131,7 @@ export function createCustomerData(deps: {
   function validate(customer: Customer, transaction: LedgerTransactionInput): void {
     const { idempotencyKey, entries } = transaction;
     if (idempotencyKey.trim() === "") throw new LedgerError("A ledger transaction needs an idempotency key");
-    if (entries.length < 2) throw new LedgerError("A ledger transaction needs at least two entries");
+    if (entries.length !== 2) throw new LedgerError("A ledger transaction is a pair of entries");
     let sum = 0;
     for (const entry of entries) {
       cents(entry.amount);
@@ -228,7 +228,7 @@ export function createCustomerData(deps: {
     openAccount(customer, account) {
       const row = db
         .insert(accountsTable)
-        .values({ customerId: customer.id, kind: account.kind, name: account.name, goalCents: account.goal ?? null })
+        .values({ customerId: customer.id, kind: account.kind, name: account.name, goalCents: account.goalTarget ?? null })
         .returning({ id: accountsTable.id })
         .get();
       const opened = getAccount(customer, row.id);

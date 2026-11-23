@@ -3,7 +3,7 @@ import type { Bank } from "./bank";
 import type { Customer } from "./customer-data";
 import type { LedgerEvent } from "./ledger-events";
 import { cents } from "./money";
-import { openTestBank, signInByName } from "./test-bank";
+import { entriesMoving, openTestBank, signInByName } from "./test-bank";
 
 function samAndAccounts(bank: Bank) {
   const sam = signInByName(bank, "Sam Calloway");
@@ -24,10 +24,7 @@ describe("ledger", () => {
     bank.customerData.postLedgerTransaction(sam, {
       idempotencyKey: "test:move-100",
       description: "Move $100",
-      entries: [
-        { accountId: checking.id, amount: cents(-100_00) },
-        { accountId: houseFund.id, amount: cents(100_00) },
-      ],
+      entries: entriesMoving(100_00, checking.id, houseFund.id),
     });
 
     expect(balanceOf(bank, sam, checking.id)).toBe(127_00);
@@ -42,7 +39,7 @@ describe("ledger", () => {
 
     expect(transactions.length).toBeGreaterThan(0);
     for (const transaction of transactions) {
-      expect(transaction.entries.length).toBeGreaterThanOrEqual(2);
+      expect(transaction.entries).toHaveLength(2);
       expect(transaction.entries.reduce((sum, entry) => sum + entry.amount, 0)).toBe(0);
     }
   });
@@ -68,6 +65,19 @@ describe("ledger", () => {
     expect(bank.customerData.listLedgerTransactions(sam)).toHaveLength(before);
   });
 
+  it("refuses a ledger transaction that isn't a pair of entries", () => {
+    const bank = openTestBank();
+    const { sam, checking, houseFund } = samAndAccounts(bank);
+
+    expect(() =>
+      bank.customerData.postLedgerTransaction(sam, {
+        idempotencyKey: "test:three-entries",
+        description: "Three entries",
+        entries: [...entriesMoving(10_00, checking.id, houseFund.id), ...entriesMoving(5_00, houseFund.id, checking.id)],
+      }),
+    ).toThrow(/pair/);
+  });
+
   it("refuses amounts that aren't whole cents", () => {
     const bank = openTestBank();
     const { sam, checking, houseFund } = samAndAccounts(bank);
@@ -91,10 +101,7 @@ describe("ledger", () => {
       bank.customerData.postLedgerTransaction(sam, {
         idempotencyKey: "test:same-key",
         description: "Move",
-        entries: [
-          { accountId: checking.id, amount: cents(-amount) },
-          { accountId: houseFund.id, amount: cents(amount) },
-        ],
+        entries: entriesMoving(amount, checking.id, houseFund.id),
       });
 
     const first = move(100_00);
@@ -117,10 +124,7 @@ describe("ledger", () => {
       bank.customerData.postLedgerTransaction(sam, {
         idempotencyKey: "test:dispatch",
         description: "Move",
-        entries: [
-          { accountId: checking.id, amount: cents(-27_00) },
-          { accountId: houseFund.id, amount: cents(27_00) },
-        ],
+        entries: entriesMoving(27_00, checking.id, houseFund.id),
       });
 
     const posted = move();
@@ -147,20 +151,14 @@ describe("ledger", () => {
       bank.customerData.postLedgerTransaction(sam, {
         idempotencyKey: `test:follow-up:${event.id}`,
         description: "Follow-up move",
-        entries: [
-          { accountId: checking.id, amount: cents(-10_00) },
-          { accountId: houseFund.id, amount: cents(10_00) },
-        ],
+        entries: entriesMoving(10_00, checking.id, houseFund.id),
       });
     });
 
     bank.customerData.postLedgerTransaction(sam, {
       idempotencyKey: "test:trigger",
       description: "Trigger",
-      entries: [
-        { accountId: houseFund.id, amount: cents(-100_00) },
-        { accountId: checking.id, amount: cents(100_00) },
-      ],
+      entries: entriesMoving(100_00, houseFund.id, checking.id),
     });
 
     expect(balanceOf(bank, sam, checking.id)).toBe(317_00);

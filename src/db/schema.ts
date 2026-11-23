@@ -54,7 +54,11 @@ export const ledgerTransactionsTable = sqliteTable(
   (table) => [index("ledger_transactions_customer_id").on(table.customerId)],
 );
 
-/** One signed amount in cents on one account. Rows are never updated or deleted. */
+/**
+ * One signed amount in cents on one account. Rows are never updated or deleted.
+ * Entries carry no customer_id: the outside side sits on a system account, so an entry is scoped
+ * through its ledger transaction, which does.
+ */
 export const ledgerEntriesTable = sqliteTable(
   "ledger_entries",
   {

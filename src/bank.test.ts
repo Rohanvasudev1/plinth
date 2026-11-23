@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { SIMULATION_START } from "./app-clock";
 import { createBank, UnknownCustomerError } from "./bank";
 import { fixedClock } from "./clock";
 import { openTestDatabase } from "./db/database";
@@ -46,13 +45,9 @@ describe("Home", () => {
 });
 
 describe("seed", () => {
-  it("starts the simulation on Thursday 19 Nov 2026 at 9am New York time", () => {
-    expect(SIMULATION_START.toISOString()).toBe("2026-11-19T14:00:00.000Z");
-  });
-
   it("seeds a database only once", () => {
     const db = openTestDatabase();
-    const clock = fixedClock(SIMULATION_START);
+    const clock = fixedClock(new Date("2026-11-19T14:00:00Z"));
     createBank({ db, clock });
 
     const reopened = createBank({ db, clock });

@@ -16,7 +16,7 @@ export async function requireCustomer(): Promise<Customer> {
   const jar = await cookies();
   const customerId = Number(jar.get(SESSION_COOKIE)?.value);
   const customer = Number.isSafeInteger(customerId)
-    ? getAppBank().systemData.findCustomer(customerId)
+    ? getAppBank().findCustomer(customerId)
     : undefined;
   if (!customer) redirect("/sign-in");
   return customer;
