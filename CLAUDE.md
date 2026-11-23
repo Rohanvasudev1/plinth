@@ -14,7 +14,14 @@ Plinth is a consumer bank web app built around one agent per customer. The agent
 
 ## Commands
 
-The scaffolding ticket fills this section in with the install, dev, typecheck, test and end-to-end test commands.
+- Install: `pnpm install`
+- Dev server: `pnpm dev`, then open http://localhost:3000. The app's database is `data/plinth.db`, or the file named by `PLINTH_DB_PATH`.
+- Typecheck: `pnpm typecheck`
+- Unit tests: `pnpm test` (Vitest, `src/**/*.test.ts`). Run one file with `pnpm test src/money.test.ts`.
+- End-to-end tests: `pnpm test:e2e` (Playwright, `e2e/`). It starts its own dev server on port 3100 with a fresh database.
+- New migration after editing `src/db/schema.ts`: `pnpm db:generate --name <change>`. Migrations in `drizzle/` apply automatically whenever a database opens.
+
+Tests get a fresh, migrated in-memory database from `openTestDatabase()` and a pinned time from `fixedClock()`. The app reads time from the simulated clock stored in the database (`getAppClock()`).
 
 ## Implementer sessions
 
