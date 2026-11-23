@@ -75,7 +75,8 @@ describe("customer scoping", () => {
         description: "Acme Corp payroll",
         entries: entriesMoving(amount, acmePayroll, checking.id),
       });
-      return { posted, balance: bank.customerData.getAccount(customer, checking.id)?.balance };
+      const entries = bank.customerData.getLedgerTransaction(customer, posted.ledgerTransactionId)?.entries;
+      return { posted, paid: entries?.find((entry) => entry.accountId === checking.id)?.amount };
     };
 
     const sam = pay("Sam Calloway", 3_240_00);
@@ -84,8 +85,8 @@ describe("customer scoping", () => {
     expect(sam.posted.created).toBe(true);
     expect(priya.posted.created).toBe(true);
     expect(priya.posted.ledgerTransactionId).not.toBe(sam.posted.ledgerTransactionId);
-    expect(sam.balance).toBe(3_467_00);
-    expect(priya.balance).toBe(4_336_42);
+    expect(sam.paid).toBe(3_240_00);
+    expect(priya.paid).toBe(2_500_00);
   });
 
   it("Priya can't read Sam's payroll or set up a payroll into Sam's account", () => {

@@ -3,8 +3,8 @@ import type { ReactNode } from "react";
 import { DISPLAY_TIME_ZONE } from "@/app-clock";
 import { getAppBank } from "@/app-bank";
 import type { BillsBeforePayday, HomeAccount, SafeToSpend } from "@/bank";
-import type { LocalDate } from "@/calendar";
-import { formatDollars } from "@/money";
+import { formatLocalDate, type LocalDate } from "@/calendar";
+import { cents, formatDollars } from "@/money";
 import { requireCustomer } from "@/session";
 
 export const dynamic = "force-dynamic";
@@ -16,25 +16,19 @@ const dateFormat = new Intl.DateTimeFormat("en-GB", {
   timeZone: DISPLAY_TIME_ZONE,
 });
 
-/** Formats a calendar date, such as "Tue 1 Dec". A LocalDate is already in the bank's time zone. */
-const calendarDateFormat = new Intl.DateTimeFormat("en-GB", {
-  weekday: "short",
-  day: "numeric",
-  month: "short",
-  timeZone: "UTC",
-});
-
-function formatLocalDate(date: LocalDate): string {
-  return calendarDateFormat.format(new Date(`${date}T12:00:00Z`));
-}
-
 function SafeToSpendLine({ safe, nextPayday }: { safe: SafeToSpend; nextPayday: LocalDate | null }) {
   return (
     <div className="safe-to-spend">
-      <p>
-        Safe to spend: <strong>{formatDollars(safe.amount)}</strong>
-        {nextPayday && <> before payday on {formatLocalDate(nextPayday)}</>}
-      </p>
+      {safe.amount < 0 ? (
+        <p>
+          Heads up: you&rsquo;ll dip <strong>{formatDollars(cents(-safe.amount))}</strong> below your buffer before payday
+        </p>
+      ) : (
+        <p>
+          Safe to spend: <strong>{formatDollars(safe.amount)}</strong>
+          {nextPayday && <> before payday on {formatLocalDate(nextPayday)}</>}
+        </p>
+      )}
       <p className="muted">
         {formatDollars(safe.checking)} in checking, less your {formatDollars(safe.buffer)} Buffer and{" "}
         {formatDollars(safe.billsBeforePayday)} of bills before payday
@@ -97,7 +91,8 @@ export default async function HomePage() {
           <p className="muted">{dateFormat.format(home.today)}</p>
         </div>
         <p className="muted signed-in">
-          {home.customerName} · <Link href="/sign-in">Switch</Link> · <Link href="/simulator">Simulator</Link>
+          {home.customerName} · <Link href="/sign-in">Switch</Link> · <Link href="/decision-log">Decision log</Link> ·{" "}
+          <Link href="/simulator">Simulator</Link>
         </p>
       </header>
 

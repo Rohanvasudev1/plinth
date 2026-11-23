@@ -1,13 +1,23 @@
-import { addDays, localDateOf, type LocalDate } from "./calendar";
+import { startBufferAgent } from "./buffer-agent";
+import { localDateOf } from "./calendar";
 import type { SettableClock } from "./clock";
 import { createCustomerData, type Account, type Customer, type CustomerData } from "./customer-data";
 import type { Database } from "./db/database";
+import type { Decision } from "./decisions";
 import { createLedgerEventDispatcher, type LedgerEventDispatcher } from "./ledger-events";
 import { cents, type Cents } from "./money";
-import { billsDue, nextPayday, totalOf } from "./schedules";
-import { seedDemoData, seededBuffer } from "./seed";
+import {
+  billsBeforePayday as billsBeforePaydayOf,
+  safeToSpend,
+  type BillsBeforePayday,
+  type SafeToSpend,
+} from "./safe-to-spend";
+import { bufferRuleFor } from "./rules";
+import { seedDemoData } from "./seed";
 import { createSimulator, type Simulator } from "./simulator";
 import { createSystemData, type SystemData } from "./system-data";
+
+export type { BillBeforePayday, BillsBeforePayday, SafeToSpend } from "./safe-to-spend";
 
 export interface GoalProgress {
   target: Cents;
@@ -21,15 +31,6 @@ export interface HomeAccount {
   balance: Cents;
 }
 
-/** Safe to spend: the checking balance minus the Buffer minus Scheduled bills due before the next payday. */
-export interface SafeToSpend {
-  /** Below zero when checking won't cover the Buffer and the bills. */
-  amount: Cents;
-  checking: Cents;
-  buffer: Cents;
-  billsBeforePayday: Cents;
-}
-
 export interface HomeView {
   customerName: string;
   today: Date;
@@ -38,22 +39,6 @@ export interface HomeView {
   billsBeforePayday: BillsBeforePayday;
   /** Null when the customer has no checking account. */
   safeToSpend: SafeToSpend | null;
-}
-
-export interface BillBeforePayday {
-  billId: number;
-  payee: string;
-  amount: Cents;
-  dueDate: LocalDate;
-}
-
-/** The customer's Scheduled bills due after today and on or before the day before the next payday. */
-export interface BillsBeforePayday {
-  /** Null when no payroll pays the customer, in which case no bills are listed. */
-  nextPayday: LocalDate | null;
-  /** In due-date order. */
-  bills: BillBeforePayday[];
-  total: Cents;
 }
 
 export class UnknownCustomerError extends Error {
@@ -73,9 +58,14 @@ export interface Bank extends Simulator {
   signIn(customerId: number): Customer;
   readHome(customer: Customer): HomeView;
   billsBeforePayday(customer: Customer): BillsBeforePayday;
+  /** Every action the customer's agent took or tried to take, newest first. */
+  readDecisionLog(customer: Customer): Decision[];
 }
 
-/** Wires the bank to a migrated database and a clock, and seeds the demo customers if there are none. */
+/**
+ * Wires the bank to a migrated database and a clock, seeds the demo customers if there are none, and starts
+ * the customers' agents.
+ */
 export function createBank(deps: { db: Database; clock: SettableClock }): Bank {
   const { db, clock } = deps;
   const ledgerEvents = createLedgerEventDispatcher();
@@ -83,17 +73,10 @@ export function createBank(deps: { db: Database; clock: SettableClock }): Bank {
   const systemData = createSystemData(db);
   seedDemoData(systemData, customerData);
   const simulator = createSimulator({ clock, systemData, customerData });
+  startBufferAgent({ clock, customerData, systemData, ledgerEvents });
 
   function billsBeforePayday(customer: Customer): BillsBeforePayday {
-    const today = localDateOf(clock.now());
-    const payday = nextPayday(customerData.listPayrolls(customer), today);
-    if (payday === null) return { nextPayday: null, bills: [], total: cents(0) };
-    const due = billsDue(customerData.listScheduledBills(customer), today, addDays(payday, -1));
-    return {
-      nextPayday: payday,
-      bills: due.map(({ bill, dueDate }) => ({ billId: bill.id, payee: bill.payee, amount: bill.amount, dueDate })),
-      total: totalOf(due),
-    };
+    return billsBeforePaydayOf(customerData, customer, localDateOf(clock.now()));
   }
 
   return {
@@ -110,6 +93,7 @@ export function createBank(deps: { db: Database; clock: SettableClock }): Bank {
       return customer;
     },
     billsBeforePayday,
+    readDecisionLog: (customer) => customerData.listDecisions(customer),
     readHome(customer) {
       const accounts = customerData.listAccounts(customer);
       const checking = accounts.find((account) => account.kind === "checking");
@@ -125,7 +109,9 @@ export function createBank(deps: { db: Database; clock: SettableClock }): Bank {
             goal: account.goalTarget === null ? null : goalProgress(account.balance, account.goalTarget),
           })),
         billsBeforePayday: bills,
-        safeToSpend: checking ? safeToSpend(checking.balance, seededBuffer(customer), bills.total) : null,
+        safeToSpend: checking
+          ? safeToSpend(checking, bufferRuleFor(customerData.listRules(customer), checking.id)?.parameters.buffer ?? cents(0), bills)
+          : null,
       };
     },
   };
@@ -133,10 +119,6 @@ export function createBank(deps: { db: Database; clock: SettableClock }): Bank {
 
 function homeAccount(account: Account): HomeAccount {
   return { id: account.id, name: account.name, balance: account.balance };
-}
-
-function safeToSpend(checking: Cents, buffer: Cents, billsBeforePayday: Cents): SafeToSpend {
-  return { amount: cents(checking - buffer - billsBeforePayday), checking, buffer, billsBeforePayday };
 }
 
 function goalProgress(balance: Cents, target: Cents): GoalProgress {

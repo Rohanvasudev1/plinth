@@ -31,6 +31,19 @@ export function localDateOf(instant: Date): LocalDate {
   return localDate(`${parts.year}-${parts.month}-${parts.day}`);
 }
 
+/** A LocalDate is already in the bank's time zone, so it is formatted as a UTC date. */
+const shortDateFormat = new Intl.DateTimeFormat("en-GB", {
+  weekday: "short",
+  day: "numeric",
+  month: "short",
+  timeZone: "UTC",
+});
+
+/** Formats a calendar date for people, such as "Tue 1 Dec". */
+export function formatLocalDate(date: LocalDate): string {
+  return shortDateFormat.format(new Date(`${date}T12:00:00Z`));
+}
+
 function utcMidnight(date: LocalDate): number {
   return Date.parse(`${date}T00:00:00Z`);
 }
