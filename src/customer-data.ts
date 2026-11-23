@@ -1,17 +1,22 @@
-import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { localDate, type LocalDate } from "./calendar";
 import type { Clock } from "./clock";
 import type { Database } from "./db/database";
 import {
   accountsTable,
+  decisionsTable,
   ledgerEntriesTable,
   ledgerEventsTable,
   ledgerTransactionsTable,
   payrollsTable,
+  rulesTable,
+  ruleVersionsTable,
   scheduledBillsTable,
 } from "./db/schema";
+import { isGuardrail, type Decision, type NewDecision, type WhyRow } from "./decisions";
 import type { LedgerEvent, LedgerEventDispatcher } from "./ledger-events";
 import { cents, type Cents } from "./money";
+import { isRuleKind, parseRuleParameters, type NewRule, type Rule } from "./rules";
 import { isEmployer, type Employer } from "./system-data";
 
 /** A seeded customer. Every customer-scoped read and write takes one as its first argument. */
@@ -121,10 +126,31 @@ export interface CustomerData {
   listScheduledBills(customer: Customer): ScheduledBill[];
   /** Ledger transactions posted for the customer, oldest first, with every entry including the outside side. */
   listLedgerTransactions(customer: Customer): LedgerTransaction[];
+  /** The customer's ledger transaction with this id, or undefined if it doesn't exist or isn't theirs. */
+  getLedgerTransaction(customer: Customer, ledgerTransactionId: number): LedgerTransaction | undefined;
+  /**
+   * Creates a Rule at version 1. Throws RuleParametersError if the parameters don't match the kind's schema.
+   * The accounts it names are not checked here: guardrails check ownership before every agent action.
+   */
+  createRule(customer: Customer, rule: NewRule): Rule;
+  /** The latest version of each of the customer's Rules, in the order they were created. */
+  listRules(customer: Customer): Rule[];
+  /** The customer's Rule at `version`, or its latest version when `version` is left out. */
+  getRule(customer: Customer, ruleId: number, version?: number): Rule | undefined;
+  /** Switches the customer's Rule on or off by writing its next version. Throws if the Rule isn't theirs. */
+  switchRule(customer: Customer, ruleId: number, on: boolean): Rule;
+  /** Writes a Decision log entry, timed by the clock. */
+  recordDecision(customer: Customer, decision: NewDecision): Decision;
+  /** The customer's Decision log, newest first. */
+  listDecisions(customer: Customer): Decision[];
 }
 
 export class LedgerError extends Error {
   override name = "LedgerError";
+}
+
+export class RuleNotFoundError extends Error {
+  override name = "RuleNotFoundError";
 }
 
 export function createCustomerData(deps: {
@@ -290,7 +316,11 @@ export function createCustomerData(deps: {
     return result.posted;
   }
 
-  function selectLedgerTransactions(customer: Customer, idempotencyKey?: string): LedgerTransaction[] {
+  function selectLedgerTransactions(
+    customer: Customer,
+    only: { idempotencyKey?: string; id?: number } = {},
+  ): LedgerTransaction[] {
+    const { idempotencyKey, id } = only;
     const transactions = db
       .select()
       .from(ledgerTransactionsTable)
@@ -298,6 +328,7 @@ export function createCustomerData(deps: {
         and(
           eq(ledgerTransactionsTable.customerId, customer.id),
           idempotencyKey === undefined ? undefined : eq(ledgerTransactionsTable.idempotencyKey, idempotencyKey),
+          id === undefined ? undefined : eq(ledgerTransactionsTable.id, id),
         ),
       )
       .orderBy(asc(ledgerTransactionsTable.id))
@@ -325,6 +356,153 @@ export function createCustomerData(deps: {
     }));
   }
 
+  /** The customer's Rules at `version`, or at their latest version when `version` is left out. */
+  function selectRules(customer: Customer, ruleId?: number, version?: number): Rule[] {
+    const rows = db
+      .select({
+        id: rulesTable.id,
+        kind: rulesTable.kind,
+        version: ruleVersionsTable.version,
+        on: ruleVersionsTable.on,
+        parameters: ruleVersionsTable.parameters,
+        createdAtMs: ruleVersionsTable.createdAtMs,
+      })
+      .from(rulesTable)
+      .innerJoin(ruleVersionsTable, eq(ruleVersionsTable.ruleId, rulesTable.id))
+      .where(
+        and(
+          eq(rulesTable.customerId, customer.id),
+          ruleId === undefined ? undefined : eq(rulesTable.id, ruleId),
+          version === undefined ? undefined : eq(ruleVersionsTable.version, version),
+        ),
+      )
+      .orderBy(asc(rulesTable.id), desc(ruleVersionsTable.version))
+      .all()
+      // Rows come newest version first, so the first row of each Rule is its latest.
+      .filter((row, index, all) => index === 0 || all[index - 1]?.id !== row.id);
+    return rows.map((row) => {
+      if (!isRuleKind(row.kind)) throw new Error(`Rule ${row.id} has an unknown kind ${row.kind}`);
+      return {
+        id: row.id,
+        kind: row.kind,
+        version: row.version,
+        on: row.on,
+        parameters: parseRuleParameters(row.kind, row.parameters),
+        createdAt: new Date(row.createdAtMs),
+      };
+    });
+  }
+
+  function getRule(customer: Customer, ruleId: number, version?: number): Rule | undefined {
+    return selectRules(customer, ruleId, version)[0];
+  }
+
+  function createRule(customer: Customer, rule: NewRule): Rule {
+    const parameters = parseRuleParameters(rule.kind, rule.parameters);
+    const ruleId = db.transaction((tx) => {
+      const inserted = tx
+        .insert(rulesTable)
+        .values({ customerId: customer.id, kind: rule.kind })
+        .returning({ id: rulesTable.id })
+        .get();
+      tx.insert(ruleVersionsTable)
+        .values({ ruleId: inserted.id, version: 1, parameters, on: rule.on, createdAtMs: clock.now().getTime() })
+        .run();
+      return inserted.id;
+    });
+    const created = getRule(customer, ruleId);
+    if (!created) throw new Error(`Rule ${ruleId} vanished after it was created`);
+    return created;
+  }
+
+  function switchRule(customer: Customer, ruleId: number, on: boolean): Rule {
+    db.transaction(
+      (tx) => {
+        const current = getRule(customer, ruleId);
+        if (!current) throw new RuleNotFoundError(`No Rule ${ruleId} for this customer`);
+        tx.insert(ruleVersionsTable)
+          .values({
+            ruleId,
+            version: current.version + 1,
+            parameters: current.parameters,
+            on,
+            createdAtMs: clock.now().getTime(),
+          })
+          .run();
+      },
+      { behavior: "immediate" },
+    );
+    const switched = getRule(customer, ruleId);
+    if (!switched) throw new Error(`Rule ${ruleId} vanished after it was switched`);
+    return switched;
+  }
+
+  function selectDecisions(customer: Customer, decisionId?: number): Decision[] {
+    return db
+      .select()
+      .from(decisionsTable)
+      .where(
+        and(
+          eq(decisionsTable.customerId, customer.id),
+          decisionId === undefined ? undefined : eq(decisionsTable.id, decisionId),
+        ),
+      )
+      .orderBy(desc(decisionsTable.createdAtMs), desc(decisionsTable.id))
+      .all()
+      .map((row) => {
+        if (row.refusedBy !== null && !isGuardrail(row.refusedBy)) {
+          throw new Error(`Decision ${row.id} names an unknown guardrail ${row.refusedBy}`);
+        }
+        return {
+          id: row.id,
+          at: new Date(row.createdAtMs),
+          actor: row.actor,
+          trigger: { ledgerEventId: row.triggerLedgerEventId, description: row.triggerDescription },
+          rule: { id: row.ruleId, version: row.ruleVersion },
+          action: row.action,
+          fromAccountId: row.fromAccountId,
+          toAccountId: row.toAccountId,
+          amount: cents(row.amountCents),
+          result: row.result,
+          refusedBy: row.refusedBy,
+          why: row.why as WhyRow[],
+          ledgerTransactionId: row.ledgerTransactionId,
+          reversesDecisionId: row.reversesDecisionId,
+        };
+      });
+  }
+
+  function recordDecision(customer: Customer, decision: NewDecision): Decision {
+    if (!getRule(customer, decision.rule.id, decision.rule.version)) {
+      throw new RuleNotFoundError(`No Rule ${decision.rule.id} version ${decision.rule.version} for this customer`);
+    }
+    const row = db
+      .insert(decisionsTable)
+      .values({
+        customerId: customer.id,
+        createdAtMs: clock.now().getTime(),
+        actor: decision.actor,
+        triggerLedgerEventId: decision.trigger.ledgerEventId,
+        triggerDescription: decision.trigger.description,
+        ruleId: decision.rule.id,
+        ruleVersion: decision.rule.version,
+        action: decision.action,
+        fromAccountId: decision.fromAccountId,
+        toAccountId: decision.toAccountId,
+        amountCents: decision.amount,
+        result: decision.result,
+        refusedBy: decision.refusedBy,
+        why: decision.why,
+        ledgerTransactionId: decision.ledgerTransactionId,
+        reversesDecisionId: decision.reversesDecisionId,
+      })
+      .returning({ id: decisionsTable.id })
+      .get();
+    const recorded = selectDecisions(customer, row.id)[0];
+    if (!recorded) throw new Error(`Decision ${row.id} vanished after it was recorded`);
+    return recorded;
+  }
+
   return {
     listAccounts: (customer) => selectAccounts(customer),
     getAccount,
@@ -341,9 +519,18 @@ export function createCustomerData(deps: {
     postLedgerTransaction,
     inOneTransaction,
     findLedgerTransaction(customer, idempotencyKey) {
-      return selectLedgerTransactions(customer, idempotencyKey)[0];
+      return selectLedgerTransactions(customer, { idempotencyKey })[0];
     },
     listLedgerTransactions: (customer) => selectLedgerTransactions(customer),
+    getLedgerTransaction(customer, ledgerTransactionId) {
+      return selectLedgerTransactions(customer, { id: ledgerTransactionId })[0];
+    },
+    createRule,
+    listRules: (customer) => selectRules(customer),
+    getRule,
+    switchRule,
+    recordDecision,
+    listDecisions: (customer) => selectDecisions(customer),
     addPayroll(customer, payroll) {
       if (!getAccount(customer, payroll.accountId)) {
         throw new LedgerError("A payroll must pay into the customer's own account");

@@ -10,7 +10,7 @@ interface SeedCustomer {
   payroll?: Omit<NewPayroll, "accountId">;
   /** Paid from the customer's checking account. */
   bills: Omit<NewScheduledBill, "accountId">[];
-  /** The Buffer kept in checking. Stands in for the buffer Rule until Rules exist. */
+  /** The Buffer of the customer's buffer Rule, which sweeps checking to their first savings account. */
   buffer: Cents;
 }
 
@@ -48,14 +48,9 @@ const SEED_CUSTOMERS: SeedCustomer[] = [
 ];
 
 /**
- * The customer's Buffer from the seed data, or zero for a customer the seed doesn't know.
- * A stand-in until the buffer Rule holds the Buffer.
+ * Seeds the demo customers, their accounts, balances, payrolls, Scheduled bills and buffer Rules, and the
+ * clearing accounts, once per database.
  */
-export function seededBuffer(customer: Customer): Cents {
-  return SEED_CUSTOMERS.find((seed) => seed.name === customer.name)?.buffer ?? cents(0);
-}
-
-/** Seeds the demo customers, their accounts, balances, payrolls and Scheduled bills, and the clearing accounts, once per database. */
 export function seedDemoData(system: SystemData, data: CustomerData): void {
   system.ensureSystemAccount("acmePayroll");
   system.ensureSystemAccount("biller");
@@ -65,8 +60,10 @@ export function seedDemoData(system: SystemData, data: CustomerData): void {
   const openingBalances = system.ensureSystemAccount("openingBalances");
   for (const seed of SEED_CUSTOMERS) {
     const customer: Customer = system.createCustomer(seed.name);
+    const accountIds: Partial<Record<NewAccount["kind"], number>> = {};
     for (const { openingBalance, ...newAccount } of seed.accounts) {
       const account = data.openAccount(customer, newAccount);
+      accountIds[account.kind] ??= account.id;
       data.postLedgerTransaction(customer, {
         idempotencyKey: `opening:${account.id}`,
         description: `Opening balance of ${account.name}`,
@@ -80,5 +77,10 @@ export function seedDemoData(system: SystemData, data: CustomerData): void {
         for (const bill of seed.bills) data.addScheduledBill(customer, { ...bill, accountId: account.id });
       }
     }
+    data.createRule(customer, {
+      kind: "buffer",
+      parameters: { checkingAccountId: accountIds.checking, savingsAccountId: accountIds.savings, buffer: seed.buffer },
+      on: true,
+    });
   }
 }

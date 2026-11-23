@@ -113,7 +113,9 @@ describe("ledger", () => {
 
     expect(first.created).toBe(true);
     expect(repeat).toEqual({ ...first, created: false });
-    expect(balanceOf(bank, sam, checking.id)).toBe(3_467_00);
+    const posted = bank.customerData.listLedgerTransactions(sam).filter((t) => t.idempotencyKey === "payroll:acme:2026-11-20");
+    expect(posted).toEqual([expect.objectContaining({ id: first.ledgerTransactionId })]);
+    expect(posted[0]?.entries).toContainEqual({ accountId: checking.id, amount: 3_240_00 });
   });
 
   it("hands each new ledger event to subscribers once, with its entries already posted, and never for a repeated key", () => {

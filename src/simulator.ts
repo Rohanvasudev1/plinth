@@ -30,7 +30,7 @@ export interface PostedBill extends PostedMoney {
   payee: string;
 }
 
-export type Posting = PostedPaycheck | PostedBill;
+export type PostedTransaction = PostedPaycheck | PostedBill;
 
 export interface CardPurchase {
   accountId: number;
@@ -56,7 +56,7 @@ export interface AdvancedClock {
    * The paychecks and Scheduled bills whose dates the clock passed, in the order they posted: by date,
    * and on a date with both, paychecks before bills.
    */
-  postings: Posting[];
+  posted: PostedTransaction[];
 }
 
 /** The outside institutions the bank talks to, simulated: employers paying in, merchants, and the clock they share. */
@@ -65,7 +65,7 @@ export interface Simulator {
   postPaycheck(): PostedPaycheck[];
   /**
    * Moves the clock to the same time of day on the next date and posts, in date order, every paycheck
-   * and Scheduled bill whose date it passed, all in one database transaction. If a posting fails, the
+   * and Scheduled bill whose date it passed, all in one database transaction. If one fails, the
    * clock stays where it was and nothing posts.
    */
   advanceClock(): AdvancedClock;
@@ -169,7 +169,7 @@ export function createSimulator(deps: {
     },
     advanceClock() {
       // The clock is read, moved and posted against in one transaction, so two advances can't both start
-      // from the same day, and the postings read the new time. A clock kept outside the database doesn't
+      // from the same day, and the ledger transactions read the new time. A clock kept outside the database doesn't
       // roll back with the transaction, so it is put back by hand on failure.
       return customerData.inOneTransaction(() => {
         const before = clock.now();
@@ -177,11 +177,11 @@ export function createSimulator(deps: {
         clock.setTo(now);
         try {
           // On each date, paychecks post before bills.
-          const postings: Posting[] = [...datesAfterThrough(localDateOf(before), localDateOf(now))].flatMap((date) => [
+          const posted: PostedTransaction[] = [...datesAfterThrough(localDateOf(before), localDateOf(now))].flatMap((date) => [
             ...paychecksOn(date).map(postPaycheckDue),
             ...billsOn(date).map(postBillDue),
           ]);
-          return { now, postings };
+          return { now, posted };
         } catch (error) {
           clock.setTo(before);
           throw error;

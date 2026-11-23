@@ -9,8 +9,16 @@ import { openTestBank, signInByName } from "./test-bank";
 /** Friday 20 November 2026, 9am in New York: Acme Corp's first payday. */
 const FIRST_PAYDAY_9AM = new Date("2026-11-20T14:00:00Z");
 
+/** A seeded bank with every buffer Rule switched off, so balances show only what the Simulator posted. */
 function bankAt(at: Date): Bank {
-  return createBank({ db: openTestDatabase(), clock: fixedClock(at) });
+  return withoutSweeps(createBank({ db: openTestDatabase(), clock: fixedClock(at) }));
+}
+
+function withoutSweeps(bank: Bank): Bank {
+  for (const customer of bank.listCustomers()) {
+    for (const rule of bank.customerData.listRules(customer)) bank.customerData.switchRule(customer, rule.id, false);
+  }
+  return bank;
 }
 
 function samsBalances(bank: Bank) {
@@ -69,7 +77,7 @@ describe("Post paycheck", () => {
 
 describe("Advance clock one day", () => {
   it("moves the simulated time forward one day", () => {
-    const bank = openTestBank();
+    const bank = withoutSweeps(openTestBank());
 
     bank.advanceClock();
 
@@ -78,23 +86,23 @@ describe("Advance clock one day", () => {
   });
 
   it("posts the paycheck whose date it passes", () => {
-    const bank = openTestBank();
+    const bank = withoutSweeps(openTestBank());
 
     const advanced = bank.advanceClock();
 
-    expect(advanced.postings).toEqual([expect.objectContaining({ kind: "paycheck", date: "2026-11-20", created: true })]);
+    expect(advanced.posted).toEqual([expect.objectContaining({ kind: "paycheck", date: "2026-11-20", created: true })]);
     expect(samsBalances(bank).checking).toBe(3_467_00);
   });
 
   it("posts nothing on days it passes that aren't paydays", () => {
     const bank = bankAt(FIRST_PAYDAY_9AM);
 
-    expect(bank.advanceClock().postings).toEqual([]);
+    expect(bank.advanceClock().posted).toEqual([]);
     expect(samsBalances(bank).checking).toBe(227_00);
   });
 
   it("doesn't pay twice when today's paycheck was already posted by hand", () => {
-    const bank = openTestBank();
+    const bank = withoutSweeps(openTestBank());
 
     bank.advanceClock();
     bank.postPaycheck();
@@ -117,7 +125,7 @@ describe("Advance clock one day", () => {
   });
 
   it("pays every 14 days and pays bills as they fall due, in date order across several pay cycles", () => {
-    const bank = openTestBank();
+    const bank = withoutSweeps(openTestBank());
     const sam = signInByName(bank, "Sam Calloway");
 
     for (let day = 0; day < 30; day++) bank.advanceClock();
@@ -149,7 +157,7 @@ describe("Advance clock one day", () => {
 
     const advanced = bank.advanceClock();
 
-    expect(advanced.postings).toEqual([
+    expect(advanced.posted).toEqual([
       expect.objectContaining({ kind: "bill", customerId: sam.id, payee: "Rent", date: "2026-12-01", amount: 1_450_00, created: true }),
     ]);
     const posted = bank.customerData.findLedgerTransaction(sam, `bill:${rent?.id}:2026-12-01`);
@@ -168,8 +176,8 @@ describe("Advance clock one day", () => {
 
     const samsPostings = bank
       .advanceClock()
-      .postings.filter((posting) => posting.customerId === sam.id)
-      .map((posting) => `${posting.kind} ${posting.date}`);
+      .posted.filter((transaction) => transaction.customerId === sam.id)
+      .map((transaction) => `${transaction.kind} ${transaction.date}`);
 
     expect(samsPostings).toEqual(["paycheck 2027-01-01", "bill 2027-01-01"]);
   });
@@ -182,11 +190,11 @@ describe("Advance clock one day", () => {
     bank.clock.setTo(start);
     const again = bank.advanceClock();
 
-    expect(again.postings).toEqual([expect.objectContaining({ kind: "bill", payee: "Rent", created: false })]);
+    expect(again.posted).toEqual([expect.objectContaining({ kind: "bill", payee: "Rent", created: false })]);
     expect(samsBalances(bank).checking).toBe(227_00 - 1_450_00);
   });
 
-  it("leaves the clock where it was and posts nothing when one of the day's postings fails", () => {
+  it("leaves the clock where it was and posts nothing when one of the day's posted fails", () => {
     // 9am on Thursday 31 December; 1 January has Sam's paycheck, then rent.
     const start = new Date("2026-12-31T14:00:00Z");
     const bank = bankAt(start);
@@ -202,8 +210,8 @@ describe("Advance clock one day", () => {
     expect(samsBalances(bank).checking).toBe(227_00);
   });
 
-  it("has moved the clock to the new day by the time rules hear about the postings", () => {
-    const bank = openTestBank();
+  it("has moved the clock to the new day by the time rules hear about the posted", () => {
+    const bank = withoutSweeps(openTestBank());
     const clockSeenByRules: string[] = [];
     bank.ledgerEvents.subscribe(() => clockSeenByRules.push(bank.clock.now().toISOString()));
 
@@ -222,7 +230,7 @@ describe("Card purchase", () => {
   }
 
   it("spends the amount from the chosen account through the Merchant clearing account", () => {
-    const bank = openTestBank();
+    const bank = withoutSweeps(openTestBank());
     const { sam, houseFund } = samWithAccounts(bank);
     const merchant = bank.systemData.ensureSystemAccount("merchant");
 
@@ -236,7 +244,7 @@ describe("Card purchase", () => {
   });
 
   it("changes nothing when the same purchase is submitted twice", () => {
-    const bank = openTestBank();
+    const bank = withoutSweeps(openTestBank());
     const { sam, checking } = samWithAccounts(bank);
     const purchase = { accountId: checking.id, amount: cents(19_99), idempotencyKey: "card:test-2" };
 
@@ -248,7 +256,7 @@ describe("Card purchase", () => {
   });
 
   it("treats a repeat of a purchase that emptied the account as already done, not declined", () => {
-    const bank = openTestBank();
+    const bank = withoutSweeps(openTestBank());
     const { sam, houseFund } = samWithAccounts(bank);
     const purchase = { accountId: houseFund.id, amount: cents(12_400_00), idempotencyKey: "card:test-5" };
 
@@ -259,7 +267,7 @@ describe("Card purchase", () => {
   });
 
   it("is declined, moving nothing, when the account holds less than the amount", () => {
-    const bank = openTestBank();
+    const bank = withoutSweeps(openTestBank());
     const { sam, checking } = samWithAccounts(bank);
 
     expect(() =>
@@ -269,7 +277,7 @@ describe("Card purchase", () => {
   });
 
   it("is declined for an amount of zero or less", () => {
-    const bank = openTestBank();
+    const bank = withoutSweeps(openTestBank());
     const { sam, checking } = samWithAccounts(bank);
 
     for (const amount of [0, -5_00]) {
@@ -281,7 +289,7 @@ describe("Card purchase", () => {
   });
 
   it("can't spend from another customer's account", () => {
-    const bank = openTestBank();
+    const bank = withoutSweeps(openTestBank());
     const { houseFund } = samWithAccounts(bank);
     const priya = signInByName(bank, "Priya Natarajan");
 

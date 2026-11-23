@@ -141,3 +141,81 @@ export const scheduledBillsTable = sqliteTable(
     check("scheduled_bills_day_of_month", sql`${table.dayOfMonth} BETWEEN 1 AND 31`),
   ],
 );
+
+/** A Rule's identity. Its content lives in `rule_versions`, one row per version (ADR 0003). */
+export const rulesTable = sqliteTable(
+  "rules",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    customerId: integer("customer_id")
+      .notNull()
+      .references(() => customersTable.id),
+    kind: text("kind").notNull(),
+  },
+  (table) => [index("rules_customer_id").on(table.customerId)],
+);
+
+/**
+ * One version of a Rule: its JSON parameters, checked against the kind's schema before they are written,
+ * and its on/off switch. Rows are never updated: editing a Rule writes the next version.
+ */
+export const ruleVersionsTable = sqliteTable(
+  "rule_versions",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    ruleId: integer("rule_id")
+      .notNull()
+      .references(() => rulesTable.id),
+    version: integer("version").notNull(),
+    parameters: text("parameters", { mode: "json" }).notNull(),
+    on: integer("is_on", { mode: "boolean" }).notNull(),
+    createdAtMs: integer("created_at_ms").notNull(),
+  },
+  (table) => [
+    uniqueIndex("rule_versions_rule_version").on(table.ruleId, table.version),
+    check("rule_versions_version_positive", sql`${table.version} > 0`),
+  ],
+);
+
+/**
+ * The Decision log: one row per agent action, with what triggered it, the Rule version it used, and its result.
+ * `why` is a JSON array of label and value pairs.
+ */
+export const decisionsTable = sqliteTable(
+  "decisions",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    customerId: integer("customer_id")
+      .notNull()
+      .references(() => customersTable.id),
+    createdAtMs: integer("created_at_ms").notNull(),
+    actor: text("actor", { enum: ["agent"] }).notNull(),
+    triggerLedgerEventId: integer("trigger_ledger_event_id").references(() => ledgerEventsTable.id),
+    triggerDescription: text("trigger_description").notNull(),
+    ruleId: integer("rule_id")
+      .notNull()
+      .references(() => rulesTable.id),
+    ruleVersion: integer("rule_version").notNull(),
+    action: text("action").notNull(),
+    fromAccountId: integer("from_account_id")
+      .notNull()
+      .references(() => accountsTable.id),
+    toAccountId: integer("to_account_id")
+      .notNull()
+      .references(() => accountsTable.id),
+    amountCents: integer("amount_cents").notNull(),
+    result: text("result", { enum: ["Done", "Refused", "Reversed"] }).notNull(),
+    /** The guardrail that refused the action, on a Refused entry. */
+    refusedBy: text("refused_by"),
+    why: text("why", { mode: "json" }).notNull(),
+    /** The ledger transaction that moved the money, on a Done or Reversed entry. */
+    ledgerTransactionId: integer("ledger_transaction_id").references(() => ledgerTransactionsTable.id),
+    /** On a Reversed entry, the entry it reverses. */
+    reversesDecisionId: integer("reverses_decision_id"),
+  },
+  (table) => [
+    index("decisions_customer_id").on(table.customerId),
+    index("decisions_trigger_ledger_event_id").on(table.triggerLedgerEventId),
+    check("decisions_refused_by", sql`(${table.result} = 'Refused') = (${table.refusedBy} IS NOT NULL)`),
+  ],
+);

@@ -6,7 +6,7 @@ import { localDateOf } from "@/calendar";
 import { formatDollars, parseDollars } from "@/money";
 import type { Customer } from "@/customer-data";
 import { requireCustomer } from "@/session";
-import { CardDeclinedError, type Posting } from "@/simulator";
+import { CardDeclinedError, type PostedTransaction } from "@/simulator";
 
 /** What the last Simulator button did, shown under the buttons. */
 export interface SimulatorResult {
@@ -18,15 +18,15 @@ export interface SimulatorResult {
  * Describes the signed-in customer's own paychecks and bills. The clock posts every customer's,
  * but a customer only hears about theirs.
  */
-function describePostings(customer: Customer, postings: Posting[]): string[] {
-  return postings
-    .filter((posting) => posting.customerId === customer.id)
-    .map((posting) => {
+function describePosted(customer: Customer, posted: PostedTransaction[]): string[] {
+  return posted
+    .filter((transaction) => transaction.customerId === customer.id)
+    .map((transaction) => {
       const [done, what] =
-        posting.kind === "paycheck"
-          ? ["Posted", `${posting.employerName} paycheck of ${formatDollars(posting.amount)} for ${posting.date}`]
-          : ["Paid", `${posting.payee} bill of ${formatDollars(posting.amount)} due ${posting.date}`];
-      return posting.created ? `${done} your ${what}.` : `Your ${what} already posted. Nothing changed.`;
+        transaction.kind === "paycheck"
+          ? ["Posted", `${transaction.employerName} paycheck of ${formatDollars(transaction.amount)} for ${transaction.date}`]
+          : ["Paid", `${transaction.payee} bill of ${formatDollars(transaction.amount)} due ${transaction.date}`];
+      return transaction.created ? `${done} your ${what}.` : `Your ${what} already posted. Nothing changed.`;
     });
 }
 
@@ -37,10 +37,10 @@ export async function runClock(_previous: SimulatorResult | null, form: FormData
   let message: string[];
   if (form.get("button") === "advance") {
     const advanced = bank.advanceClock();
-    message = [`Moved the clock to ${localDateOf(advanced.now)}.`, ...describePostings(customer, advanced.postings)];
+    message = [`Moved the clock to ${localDateOf(advanced.now)}.`, ...describePosted(customer, advanced.posted)];
   } else {
     const paychecks = bank.postPaycheck();
-    message = describePostings(customer, paychecks);
+    message = describePosted(customer, paychecks);
     if (message.length === 0) message = [`No paycheck of yours is due on ${localDateOf(bank.clock.now())}.`];
   }
   revalidatePath("/", "layout");

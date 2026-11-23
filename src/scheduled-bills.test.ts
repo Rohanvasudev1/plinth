@@ -111,9 +111,13 @@ describe("Bills before payday", () => {
 describe("Safe to spend on Home", () => {
   it("is checking minus the $1,500 Buffer minus bills before payday, $340 after Sam's 20 Nov paycheck", () => {
     const bank = bankAt("2026-11-20T14:00:00Z");
+    const sam = signInByName(bank, "Sam Calloway");
+    // With the buffer Rule off, the agent leaves the $340 in checking. The Buffer stays $1,500.
+    const [rule] = bank.customerData.listRules(sam);
+    if (rule) bank.customerData.switchRule(sam, rule.id, false);
     bank.postPaycheck();
 
-    const home = bank.readHome(signInByName(bank, "Sam Calloway"));
+    const home = bank.readHome(sam);
 
     expect(home.safeToSpend).toEqual({ amount: 340_00, checking: 3_467_00, buffer: 1_500_00, billsBeforePayday: 1_627_00 });
     expect(home.billsBeforePayday.bills.map((bill) => bill.payee)).toEqual(["Rent", "Internet", "Phone", "Power"]);

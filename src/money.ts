@@ -35,3 +35,8 @@ export function parseDollars(text: string): Cents {
   }
   return cents(Number(dollars || "0") * 100 + Number(fraction.padEnd(2, "0")));
 }
+
+/** Formats cents as US dollars, leaving off zero cents, such as `$340` or `$12.50`. */
+export function formatDollarsBriefly(amount: Cents): string {
+  return amount % 100 === 0 ? formatDollars(amount).slice(0, -3) : formatDollars(amount);
+}
