@@ -89,3 +89,30 @@ export const ledgerEventsTable = sqliteTable("ledger_events", {
     .references(() => ledgerTransactionsTable.id),
   createdAtMs: integer("created_at_ms").notNull(),
 });
+
+/**
+ * A simulated employer's standing order to pay one customer a fixed amount into one of their accounts,
+ * every `interval_days` days from `first_pay_date` (a YYYY-MM-DD date in the bank's time zone).
+ * `employer` names an entry in the payroll adapter's employer list.
+ */
+export const payrollsTable = sqliteTable(
+  "payrolls",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    customerId: integer("customer_id")
+      .notNull()
+      .references(() => customersTable.id),
+    accountId: integer("account_id")
+      .notNull()
+      .references(() => accountsTable.id),
+    employer: text("employer").notNull(),
+    amountCents: integer("amount_cents").notNull(),
+    firstPayDate: text("first_pay_date").notNull(),
+    intervalDays: integer("interval_days").notNull(),
+  },
+  (table) => [
+    index("payrolls_customer_id").on(table.customerId),
+    check("payrolls_amount_positive", sql`${table.amountCents} > 0`),
+    check("payrolls_interval_positive", sql`${table.intervalDays} > 0`),
+  ],
+);

@@ -37,7 +37,7 @@ export default async function HomePage() {
           <p className="muted">{dateFormat.format(home.today)}</p>
         </div>
         <p className="muted signed-in">
-          {home.customerName} · <Link href="/sign-in">Switch</Link>
+          {home.customerName} · <Link href="/sign-in">Switch</Link> · <Link href="/simulator">Simulator</Link>
         </p>
       </header>
 

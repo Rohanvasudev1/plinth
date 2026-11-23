@@ -1,4 +1,5 @@
 import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { localDate, type LocalDate } from "./calendar";
 import type { Clock } from "./clock";
 import type { Database } from "./db/database";
 import {
@@ -6,9 +7,11 @@ import {
   ledgerEntriesTable,
   ledgerEventsTable,
   ledgerTransactionsTable,
+  payrollsTable,
 } from "./db/schema";
 import type { LedgerEvent, LedgerEventDispatcher } from "./ledger-events";
 import { cents, type Cents } from "./money";
+import { isEmployer, type Employer } from "./system-data";
 
 /** A seeded customer. Every customer-scoped read and write takes one as its first argument. */
 export interface Customer {
@@ -60,6 +63,18 @@ export interface LedgerTransaction {
   entries: LedgerEntryInput[];
 }
 
+/** A simulated employer paying the customer a fixed amount into one of their accounts every `intervalDays` days. */
+export interface Payroll {
+  id: number;
+  accountId: number;
+  employer: Employer;
+  amount: Cents;
+  firstPayDate: LocalDate;
+  intervalDays: number;
+}
+
+export type NewPayroll = Omit<Payroll, "id">;
+
 /**
  * The one data-access layer for customer-owned rows (ADR 0004). Every method takes the customer
  * first, and no other module reads or writes customer accounts or the ledger.
@@ -76,6 +91,12 @@ export interface CustomerData {
    * ledger transaction and changes nothing, while another customer may use the same key.
    */
   postLedgerTransaction(customer: Customer, transaction: LedgerTransactionInput): PostedLedgerTransaction;
+  /** The customer's ledger transaction posted under this idempotency key, if there is one. */
+  findLedgerTransaction(customer: Customer, idempotencyKey: string): LedgerTransaction | undefined;
+  /** Sets up a payroll into one of the customer's own accounts. */
+  addPayroll(customer: Customer, payroll: NewPayroll): Payroll;
+  /** The customer's payrolls, in the order they were set up. */
+  listPayrolls(customer: Customer): Payroll[];
   /** Ledger transactions posted for the customer, oldest first, with every entry including the outside side. */
   listLedgerTransactions(customer: Customer): LedgerTransaction[];
 }
@@ -224,6 +245,41 @@ export function createCustomerData(deps: {
     return result.posted;
   }
 
+  function selectLedgerTransactions(customer: Customer, idempotencyKey?: string): LedgerTransaction[] {
+    const transactions = db
+      .select()
+      .from(ledgerTransactionsTable)
+      .where(
+        and(
+          eq(ledgerTransactionsTable.customerId, customer.id),
+          idempotencyKey === undefined ? undefined : eq(ledgerTransactionsTable.idempotencyKey, idempotencyKey),
+        ),
+      )
+      .orderBy(asc(ledgerTransactionsTable.id))
+      .all();
+    if (transactions.length === 0) return [];
+    const entries = db
+      .select()
+      .from(ledgerEntriesTable)
+      .where(
+        inArray(
+          ledgerEntriesTable.ledgerTransactionId,
+          transactions.map((transaction) => transaction.id),
+        ),
+      )
+      .orderBy(asc(ledgerEntriesTable.id))
+      .all();
+    return transactions.map((transaction) => ({
+      id: transaction.id,
+      idempotencyKey: transaction.idempotencyKey,
+      description: transaction.description,
+      postedAt: new Date(transaction.postedAtMs),
+      entries: entries
+        .filter((entry) => entry.ledgerTransactionId === transaction.id)
+        .map((entry) => ({ accountId: entry.accountId, amount: cents(entry.amountCents) })),
+    }));
+  }
+
   return {
     listAccounts: (customer) => selectAccounts(customer),
     getAccount,
@@ -238,34 +294,49 @@ export function createCustomerData(deps: {
       return opened;
     },
     postLedgerTransaction,
-    listLedgerTransactions(customer) {
-      const transactions = db
+    findLedgerTransaction(customer, idempotencyKey) {
+      return selectLedgerTransactions(customer, idempotencyKey)[0];
+    },
+    listLedgerTransactions: (customer) => selectLedgerTransactions(customer),
+    addPayroll(customer, payroll) {
+      if (!getAccount(customer, payroll.accountId)) {
+        throw new LedgerError("A payroll must pay into the customer's own account");
+      }
+      if (payroll.amount <= 0 || payroll.intervalDays <= 0) {
+        throw new LedgerError("A payroll needs an amount and an interval above zero");
+      }
+      const row = db
+        .insert(payrollsTable)
+        .values({
+          customerId: customer.id,
+          accountId: payroll.accountId,
+          employer: payroll.employer,
+          amountCents: payroll.amount,
+          firstPayDate: payroll.firstPayDate,
+          intervalDays: payroll.intervalDays,
+        })
+        .returning({ id: payrollsTable.id })
+        .get();
+      return { id: row.id, ...payroll };
+    },
+    listPayrolls(customer) {
+      return db
         .select()
-        .from(ledgerTransactionsTable)
-        .where(eq(ledgerTransactionsTable.customerId, customer.id))
-        .orderBy(asc(ledgerTransactionsTable.id))
-        .all();
-      if (transactions.length === 0) return [];
-      const entries = db
-        .select()
-        .from(ledgerEntriesTable)
-        .where(
-          inArray(
-            ledgerEntriesTable.ledgerTransactionId,
-            transactions.map((transaction) => transaction.id),
-          ),
-        )
-        .orderBy(asc(ledgerEntriesTable.id))
-        .all();
-      return transactions.map((transaction) => ({
-        id: transaction.id,
-        idempotencyKey: transaction.idempotencyKey,
-        description: transaction.description,
-        postedAt: new Date(transaction.postedAtMs),
-        entries: entries
-          .filter((entry) => entry.ledgerTransactionId === transaction.id)
-          .map((entry) => ({ accountId: entry.accountId, amount: cents(entry.amountCents) })),
-      }));
+        .from(payrollsTable)
+        .where(eq(payrollsTable.customerId, customer.id))
+        .orderBy(asc(payrollsTable.id))
+        .all()
+        .map((row) => {
+          if (!isEmployer(row.employer)) throw new Error(`Payroll ${row.id} names an unknown employer ${row.employer}`);
+          return {
+            id: row.id,
+            accountId: row.accountId,
+            employer: row.employer,
+            amount: cents(row.amountCents),
+            firstPayDate: localDate(row.firstPayDate),
+            intervalDays: row.intervalDays,
+          };
+        });
     },
   };
 }
