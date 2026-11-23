@@ -1,4 +1,5 @@
 import { and, asc, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/sqlite-core";
 import { localDate, type LocalDate } from "./calendar";
 import type { Clock } from "./clock";
 import type { Database } from "./db/database";
@@ -139,10 +140,19 @@ export interface CustomerData {
   getRule(customer: Customer, ruleId: number, version?: number): Rule | undefined;
   /** Switches the customer's Rule on or off by writing its next version. Throws if the Rule isn't theirs. */
   switchRule(customer: Customer, ruleId: number, on: boolean): Rule;
-  /** Writes a Decision log entry, timed by the clock. */
+  /**
+   * Writes a Decision log entry, timed by the clock. A Reversed entry must name an agent action of the
+   * customer's that no other entry reverses yet.
+   */
   recordDecision(customer: Customer, decision: NewDecision): Decision;
   /** The customer's Decision log, newest first. */
   listDecisions(customer: Customer): Decision[];
+  /** The customer's Decision log entry with this id, or undefined if it doesn't exist or isn't theirs. */
+  getDecision(customer: Customer, decisionId: number): Decision | undefined;
+  /** The customer's agent actions they haven't been shown yet, newest first. */
+  listUnseenAgentActions(customer: Customer): Decision[];
+  /** Marks these agent actions of the customer's as seen now. Ids that aren't theirs are ignored. */
+  markAgentActionsSeen(customer: Customer, decisionIds: number[]): void;
 }
 
 export class LedgerError extends Error {
@@ -437,19 +447,23 @@ export function createCustomerData(deps: {
     return switched;
   }
 
-  function selectDecisions(customer: Customer, decisionId?: number): Decision[] {
+  const reversals = alias(decisionsTable, "reversals");
+
+  function selectDecisions(customer: Customer, only: { id?: number; unseenAgentActions?: boolean } = {}): Decision[] {
     return db
-      .select()
+      .select({ decision: decisionsTable, reversedByDecisionId: reversals.id })
       .from(decisionsTable)
+      .leftJoin(reversals, eq(reversals.reversesDecisionId, decisionsTable.id))
       .where(
         and(
           eq(decisionsTable.customerId, customer.id),
-          decisionId === undefined ? undefined : eq(decisionsTable.id, decisionId),
+          only.id === undefined ? undefined : eq(decisionsTable.id, only.id),
+          only.unseenAgentActions ? and(eq(decisionsTable.actor, "agent"), isNull(decisionsTable.seenAtMs)) : undefined,
         ),
       )
       .orderBy(desc(decisionsTable.createdAtMs), desc(decisionsTable.id))
       .all()
-      .map((row) => {
+      .map(({ decision: row, reversedByDecisionId }) => {
         if (row.refusedBy !== null && !isGuardrail(row.refusedBy)) {
           throw new Error(`Decision ${row.id} names an unknown guardrail ${row.refusedBy}`);
         }
@@ -468,6 +482,7 @@ export function createCustomerData(deps: {
           why: row.why as WhyRow[],
           ledgerTransactionId: row.ledgerTransactionId,
           reversesDecisionId: row.reversesDecisionId,
+          reversedByDecisionId,
         };
       });
   }
@@ -479,6 +494,12 @@ export function createCustomerData(deps: {
     for (const accountId of [decision.fromAccountId, decision.toAccountId]) {
       if (accountId !== null && !getAccount(customer, accountId)) {
         throw new LedgerError("A Decision log entry can only name the customer's own accounts");
+      }
+    }
+    if (decision.reversesDecisionId !== null) {
+      const reversed = selectDecisions(customer, { id: decision.reversesDecisionId })[0];
+      if (decision.result !== "Reversed" || reversed?.actor !== "agent" || reversed.result !== "Done") {
+        throw new LedgerError("Only a Reversed entry can reverse, and only an agent action that moved money");
       }
     }
     const row = db
@@ -503,7 +524,7 @@ export function createCustomerData(deps: {
       })
       .returning({ id: decisionsTable.id })
       .get();
-    const recorded = selectDecisions(customer, row.id)[0];
+    const recorded = selectDecisions(customer, { id: row.id })[0];
     if (!recorded) throw new Error(`Decision ${row.id} vanished after it was recorded`);
     return recorded;
   }
@@ -536,6 +557,22 @@ export function createCustomerData(deps: {
     switchRule,
     recordDecision,
     listDecisions: (customer) => selectDecisions(customer),
+    getDecision: (customer, decisionId) => selectDecisions(customer, { id: decisionId })[0],
+    listUnseenAgentActions: (customer) => selectDecisions(customer, { unseenAgentActions: true }),
+    markAgentActionsSeen(customer, decisionIds) {
+      if (decisionIds.length === 0) return;
+      db.update(decisionsTable)
+        .set({ seenAtMs: clock.now().getTime() })
+        .where(
+          and(
+            eq(decisionsTable.customerId, customer.id),
+            eq(decisionsTable.actor, "agent"),
+            isNull(decisionsTable.seenAtMs),
+            inArray(decisionsTable.id, decisionIds),
+          ),
+        )
+        .run();
+    },
     addPayroll(customer, payroll) {
       if (!getAccount(customer, payroll.accountId)) {
         throw new LedgerError("A payroll must pay into the customer's own account");

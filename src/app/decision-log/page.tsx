@@ -4,6 +4,7 @@ import { getAppBank } from "@/app-bank";
 import type { Decision } from "@/decisions";
 import { formatDollars } from "@/money";
 import { requireCustomer } from "@/session";
+import { WhyPanel } from "../why-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -27,21 +28,12 @@ function DecisionEntry({ decision }: { decision: Decision }) {
           <span className={`pill ${decision.result.toLowerCase()}`}>{decision.result}</span>
         </div>
         <p className="muted">
-          <time dateTime={decision.at.toISOString()}>{timeFormat.format(decision.at)}</time> · Your agent · Rule #
-          {decision.rule.id} v{decision.rule.version} ·{" "}
+          <time dateTime={decision.at.toISOString()}>{timeFormat.format(decision.at)}</time> ·{" "}
+          {decision.actor === "agent" ? "Your agent" : "You"} · Rule #{decision.rule.id} v{decision.rule.version} ·{" "}
           <span className="num">{formatDollars(decision.amount)}</span>
+          {decision.reversedByDecisionId !== null && <> · Reversed by you</>}
         </p>
-        <details className="why">
-          <summary>Why?</summary>
-          <dl>
-            {decision.why.map((row) => (
-              <div key={row.label}>
-                <dt>{row.label}</dt>
-                <dd>{row.value}</dd>
-              </div>
-            ))}
-          </dl>
-        </details>
+        <WhyPanel rows={decision.why} />
       </article>
     </li>
   );
@@ -55,7 +47,7 @@ export default async function DecisionLogPage() {
       <header className="top">
         <div>
           <h1>Decision log</h1>
-          <p className="muted">Every action your agent took or tried to take, the Rule behind it, and what happened.</p>
+          <p className="muted">Every action your agent took or tried to take, every Undo, the Rule behind each, and what happened.</p>
         </div>
         <p className="muted signed-in">
           {customer.name} · <Link href="/">Home</Link>

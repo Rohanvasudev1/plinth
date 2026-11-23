@@ -7,6 +7,9 @@ const port = 3100;
 
 export default defineConfig({
   testDir: "./e2e",
+  // Every test shares one server, database and simulated clock, so tests run one at a time, files in name order.
+  workers: 1,
+  fullyParallel: false,
   use: { baseURL: `http://localhost:${port}` },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {

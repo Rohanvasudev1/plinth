@@ -12,11 +12,17 @@ export interface WhyRow {
   value: string;
 }
 
-/** One entry in the customer's Decision log: an action their agent took or tried to take. */
+/** Who took a Decision log entry's action: the customer's agent, or the customer undoing one of its actions. */
+export type DecisionActor = "agent" | "customer";
+
+/**
+ * One entry in the customer's Decision log: an action their agent took or tried to take, or the customer's
+ * Undo of one of those actions.
+ */
 export interface Decision {
   id: number;
   at: Date;
-  actor: "agent";
+  actor: DecisionActor;
   trigger: {
     /** The ledger event the agent reacted to. */
     ledgerEventId: number | null;
@@ -38,9 +44,11 @@ export interface Decision {
   ledgerTransactionId: number | null;
   /** On a Reversed entry, the entry it reverses. */
   reversesDecisionId: number | null;
+  /** On an agent action the customer undid, their Reversed entry. Null otherwise. */
+  reversedByDecisionId: number | null;
 }
 
-export type NewDecision = Omit<Decision, "id" | "at">;
+export type NewDecision = Omit<Decision, "id" | "at" | "reversedByDecisionId">;
 
 export function isGuardrail(name: string): name is Guardrail {
   return (GUARDRAILS as readonly string[]).includes(name);
