@@ -3,7 +3,7 @@ import { localDateOf } from "./calendar";
 import type { SettableClock } from "./clock";
 import { createCustomerData, type Account, type Customer, type CustomerData } from "./customer-data";
 import type { Database } from "./db/database";
-import type { Decision } from "./decisions";
+import type { Decision, DecisionResult, WhyRow } from "./decisions";
 import { createLedgerEventDispatcher, type LedgerEventDispatcher } from "./ledger-events";
 import { cents, type Cents } from "./money";
 import {
@@ -16,8 +16,26 @@ import { bufferRuleFor } from "./rules";
 import { seedDemoData } from "./seed";
 import { createSimulator, type Simulator } from "./simulator";
 import { createSystemData, type SystemData } from "./system-data";
+import { undoAgentAction, type UndoResult } from "./undo";
 
 export type { BillBeforePayday, BillsBeforePayday, SafeToSpend } from "./safe-to-spend";
+export type { UndoDone, UndoRefused, UndoResult } from "./undo";
+
+/** One agent action as "What your agent did" shows it on Home. */
+export interface AgentAction {
+  /** The Decision log entry this action is, which Undo names. */
+  decisionId: number;
+  at: Date;
+  /** What the agent did or tried to do, such as "Moved $340 to House fund". */
+  action: string;
+  /** Done, Refused, or Reversed once the customer has undone it. */
+  state: DecisionResult;
+  amount: Cents;
+  /** The rows of the action's Why panel. */
+  why: WhyRow[];
+  /** True while the customer can still press Undo: a Done action they haven't undone. */
+  canUndo: boolean;
+}
 
 export interface GoalProgress {
   target: Cents;
@@ -39,6 +57,10 @@ export interface HomeView {
   billsBeforePayday: BillsBeforePayday;
   /** Null when the customer has no checking account. */
   safeToSpend: SafeToSpend | null;
+  /** "What your agent did", newest first. */
+  agentActions: AgentAction[];
+  /** The actions the customer hasn't been shown yet, which Home toasts once. Newest first. */
+  unseenActions: AgentAction[];
 }
 
 export class UnknownCustomerError extends Error {
@@ -60,6 +82,12 @@ export interface Bank extends Simulator {
   billsBeforePayday(customer: Customer): BillsBeforePayday;
   /** Every action the customer's agent took or tried to take, newest first. */
   readDecisionLog(customer: Customer): Decision[];
+  /** "What your agent did": the customer's agent actions with their state, newest first. */
+  readAgentActions(customer: Customer): AgentAction[];
+  /** Puts the money back from one of the customer's agent actions, or says why it can't (ADR 0002). */
+  undo(customer: Customer, decisionId: number): UndoResult;
+  /** Records that the customer has been shown their agent's actions, so the toast shows once. */
+  markAgentActionsSeen(customer: Customer): void;
 }
 
 /**
@@ -79,6 +107,33 @@ export function createBank(deps: { db: Database; clock: SettableClock }): Bank {
     return billsBeforePaydayOf(customerData, customer, localDateOf(clock.now()));
   }
 
+  /**
+   * "What your agent did", newest first, and the actions the customer hasn't been shown yet. A Reversed
+   * entry is the customer's Undo rather than an action their agent took, so it isn't listed on its own:
+   * it turns the action it reverses to Reversed.
+   */
+  function agentActivity(customer: Customer): { actions: AgentAction[]; unseen: AgentAction[] } {
+    const decisions = customerData.listDecisions(customer);
+    const undone = new Set(decisions.map((decision) => decision.reversesDecisionId));
+    const actions: AgentAction[] = [];
+    const unseen: AgentAction[] = [];
+    for (const decision of decisions) {
+      if (decision.reversesDecisionId !== null) continue;
+      const action: AgentAction = {
+        decisionId: decision.id,
+        at: decision.at,
+        action: decision.action,
+        state: undone.has(decision.id) ? "Reversed" : decision.result,
+        amount: decision.amount,
+        why: decision.why,
+        canUndo: decision.result === "Done" && !undone.has(decision.id),
+      };
+      actions.push(action);
+      if (decision.seenAt === null) unseen.push(action);
+    }
+    return { actions, unseen };
+  }
+
   return {
     ...simulator,
     clock,
@@ -94,10 +149,14 @@ export function createBank(deps: { db: Database; clock: SettableClock }): Bank {
     },
     billsBeforePayday,
     readDecisionLog: (customer) => customerData.listDecisions(customer),
+    readAgentActions: (customer) => agentActivity(customer).actions,
+    undo: (customer, decisionId) => undoAgentAction({ customerData }, customer, decisionId),
+    markAgentActionsSeen: (customer) => customerData.markDecisionsSeen(customer),
     readHome(customer) {
       const accounts = customerData.listAccounts(customer);
       const checking = accounts.find((account) => account.kind === "checking");
       const bills = billsBeforePayday(customer);
+      const activity = agentActivity(customer);
       return {
         customerName: customer.name,
         today: clock.now(),
@@ -112,6 +171,8 @@ export function createBank(deps: { db: Database; clock: SettableClock }): Bank {
         safeToSpend: checking
           ? safeToSpend(checking, bufferRuleFor(customerData.listRules(customer), checking.id)?.parameters.buffer ?? cents(0), bills)
           : null,
+        agentActions: activity.actions,
+        unseenActions: activity.unseen,
       };
     },
   };

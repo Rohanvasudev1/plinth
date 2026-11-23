@@ -38,9 +38,12 @@ export interface Decision {
   ledgerTransactionId: number | null;
   /** On a Reversed entry, the entry it reverses. */
   reversesDecisionId: number | null;
+  /** When Home last showed this entry to the customer. Null until it has, which is what the toast reads. */
+  seenAt: Date | null;
 }
 
-export type NewDecision = Omit<Decision, "id" | "at">;
+/** A new entry is always unseen, so `seenAt` is set by Home rather than by whoever records it. */
+export type NewDecision = Omit<Decision, "id" | "at" | "seenAt">;
 
 export function isGuardrail(name: string): name is Guardrail {
   return (GUARDRAILS as readonly string[]).includes(name);

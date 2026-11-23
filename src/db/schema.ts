@@ -209,6 +209,8 @@ export const decisionsTable = sqliteTable(
     ledgerTransactionId: integer("ledger_transaction_id").references(() => ledgerTransactionsTable.id),
     /** On a Reversed entry, the entry it reverses. */
     reversesDecisionId: integer("reverses_decision_id"),
+    /** When Home last showed the customer this entry. Null until it has, which is what the toast reads. */
+    seenAtMs: integer("seen_at_ms"),
   },
   (table) => [
     index("decisions_customer_id").on(table.customerId),
