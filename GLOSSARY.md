@@ -78,6 +78,34 @@ _Avoid_: Minimum balance, floor
 A move of money above the Buffer from checking to savings, made by the agent after a paycheck posts.
 _Avoid_: Auto-save, transfer
 
+**Payment limit**:
+The largest amount the agent may move alone under "handle small things", held in a payment limit Rule.
+_Avoid_: Cap, threshold
+
+**Autonomy level**:
+The customer's choice of how much the agent does alone: ask before everything, handle small things, or act on anything within the Rules.
+_Avoid_: Automation mode, permission level
+
+**Pause**:
+A customer switch that stops every automatic agent action until the customer turns it back on.
+_Avoid_: Freeze, kill switch
+
+**Finding**:
+Facts the agent reports to the customer with a set of Options, where nothing happens until the customer picks one.
+_Avoid_: Suggestion, recommendation, alert
+
+**Option**:
+One choice in a Finding, stating what it does.
+_Avoid_: Action, choice button
+
+**Setup survey**:
+The questions a customer answers before the agent acts, whose answers become Rules, Goals and settings.
+_Avoid_: Onboarding, wizard
+
+**Advice setting**:
+The customer's choice of whether the agent's own view appears in a Finding: never, on request, or always.
+_Avoid_: Advice mode, tone
+
 **Guardrail**:
 A check that runs before any agent action and refuses it if it breaks a Rule or ownership limit.
 _Avoid_: Validation, safety check
