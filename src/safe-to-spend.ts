@@ -1,7 +1,6 @@
 import { addDays, type LocalDate } from "./calendar";
 import type { Account, Customer, CustomerData } from "./customer-data";
 import { cents, type Cents } from "./money";
-import type { Rule } from "./rules";
 import { billsDue, nextPayday, totalOf } from "./schedules";
 
 export interface BillBeforePayday {
@@ -38,17 +37,6 @@ export function billsBeforePayday(customerData: CustomerData, customer: Customer
     bills: due.map(({ bill, dueDate }) => ({ billId: bill.id, payee: bill.payee, amount: bill.amount, dueDate })),
     total: totalOf(due),
   };
-}
-
-/**
- * The buffer Rule that keeps a Buffer in this checking account: a switched-on one if there is one, else the
- * latest switched-off one, since switching the agent off doesn't change the Buffer the customer chose.
- */
-export function bufferRuleFor(customerData: CustomerData, customer: Customer, checkingAccountId: number): Rule | undefined {
-  const rules = customerData
-    .listRules(customer)
-    .filter((rule) => rule.kind === "buffer" && rule.parameters.checkingAccountId === checkingAccountId);
-  return rules.find((rule) => rule.on) ?? rules.at(-1);
 }
 
 /** Safe to spend from a checking account. Home shows it, and the Sweep moves it, rounded down to whole dollars. */

@@ -45,7 +45,7 @@ describe("Decision log", () => {
             label: "Amount",
             value: "$3,467.00 in Checking, less $1,500.00 Buffer and $1,627.00 of bills, rounded down to $340.00",
           },
-          { label: "Checked by", value: "Guardrails passed: ownership, positive amount, Rule on, checking floor" },
+          { label: "Checked by", value: "Guardrails passed: ownership, positive amount, Rule on, Buffer kept" },
         ],
         ledgerTransactionId: sweep?.id,
         reversesDecisionId: null,
@@ -104,7 +104,7 @@ describe("Decision log", () => {
         refusedBy: "ownership",
         ledgerTransactionId: null,
         why: expect.arrayContaining([
-          { label: "Checked by", value: "Refused by the ownership guardrail: both accounts must be yours" },
+          { label: "Checked by", value: "Refused by the ownership guardrail: the Rule must name your own checking and savings accounts" },
         ]),
       }),
     ]);

@@ -4,7 +4,7 @@ import type { Account, Customer, CustomerData, LedgerTransaction } from "./custo
 import { GUARDRAILS, type Guardrail, type WhyRow } from "./decisions";
 import type { LedgerEvent, LedgerEventDispatcher } from "./ledger-events";
 import { cents, formatDollars, formatDollarsBriefly, type Cents } from "./money";
-import type { Rule } from "./rules";
+import { bufferRuleFor, type Rule } from "./rules";
 import { billsBeforePayday, safeToSpend, type BillsBeforePayday } from "./safe-to-spend";
 import { EMPLOYERS, type SystemData } from "./system-data";
 
@@ -36,10 +36,14 @@ export function startBufferAgent(deps: {
   ledgerEvents: LedgerEventDispatcher;
 }): () => void {
   const { clock, customerData, systemData, ledgerEvents } = deps;
+  const employerClearingAccounts = Object.values(EMPLOYERS).map((employer) => ({
+    name: employer.name,
+    clearing: systemData.ensureSystemAccount(employer.clearingAccount),
+  }));
 
   function payrollDeposit(transaction: LedgerTransaction): PayrollDeposit | undefined {
-    for (const employer of Object.values(EMPLOYERS)) {
-      const clearing = systemData.ensureSystemAccount(employer.clearingAccount);
+    for (const employer of employerClearingAccounts) {
+      const { clearing } = employer;
       const paid = transaction.entries.find((entry) => entry.accountId === clearing && entry.amount < 0);
       const received = transaction.entries.find((entry) => entry.accountId !== clearing && entry.amount > 0);
       if (paid && received) return { accountId: received.accountId, amount: received.amount, employerName: employer.name };
@@ -52,13 +56,13 @@ export function startBufferAgent(deps: {
     const { customer, rule, checking, amount, bills } = sweep;
     const checks: Record<Guardrail, () => string | null> = {
       ownership: () =>
-        customerData.getAccount(customer, rule.parameters.checkingAccountId) &&
-        customerData.getAccount(customer, rule.parameters.savingsAccountId)
+        customerData.getAccount(customer, rule.parameters.checkingAccountId)?.kind === "checking" &&
+        customerData.getAccount(customer, rule.parameters.savingsAccountId)?.kind === "savings"
           ? null
-          : "both accounts must be yours",
+          : "the Rule must name your own checking and savings accounts",
       "positive amount": () => (amount > 0 ? null : "the amount must be more than $0"),
       "Rule on": () => (customerData.getRule(customer, rule.id)?.on ? null : "the buffer Rule is switched off"),
-      "checking floor": () =>
+      "Buffer kept": () =>
         checking.balance - amount >= rule.parameters.buffer + bills.total
           ? null
           : `checking would fall below the ${formatDollars(rule.parameters.buffer)} Buffer plus ${formatDollars(bills.total)} of bills`,
@@ -76,8 +80,9 @@ export function startBufferAgent(deps: {
       if (!checking) return;
       const bills = billsBeforePayday(customerData, customer, localDateOf(clock.now()));
       const safe = safeToSpend(checking, rule.parameters.buffer, bills);
-      const amount = cents(Math.floor(safe.amount / 100) * 100);
-      if (amount <= 0) return;
+      // Round down to whole dollars. Nothing is swept, or logged, unless a whole dollar is above the Buffer.
+      if (safe.amount < 100) return;
+      const amount = cents(safe.amount - (safe.amount % 100));
 
       const savings = customerData.getAccount(customer, rule.parameters.savingsAccountId);
       const savingsName = savings?.name ?? "savings";
@@ -147,10 +152,9 @@ export function startBufferAgent(deps: {
     const transaction = customerData.getLedgerTransaction(customer, event.ledgerTransactionId);
     const deposit = transaction && payrollDeposit(transaction);
     if (!deposit) return;
-    const rules = customerData
-      .listRules(customer)
-      .filter((rule) => rule.kind === "buffer" && rule.on && rule.parameters.checkingAccountId === deposit.accountId);
-    for (const rule of rules) sweep(customer, rule, event, deposit);
+    // One sweep per paycheck, under the key sweep:<ledger event id>.
+    const rule = bufferRuleFor(customerData.listRules(customer), deposit.accountId);
+    if (rule?.on) sweep(customer, rule, event, deposit);
   });
 }
 

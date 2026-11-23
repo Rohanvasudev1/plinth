@@ -2,8 +2,8 @@ import type { Cents } from "./money";
 
 export type DecisionResult = "Done" | "Refused" | "Reversed";
 
-/** The guardrails checked before every agent transfer, in the order they run. */
-export const GUARDRAILS = ["ownership", "positive amount", "Rule on", "checking floor"] as const;
+/** The guardrails checked before every agent action that moves money, in the order they run. */
+export const GUARDRAILS = ["ownership", "positive amount", "Rule on", "Buffer kept"] as const;
 export type Guardrail = (typeof GUARDRAILS)[number];
 
 /** One row of a Decision log entry's Why panel. */

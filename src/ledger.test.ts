@@ -179,7 +179,7 @@ describe("ledger", () => {
   });
 });
 
-describe("one transaction around several postings", () => {
+describe("one transaction around several ledger transactions", () => {
   it("keeps nothing and tells no subscriber when the block throws", () => {
     const bank = openTestBank();
     const { sam, checking, houseFund } = samAndAccounts(bank);

@@ -31,6 +31,15 @@ export class RuleParametersError extends Error {
   override name = "RuleParametersError";
 }
 
+/**
+ * The buffer Rule that keeps a Buffer in this checking account: a switched-on one if there is one, else the
+ * latest switched-off one, since switching the agent off doesn't change the Buffer the customer chose.
+ */
+export function bufferRuleFor(rules: Rule[], checkingAccountId: number): Rule | undefined {
+  const matching = rules.filter((rule) => rule.kind === "buffer" && rule.parameters.checkingAccountId === checkingAccountId);
+  return matching.find((rule) => rule.on) ?? matching.at(-1);
+}
+
 export function isRuleKind(kind: string): kind is RuleKind {
   return kind === "buffer";
 }

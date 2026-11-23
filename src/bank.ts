@@ -8,11 +8,11 @@ import { createLedgerEventDispatcher, type LedgerEventDispatcher } from "./ledge
 import { cents, type Cents } from "./money";
 import {
   billsBeforePayday as billsBeforePaydayOf,
-  bufferRuleFor,
   safeToSpend,
   type BillsBeforePayday,
   type SafeToSpend,
 } from "./safe-to-spend";
+import { bufferRuleFor } from "./rules";
 import { seedDemoData } from "./seed";
 import { createSimulator, type Simulator } from "./simulator";
 import { createSystemData, type SystemData } from "./system-data";
@@ -110,7 +110,7 @@ export function createBank(deps: { db: Database; clock: SettableClock }): Bank {
           })),
         billsBeforePayday: bills,
         safeToSpend: checking
-          ? safeToSpend(checking, bufferRuleFor(customerData, customer, checking.id)?.parameters.buffer ?? cents(0), bills)
+          ? safeToSpend(checking, bufferRuleFor(customerData.listRules(customer), checking.id)?.parameters.buffer ?? cents(0), bills)
           : null,
       };
     },
