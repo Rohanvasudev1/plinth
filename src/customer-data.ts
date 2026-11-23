@@ -476,6 +476,11 @@ export function createCustomerData(deps: {
     if (!getRule(customer, decision.rule.id, decision.rule.version)) {
       throw new RuleNotFoundError(`No Rule ${decision.rule.id} version ${decision.rule.version} for this customer`);
     }
+    for (const accountId of [decision.fromAccountId, decision.toAccountId]) {
+      if (accountId !== null && !getAccount(customer, accountId)) {
+        throw new LedgerError("A Decision log entry can only name the customer's own accounts");
+      }
+    }
     const row = db
       .insert(decisionsTable)
       .values({

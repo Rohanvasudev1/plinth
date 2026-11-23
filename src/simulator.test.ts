@@ -174,12 +174,12 @@ describe("Advance clock one day", () => {
     const bank = bankAt(new Date("2026-12-31T14:00:00Z"));
     const sam = signInByName(bank, "Sam Calloway");
 
-    const samsPostings = bank
+    const samsPosted = bank
       .advanceClock()
       .posted.filter((transaction) => transaction.customerId === sam.id)
       .map((transaction) => `${transaction.kind} ${transaction.date}`);
 
-    expect(samsPostings).toEqual(["paycheck 2027-01-01", "bill 2027-01-01"]);
+    expect(samsPosted).toEqual(["paycheck 2027-01-01", "bill 2027-01-01"]);
   });
 
   it("doesn't pay a bill twice when the clock passes its due date again", () => {
@@ -194,7 +194,7 @@ describe("Advance clock one day", () => {
     expect(samsBalances(bank).checking).toBe(227_00 - 1_450_00);
   });
 
-  it("leaves the clock where it was and posts nothing when one of the day's posted fails", () => {
+  it("leaves the clock where it was and posts nothing when one of the day's ledger transactions fails", () => {
     // 9am on Thursday 31 December; 1 January has Sam's paycheck, then rent.
     const start = new Date("2026-12-31T14:00:00Z");
     const bank = bankAt(start);
@@ -210,7 +210,7 @@ describe("Advance clock one day", () => {
     expect(samsBalances(bank).checking).toBe(227_00);
   });
 
-  it("has moved the clock to the new day by the time rules hear about the posted", () => {
+  it("has moved the clock to the new day by the time rules hear about the paychecks and bills", () => {
     const bank = withoutSweeps(openTestBank());
     const clockSeenByRules: string[] = [];
     bank.ledgerEvents.subscribe(() => clockSeenByRules.push(bank.clock.now().toISOString()));

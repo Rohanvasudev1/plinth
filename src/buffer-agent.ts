@@ -19,7 +19,9 @@ interface PayrollDeposit {
 interface ProposedSweep {
   customer: Customer;
   rule: Rule;
-  checking: Account;
+  /** Undefined when the Rule's account isn't one of the customer's. */
+  checking: Account | undefined;
+  savings: Account | undefined;
   amount: Cents;
   bills: BillsBeforePayday;
 }
@@ -53,17 +55,16 @@ export function startBufferAgent(deps: {
 
   /** The first guardrail the Sweep fails, with the reason, or null if it passes them all. */
   function checkGuardrails(sweep: ProposedSweep): { guardrail: Guardrail; reason: string } | null {
-    const { customer, rule, checking, amount, bills } = sweep;
+    const { customer, rule, checking, savings, amount, bills } = sweep;
     const checks: Record<Guardrail, () => string | null> = {
       ownership: () =>
-        customerData.getAccount(customer, rule.parameters.checkingAccountId)?.kind === "checking" &&
-        customerData.getAccount(customer, rule.parameters.savingsAccountId)?.kind === "savings"
+        checking?.kind === "checking" && savings?.kind === "savings"
           ? null
           : "the Rule must name your own checking and savings accounts",
       "positive amount": () => (amount > 0 ? null : "the amount must be more than $0"),
       "Rule on": () => (customerData.getRule(customer, rule.id)?.on ? null : "the buffer Rule is switched off"),
       "Buffer kept": () =>
-        checking.balance - amount >= rule.parameters.buffer + bills.total
+        checking && checking.balance - amount >= rule.parameters.buffer + bills.total
           ? null
           : `checking would fall below the ${formatDollars(rule.parameters.buffer)} Buffer plus ${formatDollars(bills.total)} of bills`,
     };
@@ -76,27 +77,32 @@ export function startBufferAgent(deps: {
 
   function sweep(customer: Customer, rule: Rule, event: LedgerEvent, deposit: PayrollDeposit): void {
     customerData.inOneTransaction(() => {
+      // Only the customer's own accounts come back, so an account that isn't theirs reads as missing.
       const checking = customerData.getAccount(customer, rule.parameters.checkingAccountId);
-      if (!checking) return;
-      const bills = billsBeforePayday(customerData, customer, localDateOf(clock.now()));
-      const safe = safeToSpend(checking, rule.parameters.buffer, bills);
-      // Round down to whole dollars. Nothing is swept, or logged, unless a whole dollar is above the Buffer.
-      if (safe.amount < 100) return;
-      const amount = cents(safe.amount - (safe.amount % 100));
-
       const savings = customerData.getAccount(customer, rule.parameters.savingsAccountId);
+      const bills = billsBeforePayday(customerData, customer, localDateOf(clock.now()));
+      const safe = checking ? safeToSpend(checking, rule.parameters.buffer, bills) : null;
+      // Round down to whole dollars.
+      const amount = cents(safe && safe.amount >= 100 ? safe.amount - (safe.amount % 100) : 0);
+      const proposed: ProposedSweep = { customer, rule, checking, savings, amount, bills };
+      const refusal = checkGuardrails(proposed);
+      // With nothing above the Buffer there is no action to take, so nothing is logged. Any other refusal is.
+      if (amount <= 0 && refusal?.guardrail !== "ownership") return;
+
+      const checkingName = checking?.name ?? "checking";
       const savingsName = savings?.name ?? "savings";
-      const refusal = checkGuardrails({ customer, rule, checking, amount, bills });
       const why: WhyRow[] = [
         { label: "Trigger", value: `Paycheck of ${formatDollars(deposit.amount)} from ${deposit.employerName} posted` },
         { label: "Bills before payday", value: describeBills(bills) },
         {
           label: "Rule",
-          value: `Buffer Rule v${rule.version}: keep ${formatDollarsBriefly(rule.parameters.buffer)} in ${checking.name}, move the rest to ${savingsName}`,
+          value: `Buffer Rule v${rule.version}: keep ${formatDollarsBriefly(rule.parameters.buffer)} in ${checkingName}, move the rest to ${savingsName}`,
         },
         {
           label: "Amount",
-          value: `${formatDollars(safe.checking)} in ${checking.name}, less ${formatDollars(safe.buffer)} Buffer and ${formatDollars(safe.billsBeforePayday)} of bills, rounded down to ${formatDollars(amount)}`,
+          value: safe
+            ? `${formatDollars(safe.checking)} in ${checkingName}, less ${formatDollars(safe.buffer)} Buffer and ${formatDollars(safe.billsBeforePayday)} of bills, rounded down to ${formatDollars(amount)}`
+            : "Not worked out: the Rule doesn't name a checking account of yours",
         },
         {
           label: "Checked by",
@@ -109,19 +115,20 @@ export function startBufferAgent(deps: {
         actor: "agent" as const,
         trigger: { ledgerEventId: event.id, description: `Paycheck from ${deposit.employerName}` },
         rule: { id: rule.id, version: rule.version },
-        fromAccountId: checking.id,
-        toAccountId: rule.parameters.savingsAccountId,
+        fromAccountId: checking?.id ?? null,
+        toAccountId: savings?.id ?? null,
         amount,
         why,
         reversesDecisionId: null,
       };
 
-      if (refusal) {
+      // Passing the ownership guardrail means both accounts are the customer's; the extra checks narrow the types.
+      if (refusal || !checking || !savings) {
         customerData.recordDecision(customer, {
           ...decision,
           action: `Move ${formatDollarsBriefly(amount)} to ${savingsName}`,
           result: "Refused",
-          refusedBy: refusal.guardrail,
+          refusedBy: refusal?.guardrail ?? "ownership",
           ledgerTransactionId: null,
         });
         return;
@@ -129,16 +136,16 @@ export function startBufferAgent(deps: {
 
       const posted = customerData.postLedgerTransaction(customer, {
         idempotencyKey: `sweep:${event.id}`,
-        description: `Sweep to ${savingsName}`,
+        description: `Sweep to ${savings.name}`,
         entries: [
           { accountId: checking.id, amount: cents(-amount) },
-          { accountId: rule.parameters.savingsAccountId, amount },
+          { accountId: savings.id, amount },
         ],
       });
       if (!posted.created) return;
       customerData.recordDecision(customer, {
         ...decision,
-        action: `Moved ${formatDollarsBriefly(amount)} to ${savingsName}`,
+        action: `Moved ${formatDollarsBriefly(amount)} to ${savings.name}`,
         result: "Done",
         refusedBy: null,
         ledgerTransactionId: posted.ledgerTransactionId,

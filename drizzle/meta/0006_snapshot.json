@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "7ef25b83-e74b-4372-b227-1127574504db",
+  "id": "41e4644b-7b87-42f5-9dbd-1e954d620a3d",
   "prevId": "f8503ec1-5408-4930-b990-de30e12b281d",
   "tables": {
     "accounts": {
@@ -196,14 +196,14 @@
           "name": "from_account_id",
           "type": "integer",
           "primaryKey": false,
-          "notNull": true,
+          "notNull": false,
           "autoincrement": false
         },
         "to_account_id": {
           "name": "to_account_id",
           "type": "integer",
           "primaryKey": false,
-          "notNull": true,
+          "notNull": false,
           "autoincrement": false
         },
         "amount_cents": {

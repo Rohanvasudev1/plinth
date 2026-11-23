@@ -197,12 +197,9 @@ export const decisionsTable = sqliteTable(
       .references(() => rulesTable.id),
     ruleVersion: integer("rule_version").notNull(),
     action: text("action").notNull(),
-    fromAccountId: integer("from_account_id")
-      .notNull()
-      .references(() => accountsTable.id),
-    toAccountId: integer("to_account_id")
-      .notNull()
-      .references(() => accountsTable.id),
+    /** Only ever one of the customer's own accounts, or null. */
+    fromAccountId: integer("from_account_id").references(() => accountsTable.id),
+    toAccountId: integer("to_account_id").references(() => accountsTable.id),
     amountCents: integer("amount_cents").notNull(),
     result: text("result", { enum: ["Done", "Refused", "Reversed"] }).notNull(),
     /** The guardrail that refused the action, on a Refused entry. */

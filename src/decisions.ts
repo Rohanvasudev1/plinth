@@ -25,8 +25,10 @@ export interface Decision {
   rule: { id: number; version: number };
   /** What the agent did or tried to do, such as "Moved $340 to House fund". */
   action: string;
-  fromAccountId: number;
-  toAccountId: number;
+  /** The customer's account the money moved or would move from. Null when the Rule names one that isn't theirs. */
+  fromAccountId: number | null;
+  /** The customer's account the money moved or would move to. Null when the Rule names one that isn't theirs. */
+  toAccountId: number | null;
   amount: Cents;
   result: DecisionResult;
   /** The guardrail that stopped a Refused action. Null otherwise. */

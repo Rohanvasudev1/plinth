@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { createBank, type Bank } from "./bank";
 import { fixedClock } from "./clock";
 import { openTestDatabase } from "./db/database";
-import { openTestBank, signInByName } from "./test-bank";
+import { cents } from "./money";
+import { entriesMoving, openTestBank, signInByName } from "./test-bank";
 
 function bankAt(at: string): Bank {
   return createBank({ db: openTestDatabase(), clock: fixedClock(new Date(at)) });
@@ -99,6 +100,8 @@ describe("Decision log", () => {
       expect.objectContaining({
         rule: { id: misdirected.id, version: 1 },
         action: "Move $2,569 to savings",
+        fromAccountId: priyasChecking.id,
+        toAccountId: null,
         amount: 2_569_00,
         result: "Refused",
         refusedBy: "ownership",
@@ -111,6 +114,67 @@ describe("Decision log", () => {
     expect(bank.customerData.getAccount(priya, priyasChecking.id)?.balance).toBe(1_836_42 + 2_480_00);
     expect(bank.customerData.getAccount(sam, samsHouseFund.id)?.balance).toBe(12_400_00);
     expect(bank.readDecisionLog(sam)).toEqual([]);
+  });
+
+  it("writes a Refused ownership entry when the Rule's checking account isn't a checking account", () => {
+    // Priya's Rule has her accounts the wrong way round, and a paycheck lands in her Travel fund.
+    const bank = bankAt("2026-11-25T14:00:00Z");
+    const priya = signInByName(bank, "Priya Natarajan");
+    const [checking, travelFund] = bank.customerData.listAccounts(priya);
+    const [seeded] = bank.customerData.listRules(priya);
+    if (!checking || !travelFund || !seeded) throw new Error("Seed data is missing");
+    bank.customerData.switchRule(priya, seeded.id, false);
+    const swapped = bank.customerData.createRule(priya, {
+      kind: "buffer",
+      parameters: { checkingAccountId: travelFund.id, savingsAccountId: checking.id, buffer: seeded.parameters.buffer },
+      on: true,
+    });
+
+    bank.customerData.postLedgerTransaction(priya, {
+      idempotencyKey: "payroll:acme-corp:bonus",
+      description: "Bonus from Acme Corp",
+      entries: entriesMoving(1_000_00, bank.systemData.ensureSystemAccount("acmePayroll"), travelFund.id),
+    });
+
+    expect(bank.readDecisionLog(priya)).toEqual([
+      expect.objectContaining({
+        rule: { id: swapped.id, version: 1 },
+        result: "Refused",
+        refusedBy: "ownership",
+        fromAccountId: travelFund.id,
+        toAccountId: checking.id,
+        ledgerTransactionId: null,
+      }),
+    ]);
+    expect(bank.customerData.listAccounts(priya).map((account) => account.balance)).toEqual([1_836_42, 3_150_00]);
+  });
+
+  it("can't name another customer's account on an entry", () => {
+    const bank = openTestBank();
+    const sam = signInByName(bank, "Sam Calloway");
+    const priya = signInByName(bank, "Priya Natarajan");
+    const [, samsHouseFund] = bank.customerData.listAccounts(sam);
+    const [priyasChecking] = bank.customerData.listAccounts(priya);
+    const [priyasRule] = bank.customerData.listRules(priya);
+    if (!samsHouseFund || !priyasChecking || !priyasRule) throw new Error("Seed data is missing");
+
+    expect(() =>
+      bank.customerData.recordDecision(priya, {
+        actor: "agent",
+        trigger: { ledgerEventId: null, description: "Test" },
+        rule: { id: priyasRule.id, version: priyasRule.version },
+        action: "Move $1 to House fund",
+        fromAccountId: priyasChecking.id,
+        toAccountId: samsHouseFund.id,
+        amount: cents(1_00),
+        result: "Refused",
+        refusedBy: "ownership",
+        why: [],
+        ledgerTransactionId: null,
+        reversesDecisionId: null,
+      }),
+    ).toThrow(/own accounts/);
+    expect(bank.readDecisionLog(priya)).toEqual([]);
   });
 
   it("Priya can't read Sam's Decision log", () => {
