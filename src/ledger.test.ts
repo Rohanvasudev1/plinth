@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { Bank } from "./bank";
+import { createBank, type Bank } from "./bank";
+import { fixedClock } from "./clock";
+import { openTestDatabase } from "./db/database";
+import { ledgerEntriesTable } from "./db/schema";
 import type { Customer } from "./customer-data";
 import type { LedgerEvent } from "./ledger-events";
 import { cents } from "./money";
@@ -94,23 +97,23 @@ describe("ledger", () => {
     ).toThrow(RangeError);
   });
 
-  it("treats a repeated idempotency key as a no-op that returns the first ledger transaction", () => {
+  it("treats Sam posting the same idempotency key twice as a no-op that returns the first ledger transaction", () => {
     const bank = openTestBank();
-    const { sam, checking, houseFund } = samAndAccounts(bank);
-    const move = (amount: number) =>
+    const { sam, checking } = samAndAccounts(bank);
+    const acmePayroll = bank.systemData.ensureSystemAccount("acmePayroll");
+    const pay = (amount: number) =>
       bank.customerData.postLedgerTransaction(sam, {
-        idempotencyKey: "test:same-key",
-        description: "Move",
-        entries: entriesMoving(amount, checking.id, houseFund.id),
+        idempotencyKey: "payroll:acme:2026-11-20",
+        description: "Acme Corp payroll",
+        entries: entriesMoving(amount, acmePayroll, checking.id),
       });
 
-    const first = move(100_00);
-    const repeat = move(50_00);
+    const first = pay(3_240_00);
+    const repeat = pay(1_00);
 
     expect(first.created).toBe(true);
     expect(repeat).toEqual({ ...first, created: false });
-    expect(balanceOf(bank, sam, checking.id)).toBe(127_00);
-    expect(balanceOf(bank, sam, houseFund.id)).toBe(12_500_00);
+    expect(balanceOf(bank, sam, checking.id)).toBe(3_467_00);
   });
 
   it("hands each new ledger event to subscribers once, with its entries already posted, and never for a repeated key", () => {
@@ -162,5 +165,14 @@ describe("ledger", () => {
     });
 
     expect(balanceOf(bank, sam, checking.id)).toBe(317_00);
+  });
+
+  it("refuses to update or delete a posted ledger entry", () => {
+    const db = openTestDatabase();
+    createBank({ db, clock: fixedClock(new Date("2026-11-19T14:00:00Z")) });
+
+    expect(() => db.update(ledgerEntriesTable).set({ amountCents: 1_000_000_00 }).run()).toThrow(/append-only/);
+    expect(() => db.delete(ledgerEntriesTable).run()).toThrow(/append-only/);
+    expect(db.select().from(ledgerEntriesTable).all().length).toBeGreaterThan(0);
   });
 });

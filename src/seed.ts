@@ -27,12 +27,12 @@ const SEED_CUSTOMERS: SeedCustomer[] = [
 
 /** Seeds the demo customers, their accounts and balances, and the clearing accounts, once per database. */
 export function seedDemoData(system: SystemData, data: CustomerData): void {
-  system.systemAccountId("acmePayroll");
-  system.systemAccountId("biller");
-  system.systemAccountId("merchant");
+  system.ensureSystemAccount("acmePayroll");
+  system.ensureSystemAccount("biller");
+  system.ensureSystemAccount("merchant");
   if (system.listCustomers().length > 0) return;
 
-  const openingBalances = system.systemAccountId("openingBalances");
+  const openingBalances = system.ensureSystemAccount("openingBalances");
   for (const seed of SEED_CUSTOMERS) {
     const customer: Customer = system.createCustomer(seed.name);
     for (const { openingBalance, ...newAccount } of seed.accounts) {

@@ -61,20 +61,28 @@ describe("customer scoping", () => {
     expect(bank.customerData.getAccount(sam, samsChecking.id)?.balance).toBe(227_00);
   });
 
-  it("Priya can't reuse an idempotency key from Sam's ledger transaction to learn about it", () => {
+  it("lets one employer pay Sam and Priya under the same idempotency key on the same date", () => {
     const bank = openTestBank();
-    const sam = signInByName(bank, "Sam Calloway");
-    const priya = signInByName(bank, "Priya Natarajan");
-    const [samsFirst] = bank.customerData.listLedgerTransactions(sam);
-    const [priyasChecking, priyasTravelFund] = bank.customerData.listAccounts(priya);
-    if (!samsFirst || !priyasChecking || !priyasTravelFund) throw new Error("Seed data is missing");
+    const acmePayroll = bank.systemData.ensureSystemAccount("acmePayroll");
+    const pay = (name: string, amount: number) => {
+      const customer = signInByName(bank, name);
+      const [checking] = bank.customerData.listAccounts(customer);
+      if (!checking) throw new Error(`${name}'s checking account is missing`);
+      const posted = bank.customerData.postLedgerTransaction(customer, {
+        idempotencyKey: "payroll:acme:2026-11-20",
+        description: "Acme Corp payroll",
+        entries: entriesMoving(amount, acmePayroll, checking.id),
+      });
+      return { posted, balance: bank.customerData.getAccount(customer, checking.id)?.balance };
+    };
 
-    expect(() =>
-      bank.customerData.postLedgerTransaction(priya, {
-        idempotencyKey: samsFirst.idempotencyKey,
-        description: "Collide",
-        entries: entriesMoving(1_00, priyasChecking.id, priyasTravelFund.id),
-      }),
-    ).toThrow(/another customer/);
+    const sam = pay("Sam Calloway", 3_240_00);
+    const priya = pay("Priya Natarajan", 2_500_00);
+
+    expect(sam.posted.created).toBe(true);
+    expect(priya.posted.created).toBe(true);
+    expect(priya.posted.ledgerTransactionId).not.toBe(sam.posted.ledgerTransactionId);
+    expect(sam.balance).toBe(3_467_00);
+    expect(priya.balance).toBe(4_336_42);
   });
 });

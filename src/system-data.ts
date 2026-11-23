@@ -22,8 +22,8 @@ export interface SystemData {
   listCustomers(): Customer[];
   findCustomer(customerId: number): Customer | undefined;
   createCustomer(name: string): Customer;
-  /** The id of a system account, creating it on first use. */
-  systemAccountId(account: SystemAccount): number;
+  /** Creates the system account if it doesn't exist yet, and returns its id. */
+  ensureSystemAccount(account: SystemAccount): number;
 }
 
 export function createSystemData(db: Database): SystemData {
@@ -37,7 +37,7 @@ export function createSystemData(db: Database): SystemData {
     createCustomer(name) {
       return db.insert(customersTable).values({ name }).returning().get();
     },
-    systemAccountId(account) {
+    ensureSystemAccount(account) {
       const { key, name } = SYSTEM_ACCOUNTS[account];
       db.insert(accountsTable)
         .values({ kind: "system", name, systemKey: key })

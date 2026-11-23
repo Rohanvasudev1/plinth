@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { check, index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { check, index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 /** The app's simulated time. It holds at most one row, with id 1. */
 export const simulatedClockTable = sqliteTable("simulated_clock", {
@@ -39,7 +39,7 @@ export const accountsTable = sqliteTable(
   ],
 );
 
-/** A group of entries that sum to zero, posted for one customer under one idempotency key. */
+/** A group of entries that sum to zero, posted for one customer under an idempotency key unique to that customer. */
 export const ledgerTransactionsTable = sqliteTable(
   "ledger_transactions",
   {
@@ -47,11 +47,11 @@ export const ledgerTransactionsTable = sqliteTable(
     customerId: integer("customer_id")
       .notNull()
       .references(() => customersTable.id),
-    idempotencyKey: text("idempotency_key").notNull().unique(),
+    idempotencyKey: text("idempotency_key").notNull(),
     description: text("description").notNull(),
     postedAtMs: integer("posted_at_ms").notNull(),
   },
-  (table) => [index("ledger_transactions_customer_id").on(table.customerId)],
+  (table) => [uniqueIndex("ledger_transactions_customer_key").on(table.customerId, table.idempotencyKey)],
 );
 
 /**

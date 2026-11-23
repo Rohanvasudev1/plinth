@@ -72,7 +72,8 @@ export interface CustomerData {
   /**
    * Posts a pair of entries that sum to zero, plus a ledger event, in one database transaction, then hands
    * the event to subscribers. Each entry must be on the customer's own account or a system account.
-   * Reusing an idempotency key returns the existing ledger transaction and changes nothing.
+   * Idempotency keys are unique per customer: reusing one of the customer's keys returns the existing
+   * ledger transaction and changes nothing, while another customer may use the same key.
    */
   postLedgerTransaction(customer: Customer, transaction: LedgerTransactionInput): PostedLedgerTransaction;
   /** Ledger transactions posted for the customer, oldest first, with every entry including the outside side. */
@@ -165,17 +166,18 @@ export function createCustomerData(deps: {
         const existing = tx
           .select({
             ledgerTransactionId: ledgerTransactionsTable.id,
-            customerId: ledgerTransactionsTable.customerId,
             ledgerEventId: ledgerEventsTable.id,
           })
           .from(ledgerTransactionsTable)
           .innerJoin(ledgerEventsTable, eq(ledgerEventsTable.ledgerTransactionId, ledgerTransactionsTable.id))
-          .where(eq(ledgerTransactionsTable.idempotencyKey, transaction.idempotencyKey))
+          .where(
+            and(
+              eq(ledgerTransactionsTable.customerId, customer.id),
+              eq(ledgerTransactionsTable.idempotencyKey, transaction.idempotencyKey),
+            ),
+          )
           .get();
         if (existing) {
-          if (existing.customerId !== customer.id) {
-            throw new LedgerError("That idempotency key belongs to another customer's ledger transaction");
-          }
           return {
             posted: {
               ledgerTransactionId: existing.ledgerTransactionId,

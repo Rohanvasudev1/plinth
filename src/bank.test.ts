@@ -59,7 +59,7 @@ describe("seed", () => {
 
   it("keeps the clearing accounts for Acme Corp payroll, Biller and Merchant out of every customer's accounts", () => {
     const bank = openTestBank();
-    const clearing = (["acmePayroll", "biller", "merchant"] as const).map((key) => bank.systemData.systemAccountId(key));
+    const clearing = (["acmePayroll", "biller", "merchant"] as const).map((key) => bank.systemData.ensureSystemAccount(key));
     const sam = signInByName(bank, "Sam Calloway");
     const priya = signInByName(bank, "Priya Natarajan");
 
