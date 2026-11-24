@@ -12,13 +12,13 @@ const RECENT_DAYS = 90;
 
 export function createFakeMissionModel(deps: {
   clock: Clock;
-  /** How long to wait before each step, so the app shows a running Mission's progress. Zero in tests. */
-  stepDelayMs?: number;
+  /** How long to wait before each tool call, so the app shows a running Mission's progress. Zero in tests. */
+  toolCallDelayMs?: number;
 }): MissionModel {
-  const { clock, stepDelayMs = 0 } = deps;
+  const { clock, toolCallDelayMs = 0 } = deps;
   return {
     async runMission(request) {
-      const session = new ScriptSession(request, localDateOf(clock.now()), stepDelayMs);
+      const session = new ScriptSession(request, localDateOf(clock.now()), toolCallDelayMs);
       const transactions = await session.call<TransactionsResult>("read_transactions", {
         from: addDays(session.today, -RECENT_DAYS),
         to: session.today,
@@ -71,11 +71,11 @@ class ScriptSession {
   constructor(
     private readonly request: MissionModelRequest,
     readonly today: LocalDate,
-    private readonly stepDelayMs: number,
+    private readonly toolCallDelayMs: number,
   ) {}
 
   async call<T>(name: string, input: unknown): Promise<Called<T>> {
-    if (this.stepDelayMs > 0) await new Promise((resolve) => setTimeout(resolve, this.stepDelayMs));
+    if (this.toolCallDelayMs > 0) await new Promise((resolve) => setTimeout(resolve, this.toolCallDelayMs));
     const answer: MissionToolAnswer = await this.request.callTool(name, input);
     if ("error" in answer) throw new Error(`The fake model's ${name} call failed: ${answer.error}`);
     return { toolCallId: answer.toolCallId, result: answer.result as T };

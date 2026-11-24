@@ -1,5 +1,7 @@
+import { formatLocalDate, type LocalDate } from "./calendar";
 import type { WhyRow } from "./decisions";
 import type { FindingFact } from "./findings";
+import type { MissionToolName } from "./mission-tools";
 import type { MissionRead } from "./missions";
 
 // Text a Mission stores and shows: its progress labels, the Sources of its tools, its Decision log entry, and the
@@ -21,15 +23,31 @@ export const SUGGESTED_QUESTIONS = [
   "Am I on track for my House fund?",
 ] as const;
 
-/** The Source of a fact citing each Mission tool. read_transactions adds the period it read. */
-export const MISSION_TOOL_SOURCES = {
+/** What each Mission tool read, as its Read list item: the period or the item. */
+export const MISSION_READ_ITEMS = {
+  transactions: (from: LocalDate, to: LocalDate) => `${formatLocalDate(from)} to ${formatLocalDate(to)}`,
+  usualMonth: "Usual month and On pace",
+  forecast: (today: LocalDate) => `30 days from ${formatLocalDate(today)}`,
+  projection: "3-year Projection",
+  goals: "Goals",
+  scheduledBills: "Scheduled bills",
+} as const;
+
+/** The Source of a fact citing a call to `tool` that read `item`. Transactions name the period read. */
+export function missionToolSource(tool: MissionToolName, item: string): string {
+  const source = MISSION_TOOL_SOURCES[tool];
+  return tool === "read_transactions" ? `${source}, ${item}` : source;
+}
+
+/** The Source of a fact citing each Mission tool. */
+const MISSION_TOOL_SOURCES: Record<MissionToolName, string> = {
   read_transactions: "From your transactions",
   read_usual_month: "From your Usual month and On pace",
   read_forecast: "From your 30-day Forecast",
   read_projection: "From your Projection",
   read_goals: "From your Goals",
   read_scheduled_bills: "From your Scheduled bills",
-} as const;
+};
 
 /** Why a Mission couldn't finish, for its Decision log entry's Why panel. */
 export const MISSION_FAILURES = {
@@ -37,8 +55,9 @@ export const MISSION_FAILURES = {
   noFacts: "The Finding has no facts",
   blankFact: "A fact has no label or value",
   uncited: (label: string) => `The fact “${label}” cites no tool call from this Mission`,
-  cantKnowFigure: "What Plinth can't know may not state a figure",
+  cantKnowMoney: "What Plinth can't know may not state a money amount or a rate",
   modelError: "The language model couldn't finish",
+  notSaved: "Your agent couldn't save what it found",
 } as const;
 
 /** Why a question can't start a Mission. */

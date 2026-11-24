@@ -1,9 +1,9 @@
-import { addDays, formatLocalDate, localDate, localDateOf, type LocalDate } from "./calendar";
+import { addDays, localDate, localDateOf, type LocalDate } from "./calendar";
 import type { Clock } from "./clock";
 import type { Account, Customer, CustomerData } from "./customer-data";
 import { readForecast } from "./forecast";
 import { readForecastPage } from "./forecast-page";
-import { MISSION_PROGRESS, MISSION_TOOL_SOURCES, type MissionProgressLabel } from "./mission-text";
+import { MISSION_PROGRESS, MISSION_READ_ITEMS, missionToolSource, type MissionProgressLabel } from "./mission-text";
 import { MissionError, type MissionRead } from "./missions";
 import { projectionLines } from "./projection";
 
@@ -47,7 +47,7 @@ const NO_INPUT: MissionToolDefinition["inputSchema"] = {
 
 const TOOLS: Record<
   MissionToolName,
-  { description: string; inputSchema: MissionToolDefinition["inputSchema"]; progress: MissionProgressLabel; source: string }
+  { description: string; inputSchema: MissionToolDefinition["inputSchema"]; progress: MissionProgressLabel }
 > = {
   read_transactions: {
     description:
@@ -60,7 +60,6 @@ const TOOLS: Record<
       additionalProperties: false,
     },
     progress: MISSION_PROGRESS.transactions,
-    source: MISSION_TOOL_SOURCES.read_transactions,
   },
   read_usual_month: {
     description:
@@ -68,13 +67,11 @@ const TOOLS: Record<
       "On pace, and Left to save, with spending by Category. Says not_enough_history when there is no full month.",
     inputSchema: NO_INPUT,
     progress: MISSION_PROGRESS.usualMonth,
-    source: MISSION_TOOL_SOURCES.read_usual_month,
   },
   read_forecast: {
     description: "The 30-day Forecast of the checking balance: today's balance, the lowest day, the Buffer and the daily allowance.",
     inputSchema: NO_INPUT,
     progress: MISSION_PROGRESS.forecastAndGoals,
-    source: MISSION_TOOL_SOURCES.read_forecast,
   },
   read_projection: {
     description:
@@ -82,19 +79,16 @@ const TOOLS: Record<
       "month and On pace, and the balance after 12 and 36 months at each.",
     inputSchema: NO_INPUT,
     progress: MISSION_PROGRESS.forecastAndGoals,
-    source: MISSION_TOOL_SOURCES.read_projection,
   },
   read_goals: {
     description: "The customer's Goal accounts: each one's name, savings goal, balance and target.",
     inputSchema: NO_INPUT,
     progress: MISSION_PROGRESS.forecastAndGoals,
-    source: MISSION_TOOL_SOURCES.read_goals,
   },
   read_scheduled_bills: {
     description: "The customer's Scheduled bills: payee, amount, day of the month, Category and the account they're paid from.",
     inputSchema: NO_INPUT,
     progress: MISSION_PROGRESS.forecastAndGoals,
-    source: MISSION_TOOL_SOURCES.read_scheduled_bills,
   },
 };
 
@@ -130,7 +124,8 @@ export function runMissionTool(
   input: unknown,
 ): MissionToolOutcome {
   if (!isMissionToolName(tool)) throw new MissionError(`No Mission tool ${tool}`);
-  return { ...readWith(deps, customer, tool, input), progress: TOOLS[tool].progress };
+  const { result, read } = readWith(deps, customer, tool, input);
+  return { result, read, source: missionToolSource(tool, read.item), progress: TOOLS[tool].progress };
 }
 
 function readWith(
@@ -138,17 +133,16 @@ function readWith(
   customer: Customer,
   tool: MissionToolName,
   input: unknown,
-): Omit<MissionToolOutcome, "progress"> {
+): Pick<MissionToolOutcome, "result" | "read"> {
   const { clock, customerData } = deps;
   const today = localDateOf(clock.now());
   const accounts = customerData.listAccounts(customer);
   const accountName = (accountId: number) => accounts.find((account) => account.id === accountId)?.name;
-  const { source } = TOOLS[tool];
 
   switch (tool) {
     case "read_transactions": {
       const { from, to } = period(input, today);
-      const item = `${formatLocalDate(from)} to ${formatLocalDate(to)}`;
+      const item = MISSION_READ_ITEMS.transactions(from, to);
       const transactions = customerData.listLedgerTransactions(customer).flatMap((transaction) => {
         const date = localDateOf(transaction.postedAt);
         // Opening balances have no Category: they are how the seed funds an account, not something the customer did.
@@ -168,12 +162,12 @@ function readWith(
           ];
         });
       });
-      return { result: { from, to, transactions }, read: { tool, item }, source: `${source}, ${item}` };
+      return { result: { from, to, transactions }, read: { tool, item } };
     }
     case "read_usual_month": {
       const page = readForecastPage(customerData, customer, today);
-      const read = { tool, item: "Usual month and On pace" };
-      if (page.kind === "not_enough_history") return { result: { kind: "not_enough_history" }, read, source };
+      const read = { tool, item: MISSION_READ_ITEMS.usualMonth };
+      if (page.kind === "not_enough_history") return { result: { kind: "not_enough_history" }, read };
       return {
         result: {
           kind: "figures",
@@ -189,13 +183,12 @@ function readWith(
           })),
         },
         read,
-        source,
       };
     }
     case "read_forecast": {
       const forecast = readForecast(deps, customer, clock.now());
-      const read = { tool, item: `30 days from ${formatLocalDate(today)}` };
-      if (!forecast) return { result: { kind: "no_checking_account" }, read, source };
+      const read = { tool, item: MISSION_READ_ITEMS.forecast(today) };
+      if (!forecast) return { result: { kind: "no_checking_account" }, read };
       return {
         result: {
           kind: "forecast",
@@ -207,14 +200,13 @@ function readWith(
           dailyAllowanceCents: forecast.dailyAllowance,
         },
         read,
-        source,
       };
     }
     case "read_projection": {
       const page = readForecastPage(customerData, customer, today);
-      const read = { tool, item: "3-year Projection" };
-      if (page.kind === "not_enough_history") return { result: { kind: "not_enough_history" }, read, source };
-      if (page.projection.kind !== "projection") return { result: { kind: "no_sweep_target" }, read, source };
+      const read = { tool, item: MISSION_READ_ITEMS.projection };
+      if (page.kind === "not_enough_history") return { result: { kind: "not_enough_history" }, read };
+      if (page.projection.kind !== "projection") return { result: { kind: "no_sweep_target" }, read };
       const lines = projectionLines(page.projection, 0);
       const line = (pace: typeof lines.usualMonth) => ({
         monthlySavingCents: pace.monthlySaving,
@@ -230,7 +222,6 @@ function readWith(
           onPace: line(lines.onPace),
         },
         read,
-        source,
       };
     }
     case "read_goals":
@@ -243,8 +234,7 @@ function readWith(
             targetCents: account.goalTarget,
           })),
         },
-        read: { tool, item: "Goals" },
-        source,
+        read: { tool, item: MISSION_READ_ITEMS.goals },
       };
     case "read_scheduled_bills":
       return {
@@ -257,8 +247,7 @@ function readWith(
             account: accountName(bill.accountId),
           })),
         },
-        read: { tool, item: "Scheduled bills" },
-        source,
+        read: { tool, item: MISSION_READ_ITEMS.scheduledBills },
       };
   }
 }

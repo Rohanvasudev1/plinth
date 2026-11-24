@@ -15,8 +15,12 @@ export type MissionFindingToStore = Pick<NewFinding, "title" | "facts" | "option
 /** The checked Finding, or why the Mission fails. */
 export type CheckedMissionFinding = { ok: true; finding: MissionFindingToStore } | { ok: false; reason: string };
 
-/** Any digit: only a cited fact may carry a figure, so What Plinth can't know never states a price or rate. */
-const FIGURE = /\d/;
+/**
+ * A money amount or a rate: a currency sign next to a digit, a digit next to `%`, or a number followed by "percent"
+ * or "dollars". Only a cited fact may state one, so What Plinth can't know never states an outside price or rate.
+ * Other numbers, such as a year, are allowed (decision on #53).
+ */
+const MONEY_OR_RATE = /[$€£¥]\s?\d|\d\s?%|\d[\d,.]*\s*(percent|per cent|dollars?)\b/i;
 
 /**
  * Checks the Finding a Mission's model returned (ADR 0009):
@@ -24,8 +28,8 @@ const FIGURE = /\d/;
  * - It needs a title and at least one fact. A fact that cites no tool call from this Mission fails it. Each fact's
  *   Source is the Source of the tool call it cites, so the model can't write its own.
  * - What Plinth can't know, when the model says, becomes a fact of its own, with a fixed Source since no tool call
- *   could have read it. It may hold no figure, so outside prices and rates can't slip in uncited; one that does
- *   fails the Mission.
+ *   could have read it. It may state no money amount or rate, so outside prices and rates can't slip in uncited;
+ *   one that does fails the Mission.
  * - An Option not on the Mission list, a repeat, or one whose details don't check is dropped. Remind me needs a
  *   real date after today. With no Options left, the Finding gets Read the full report and Not now.
  * - With no report from the model, code writes one from the facts.
@@ -48,7 +52,7 @@ export function checkMissionFinding(
     facts.push({ label, value, source });
   }
   const cantKnow = trimmedText(model.cantKnow);
-  if (cantKnow && FIGURE.test(cantKnow)) return { ok: false, reason: MISSION_FAILURES.cantKnowFigure };
+  if (cantKnow && MONEY_OR_RATE.test(cantKnow)) return { ok: false, reason: MISSION_FAILURES.cantKnowMoney };
   if (cantKnow) facts.push({ label: CANT_KNOW_LABEL, value: cantKnow, source: CANT_KNOW_SOURCE });
 
   const options: FindingOption[] = [];

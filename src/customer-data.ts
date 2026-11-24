@@ -711,7 +711,7 @@ export function createCustomerData(deps: {
       throw new RuleNotFoundError(`No Rule ${rule.id} version ${rule.version} for this customer`);
     }
     if (finding.missionId != null && !getMission(customer, finding.missionId)) {
-      throw new FindingError(`No Mission ${finding.missionId} for this customer`);
+      throw new MissionError(`No Mission ${finding.missionId} for this customer`);
     }
     for (const option of finding.options) {
       if (option.key === "move") cents(option.amount);

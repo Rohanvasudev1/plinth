@@ -2,7 +2,7 @@ import { localDateOf } from "./calendar";
 import type { Customer } from "./customer-data";
 import { cents } from "./money";
 import { checkMissionFinding, type MissionFindingToStore } from "./mission-finding";
-import { MISSION_SYSTEM_PROMPT, type MissionModel, type MissionToolAnswer } from "./mission-model";
+import { MISSION_SYSTEM_PROMPT, type MissionModel, type MissionToolAnswer, type ModelFinding } from "./mission-model";
 import {
   failedMissionAction,
   failedMissionWhy,
@@ -43,10 +43,14 @@ export function startMission(deps: MissionDeps, customer: Customer, question: st
   if (asked.length === 0) throw new MissionError(QUESTION_REFUSALS.blank);
   if (asked.length > MAX_QUESTION_LENGTH) throw new MissionError(QUESTION_REFUSALS.tooLong(MAX_QUESTION_LENGTH));
   const mission = customerData.createMission(customer, asked, MISSION_PROGRESS.transactions);
+  // Each call gets the next number, failed or not, and an id unique across Missions. Only a call that read
+  // something has a Source, so a fact citing a failed call fails the checks.
   const sources = new Map<string, string>();
+  let callCount = 0;
 
   async function callTool(name: string, input: unknown): Promise<MissionToolAnswer> {
-    const toolCallId = `call_${sources.size + 1}`;
+    callCount += 1;
+    const toolCallId = `m${mission.id}_call_${callCount}`;
     try {
       const outcome = runMissionTool(deps, customer, name, input);
       customerData.recordMissionProgress(customer, mission.id, outcome.progress, outcome.read);
@@ -59,27 +63,27 @@ export function startMission(deps: MissionDeps, customer: Customer, question: st
   }
 
   async function run(): Promise<Mission> {
-    let reason: string;
+    let returned: ModelFinding;
     try {
-      const returned = await model.runMission({
-        system: MISSION_SYSTEM_PROMPT,
-        question: asked,
-        tools: MISSION_TOOL_DEFINITIONS,
-        callTool,
-      });
-      customerData.recordMissionProgress(customer, mission.id, MISSION_PROGRESS.writingUp);
-      const checked = checkMissionFinding(returned, {
-        sourceOf: (toolCallId) => sources.get(toolCallId),
-        today: localDateOf(clock.now()),
-      });
-      if (checked.ok) return report(checked.finding);
-      reason = checked.reason;
+      returned = await model.runMission({ system: MISSION_SYSTEM_PROMPT, question: asked, tools: MISSION_TOOL_DEFINITIONS, callTool });
     } catch (error) {
       // The model's own error message is not customer copy, so the log says only that the model failed.
       console.error(`Mission ${mission.id} failed in the language model`, error);
-      reason = MISSION_FAILURES.modelError;
+      return fail(MISSION_FAILURES.modelError);
     }
-    return fail(reason);
+    customerData.recordMissionProgress(customer, mission.id, MISSION_PROGRESS.writingUp);
+    const checked = checkMissionFinding(returned, {
+      sourceOf: (toolCallId) => sources.get(toolCallId),
+      today: localDateOf(clock.now()),
+    });
+    if (!checked.ok) return fail(checked.reason);
+    try {
+      return report(checked.finding);
+    } catch (error) {
+      // The transaction rolled back, so nothing of the Finding was kept.
+      console.error(`Mission ${mission.id} couldn't store its Finding`, error);
+      return fail(MISSION_FAILURES.notSaved);
+    }
   }
 
   function report(finding: MissionFindingToStore): Mission {

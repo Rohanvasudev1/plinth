@@ -102,24 +102,108 @@ describe("Mission Finding checks", () => {
   });
 });
 
-describe("What Plinth can't know", () => {
-  it("fails the Mission when it states a figure, since only cited facts may carry figures", async () => {
+describe("Tool call ids", () => {
+  it("are never reused, so a fact citing a failed call fails the Mission", async () => {
+    const ids: string[] = [];
+    const bank = bankWith({
+      async runMission(request) {
+        const failed = await request.callTool("read_transactions", { from: "not a date", to: "2026-11-19" });
+        const usual = await request.callTool("read_usual_month", {});
+        ids.push(failed.toolCallId, usual.toolCallId);
+        return finding({
+          facts: [
+            { label: "Usual month", value: "$7,020.00 in", toolCallId: usual.toolCallId },
+            { label: "Spent lately", value: "$900.00", toolCallId: failed.toolCallId },
+          ],
+        });
+      },
+    });
+    const sam = signInByName(bank, "Sam Calloway");
+
+    const finished = await bank.startMission(sam, "What did I spend?").ended;
+
+    expect(ids[0]).not.toBe(ids[1]);
+    expect(finished.state).toBe("failed");
+    expect(bank.readDecisionLog(sam)[0]?.why).toContainEqual({
+      label: "Why it stopped",
+      value: "The fact “Spent lately” cites no tool call from this Mission",
+    });
+  });
+
+  it("are unique across Missions", async () => {
+    const ids: string[] = [];
     const bank = bankWith(
-      modelReturning((callId) =>
-        finding({
-          facts: [{ label: "Usual month", value: "$7,020.00 in", toolCallId: callId }],
-          cantKnow: "Rents nearby average $2,100 a month.",
-        }),
-      ),
+      modelReturning((callId) => {
+        ids.push(callId);
+        return finding({ facts: [{ label: "Usual month", value: "$7,020.00 in", toolCallId: callId }] });
+      }),
     );
     const sam = signInByName(bank, "Sam Calloway");
 
-    const finished = await bank.startMission(sam, "How does my rent compare?").ended;
+    await bank.startMission(sam, "What's my Usual month?").ended;
+    await bank.startMission(sam, "What's my Usual month?").ended;
+
+    expect(new Set(ids).size).toBe(2);
+  });
+});
+
+describe("A Mission whose Finding can't be stored", () => {
+  it("fails, saying the Finding couldn't be saved rather than blaming the model", async () => {
+    const bank = bankWith(
+      modelReturning((callId) => finding({ facts: [{ label: "Usual month", value: "$7,020.00 in", toolCallId: callId }] })),
+    );
+    const sam = signInByName(bank, "Sam Calloway");
+    bank.customerData.createFinding = () => {
+      throw new Error("The disk is full");
+    };
+
+    const finished = await bank.startMission(sam, "What's my Usual month?").ended;
 
     expect(finished.state).toBe("failed");
     expect(bank.readDecisionLog(sam)[0]?.why).toContainEqual({
       label: "Why it stopped",
-      value: "What Plinth can't know may not state a figure",
+      value: "Your agent couldn't save what it found",
+    });
+  });
+});
+
+describe("What Plinth can't know", () => {
+  async function missionSaying(cantKnow: string) {
+    const bank = bankWith(
+      modelReturning((callId) =>
+        finding({ facts: [{ label: "Usual month", value: "$7,020.00 in", toolCallId: callId }], cantKnow }),
+      ),
+    );
+    const sam = signInByName(bank, "Sam Calloway");
+    const finished = await bank.startMission(sam, "How does my rent compare?").ended;
+    return { bank, sam, finished };
+  }
+
+  it("fails the Mission when it states a money amount or a rate, since only cited facts may carry those", async () => {
+    for (const cantKnow of [
+      "Rents nearby average $2,100 a month.",
+      "Mortgage rates are near 6.5%.",
+      "Rates are around 6 percent.",
+      "Rents are about 2100 dollars.",
+    ]) {
+      const { bank, sam, finished } = await missionSaying(cantKnow);
+
+      expect(finished.state, cantKnow).toBe("failed");
+      expect(bank.readDecisionLog(sam)[0]?.why, cantKnow).toContainEqual({
+        label: "Why it stopped",
+        value: "What Plinth can't know may not state a money amount or a rate",
+      });
+    }
+  });
+
+  it("allows other numbers, such as a year or an account kind", async () => {
+    const { bank, sam, finished } = await missionSaying("Prices in 2027, and anything in a 401(k) held elsewhere.");
+
+    expect(finished.state).toBe("reported");
+    expect(bank.customerData.getFinding(sam, finished.findingId ?? -1)?.facts).toContainEqual({
+      label: "What Plinth can't know",
+      value: "Prices in 2027, and anything in a 401(k) held elsewhere.",
+      source: "Not in your Plinth data",
     });
   });
 });
@@ -209,9 +293,10 @@ describe("Mission tools", () => {
     expect(samsMission.readList.find((read) => read.tool === "read_transactions")?.item).toBe("Fri 21 Aug to Thu 19 Nov");
   });
 
-  it("return results that carry no customer name and no account id", async () => {
+  /** Runs every Mission tool for the customer and returns their raw results as JSON text. */
+  async function rawToolResults(bank: Bank, customer: ReturnType<typeof signInByName>): Promise<string> {
     const results: unknown[] = [];
-    const bank = bankWith({
+    const reader: MissionModel = {
       async runMission(request) {
         for (const tool of request.tools) {
           const input = tool.name === "read_transactions" ? { from: "2026-01-01", to: "2026-11-19" } : {};
@@ -221,16 +306,46 @@ describe("Mission tools", () => {
         }
         throw new Error("Done reading");
       },
-    });
-    const sam = signInByName(bank, "Sam Calloway");
-
-    await bank.startMission(sam, "Read everything").ended;
-
-    const text = JSON.stringify(results);
+    };
+    readerFor.current = reader;
+    await bank.startMission(customer, "Read everything").ended;
     expect(results).toHaveLength(6);
-    expect(text).toContain("House fund");
-    for (const part of sam.name.split(" ")) expect(text).not.toContain(part);
-    expect(text).not.toMatch(/"(id|accountId|customerId|fromAccountId|toAccountId)"/);
+    return JSON.stringify(results);
+  }
+  const readerFor: { current: MissionModel | undefined } = { current: undefined };
+
+  it("return results that carry no customer name and no account id, for Sam and for Priya", async () => {
+    const bank = bankWith({ runMission: (request) => (readerFor.current as MissionModel).runMission(request) });
+    const sam = signInByName(bank, "Sam Calloway");
+    const priya = signInByName(bank, "Priya Natarajan");
+
+    for (const customer of [sam, priya]) {
+      const text = await rawToolResults(bank, customer);
+      for (const part of customer.name.split(" ")) expect(text, customer.name).not.toContain(part);
+      expect(text, customer.name).not.toMatch(/"(id|accountId|customerId|fromAccountId|toAccountId)"/);
+    }
+  });
+
+  it("give Priya results that hold none of Sam's accounts or figures, and Sam none of Priya's", async () => {
+    const bank = bankWith({ runMission: (request) => (readerFor.current as MissionModel).runMission(request) });
+    const sam = signInByName(bank, "Sam Calloway");
+    const priya = signInByName(bank, "Priya Natarajan");
+
+    const samsText = await rawToolResults(bank, sam);
+    const priyasText = await rawToolResults(bank, priya);
+
+    // Sam: House fund holds $12,400.00 of a $40,000.00 target, and his Usual month income is $7,020.00.
+    expect(samsText).toContain("House fund");
+    expect(samsText).toContain('"balanceCents":1240000');
+    expect(priyasText).not.toContain("House fund");
+    expect(priyasText).not.toContain("1240000");
+    expect(priyasText).not.toContain("4000000");
+    expect(priyasText).not.toContain('"incomeCents":702000');
+    // Priya: Travel fund, with a $6,000.00 target.
+    expect(priyasText).toContain("Travel fund");
+    expect(priyasText).toContain('"targetCents":600000');
+    expect(samsText).not.toContain("Travel fund");
+    expect(samsText).not.toContain('"targetCents":600000');
   });
 
   it("record the progress label and what was read while the Mission runs", async () => {

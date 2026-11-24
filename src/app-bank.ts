@@ -5,10 +5,10 @@ import type { Database } from "./db/database";
 import { createFakeMissionModel } from "./fake-mission-model";
 
 /**
- * How long the fake model waits before each step in the app, so Discoveries shows a running Mission's progress.
+ * How long the fake model waits before each tool call in the app, so Discoveries shows a running Mission's progress.
  * Tests call the bank directly and don't wait.
  */
-const APP_FAKE_STEP_MS = 700;
+const APP_FAKE_TOOL_CALL_MS = 700;
 
 let appBank: { db: Database; bank: Bank } | undefined;
 
@@ -18,7 +18,7 @@ export function getAppBank(): Bank {
   if (appBank?.db !== db) {
     const clock = getAppClock();
     // The Anthropic SDK adapter (#58) takes over when ANTHROPIC_API_KEY is set; until then every Mission runs on the fake.
-    const missionModel = createFakeMissionModel({ clock, stepDelayMs: APP_FAKE_STEP_MS });
+    const missionModel = createFakeMissionModel({ clock, toolCallDelayMs: APP_FAKE_TOOL_CALL_MS });
     appBank = { db, bank: createBank({ db, clock, missionModel }) };
   }
   return appBank.bank;
