@@ -3,6 +3,7 @@ import type { FindingOnPage } from "@/bank";
 import { formatLocalDate } from "@/calendar";
 import { guardrailName } from "@/decisions";
 import { describeOption, findingStateLabel, type FindingKind } from "@/findings";
+import { expiredReason } from "@/finding-text";
 import { FindingOptions } from "./agent-action-controls";
 
 const findingTimeFormat = new Intl.DateTimeFormat("en-GB", {
@@ -82,12 +83,10 @@ export function FindingCard({
       )}
       {chosen && <p className="muted">You chose: {describeOption(chosen, accountName).label}</p>}
       {finding.state === "snoozed" && finding.snoozedUntil && (
-        <p className="muted">Put away until {formatLocalDate(finding.snoozedUntil)}. It shows again then.</p>
+        <p className="muted">Snoozed until {formatLocalDate(finding.snoozedUntil)}. It shows again then.</p>
       )}
       {finding.state === "expired" && (
-        <p className="muted">
-          {finding.kind === "sweep" ? "A newer paycheck changed the numbers, so this expired." : "This has expired."}
-        </p>
+        <p className="muted">{expiredReason(finding)}, so this expired.</p>
       )}
     </section>
   );

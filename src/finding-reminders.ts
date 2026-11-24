@@ -1,8 +1,8 @@
-import { formatLocalDate, localDateOf } from "./calendar";
+import { localDateOf } from "./calendar";
 import type { Clock } from "./clock";
 import type { CustomerData } from "./customer-data";
 import { customerChangeDecision } from "./decisions";
-import { reopenedFindingAction } from "./finding-text";
+import { REMINDER_TRIGGER, reopenedFindingAction, reopenedFindingWhy } from "./finding-text";
 import type { SystemData } from "./system-data";
 
 /**
@@ -16,19 +16,16 @@ export function reopenDueFindings(deps: { clock: Clock; customerData: CustomerDa
     let reopened = 0;
     for (const customer of systemData.listCustomers()) {
       for (const finding of customerData.listSnoozedFindingsDue(customer, today)) {
-        if (finding.snoozedUntil === null) continue;
+        const date = finding.snoozedUntil;
+        if (date === null) continue; // Only for the type: listSnoozedFindingsDue returns Findings with a date.
         customerData.reopenSnoozedFinding(customer, finding.id);
         customerData.recordDecision(
           customer,
           customerChangeDecision({
-            trigger: "Your reminder date came",
+            trigger: REMINDER_TRIGGER,
             rule: finding.rule,
             action: reopenedFindingAction(finding.title),
-            why: [
-              { label: "Trigger", value: `You asked to be reminded on ${formatLocalDate(finding.snoozedUntil)}` },
-              { label: "Finding", value: finding.title },
-              { label: "What changes", value: "It is open again. Nothing else changes" },
-            ],
+            why: reopenedFindingWhy(finding, date),
           }),
         );
         reopened += 1;

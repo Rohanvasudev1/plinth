@@ -135,7 +135,7 @@ export function describeOption(
     case "remind_me":
       return {
         label: `Remind me on ${formatLocalDate(option.date)}`,
-        detail: `Puts this away until ${formatLocalDate(option.date)}, then shows it again`,
+        detail: `Snoozes this until ${formatLocalDate(option.date)}, then shows it again`,
       };
     case "not_now":
       return { label: "Not now", detail: "Closes this. Nothing changes" };

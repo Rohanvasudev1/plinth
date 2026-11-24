@@ -1,5 +1,6 @@
-import type { LocalDate } from "./calendar";
-import { formatLocalDate } from "./calendar";
+import { formatLocalDate, type LocalDate } from "./calendar";
+import type { WhyRow } from "./decisions";
+import type { Finding } from "./findings";
 import { formatDollars, type Cents } from "./money";
 
 // Text a Finding stores when it is written: its title and the Source of each fact (see CODING_STANDARDS.md).
@@ -28,7 +29,41 @@ export function reopenedFindingAction(title: string): string {
   return `Showed you “${title}” again`;
 }
 
-/** The Why row saying when a snoozed Finding opens again. */
-export function snoozedUntilText(date: LocalDate): string {
-  return `Shows again on ${formatLocalDate(date)}`;
+/** The trigger of the Decision log entry written when a snoozed Finding opens again. */
+export const REMINDER_TRIGGER = "Your reminder date came";
+
+/** The Decision log action for picking Leave it on a sweep Finding. */
+export function leftMoneyAction(accountName: string): string {
+  return `Left the money in ${accountName}`;
+}
+
+/** What a pick that moves no money changes, for its Why panel. */
+export const PICK_CHANGES = {
+  leave: "Nothing moves",
+  readReport: "Nothing. This stays open",
+  close: "Nothing. This closes",
+  snooze: (date: LocalDate) => `Shows again on ${formatLocalDate(date)}`,
+} as const;
+
+/** The Why rows of a Decision log entry about one Finding: what triggered it, the Finding, and what changes. */
+export function findingWhyRows(trigger: string, finding: Pick<Finding, "title">, whatChanges: string): WhyRow[] {
+  return [
+    { label: "Trigger", value: trigger },
+    { label: "Finding", value: finding.title },
+    { label: "What changes", value: whatChanges },
+  ];
+}
+
+/** The Why rows of the Decision log entry written when a snoozed Finding opens again. */
+export function reopenedFindingWhy(finding: Pick<Finding, "title">, date: LocalDate): WhyRow[] {
+  return findingWhyRows(
+    `You asked to be reminded on ${formatLocalDate(date)}`,
+    finding,
+    "It is open again. Nothing else changes",
+  );
+}
+
+/** Why a Finding expired, for its card and for a pick refused because of it. */
+export function expiredReason(finding: Pick<Finding, "kind">): string {
+  return finding.kind === "sweep" ? "A newer paycheck changed the numbers" : "Newer facts or your settings closed it";
 }

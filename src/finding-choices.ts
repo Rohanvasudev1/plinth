@@ -2,7 +2,13 @@ import { formatLocalDate, localDateOf } from "./calendar";
 import type { Clock } from "./clock";
 import type { Customer, CustomerData } from "./customer-data";
 import { customerChangeDecision, type Decision } from "./decisions";
-import { pickedOptionAction, snoozedUntilText } from "./finding-text";
+import {
+  expiredReason,
+  findingWhyRows,
+  leftMoneyAction,
+  PICK_CHANGES,
+  pickedOptionAction,
+} from "./finding-text";
 import { describeOption, FindingError, type Finding, type FindingOptionKey, type MoveOption } from "./findings";
 import { formatDollars } from "./money";
 import { billsBeforePayday } from "./safe-to-spend";
@@ -40,10 +46,9 @@ export function chooseOption(
     if (!finding) return { ok: false, reason: "There is no such Finding.", finding };
     if (finding.state === "chosen") return { ok: false, reason: ALREADY_CHOSEN, finding };
     if (finding.state === "expired") {
-      const why = finding.kind === "sweep" ? "a newer paycheck changed the numbers" : "newer facts replaced it";
-      return { ok: false, reason: `This Finding has expired: ${why}.`, finding };
+      return { ok: false, reason: `This Finding has expired: ${expiredReason(finding).toLowerCase()}.`, finding };
     }
-    if (finding.state === "snoozed") return { ok: false, reason: "This Finding is put away until its reminder date.", finding };
+    if (finding.state === "snoozed") return { ok: false, reason: "This Finding is snoozed until its reminder date.", finding };
     const option = finding.options.find((candidate) => candidate.key === key);
     if (!option) return { ok: false, reason: "That Option isn't on this Finding.", finding };
 
@@ -55,23 +60,23 @@ export function chooseOption(
       case "move":
         return move(finding, option, picked);
       case "leave": {
-        const decision = recordPick(finding, `Left the money in ${accountName(option.accountId)}`, picked, "Nothing moves");
+        const decision = recordPick(finding, leftMoneyAction(accountName(option.accountId)), picked, PICK_CHANGES.leave);
         return { ok: true, finding: customerData.markFindingChosen(customer, finding.id, key), decision };
       }
       case "read_report": {
-        const decision = recordPick(finding, pickedOptionAction(label, finding.title), picked, "Nothing. This stays open");
+        const decision = recordPick(finding, pickedOptionAction(label, finding.title), picked, PICK_CHANGES.readReport);
         return { ok: true, finding, decision };
       }
       case "remind_me": {
         if (option.date <= localDateOf(clock.now())) {
           return { ok: false, reason: `${formatLocalDate(option.date)} has already come.`, finding };
         }
-        const decision = recordPick(finding, pickedOptionAction(label, finding.title), picked, snoozedUntilText(option.date));
+        const decision = recordPick(finding, pickedOptionAction(label, finding.title), picked, PICK_CHANGES.snooze(option.date));
         return { ok: true, finding: customerData.snoozeFinding(customer, finding.id, option.date), decision };
       }
       case "not_now":
       case "keep_paying": {
-        const decision = recordPick(finding, pickedOptionAction(label, finding.title), picked, "Nothing. This closes");
+        const decision = recordPick(finding, pickedOptionAction(label, finding.title), picked, PICK_CHANGES.close);
         return { ok: true, finding: customerData.markFindingChosen(customer, finding.id, key), decision };
       }
     }
@@ -85,11 +90,7 @@ export function chooseOption(
         trigger: "You chose this Option",
         rule: finding.rule,
         action,
-        why: [
-          { label: "Trigger", value: picked },
-          { label: "Finding", value: finding.title },
-          { label: "What changes", value: whatChanges },
-        ],
+        why: findingWhyRows(picked, finding, whatChanges),
       }),
     );
   }
