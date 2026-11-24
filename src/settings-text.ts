@@ -1,3 +1,4 @@
+import { STANDING_SEARCHES, type StandingSearch } from "./findings";
 import type {
   AdviceSetting,
   AutonomyLevel,
@@ -43,6 +44,15 @@ export const GOAL_PREFERENCE_TEXT: Record<GoalPreference, string> = {
   spend_less: "Spend less",
 };
 
+/** Each Standing search's name, and what it does, for its switch. */
+export const STANDING_SEARCH_TEXT: Record<StandingSearch, { name: string; description: string; stopLooking: string }> = {
+  subscription_price_rises: {
+    name: "Subscription price rises",
+    description: "Checks your card charges as they post",
+    stopLooking: "Stop looking at subscription price rises",
+  },
+};
+
 function onOff(on: boolean): string {
   return on ? "On" : "Off";
 }
@@ -62,5 +72,9 @@ export function settingsRows(choices: SettingsChoices): { label: string; value: 
     { label: "Share my data with partners", value: onOff(choices.dataChoices.shareWithPartners) },
     { label: "Keep chat history", value: onOff(choices.dataChoices.keepChatHistory) },
     { label: "Goals, in order", value: goalsText(choices.goalPreferences) },
+    ...STANDING_SEARCHES.map((search) => ({
+      label: STANDING_SEARCH_TEXT[search].name,
+      value: onOff(choices.standingSearches[search]),
+    })),
   ];
 }

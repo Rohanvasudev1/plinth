@@ -9,7 +9,7 @@ import type { Decision, DecisionResult } from "./decisions";
 import { countOpenFindings, readDiscoveriesPage, type DiscoveriesPage } from "./discoveries-page";
 import { reopenDueFindings } from "./finding-reminders";
 import { chooseOption, type ChooseOptionOutcome } from "./finding-choices";
-import type { Finding, FindingOptionKey } from "./findings";
+import type { Finding, FindingOptionKey, StandingSearch } from "./findings";
 import { setGoalTarget } from "./goal-changes";
 import { readForecast, type Forecast } from "./forecast";
 import { createLedgerEventDispatcher, type LedgerEventDispatcher } from "./ledger-events";
@@ -33,6 +33,8 @@ import { changeSettings, type SettingsChange } from "./settings-changes";
 import { applySetup, readSetupAnswers } from "./setup";
 import { STANDARD_SETUP, type SetupAnswers } from "./setup-answers";
 import { createSimulator, type Simulator } from "./simulator";
+import { setStandingSearch } from "./standing-searches";
+import { startSubscriptionPriceRises } from "./subscription-price-rises";
 import { createSystemData, type SystemData } from "./system-data";
 import { undoAgentAction, type UndoOutcome } from "./undo";
 
@@ -159,6 +161,12 @@ export interface Bank extends Simulator, RuleChanges {
    * and the open Finding count.
    */
   readDiscoveries(customer: Customer): DiscoveriesPage;
+  /**
+   * Switches one of the customer's Standing searches on or off, writing the next settings version and a Decision log
+   * entry. Off expires the search's open and snoozed Findings; on runs it over existing data. Asking for the state it
+   * is already in changes nothing. Throws SettingsError, saving nothing, before setup.
+   */
+  setStandingSearch(customer: Customer, search: StandingSearch, on: boolean): Settings;
   /** How many of the customer's Findings are open, for the nav bar's Discoveries badge. */
   countOpenFindings(customer: Customer): number;
   /**
@@ -200,6 +208,7 @@ export function createBank(deps: {
   const simulator = createSimulator({ clock, systemData, customerData });
   const merchantClearingAccountId = systemData.ensureSystemAccount("merchant");
   startBufferAgent({ clock, customerData, systemData, ledgerEvents });
+  startSubscriptionPriceRises({ clock, customerData, systemData, ledgerEvents });
 
   function billsBeforePayday(customer: Customer): BillsBeforePayday {
     return billsBeforePaydayOf(customerData, customer, localDateOf(clock.now()));
@@ -253,6 +262,8 @@ export function createBank(deps: {
     readForecastPage: (customer) => readForecastPage(customerData, customer, localDateOf(clock.now())),
     readFindings: (customer) => customerData.listFindings(customer),
     readDiscoveries: (customer) => readDiscoveriesPage(customerData, customer),
+    setStandingSearch: (customer, search, on) =>
+      setStandingSearch({ clock, customerData, systemData }, customer, search, on),
     countOpenFindings: (customer) => countOpenFindings(customerData.listFindings(customer)),
     chooseOption: (customer, findingId, option) => chooseOption({ clock, customerData }, customer, findingId, option),
     undo: (customer, decisionId) => undoAgentAction(customerData, customer, decisionId),

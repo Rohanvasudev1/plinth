@@ -126,11 +126,14 @@ describe("The Discoveries page", () => {
       "Newer",
       "$340.00 above your Buffer in Checking",
       "Older",
+      // Sam's seeded Subscription price rise Findings, made when the bank started.
+      "Tunewell Streaming went up from $15.00 to $18.00",
+      "Your Clipreel free trial turned paid at $12.99",
     ]);
     expect(page.findings[0]?.id).toBe(newer.id);
     expect(page.findings[1]?.facts.every((fact) => fact.source.length > 0)).toBe(true);
-    expect(page.openFindingCount).toBe(2);
-    expect(bank.readHome(sam).openFindingCount).toBe(2);
+    expect(page.openFindingCount).toBe(4);
+    expect(bank.readHome(sam).openFindingCount).toBe(4);
   });
 
   it("shows the Agent's view as the current Advice setting allows, and under never sends none of its text", () => {
@@ -165,7 +168,11 @@ describe("The Discoveries page", () => {
     bank.customerData.createFinding(sam, missionFinding({ title: "Sam's Finding" }));
     bank.customerData.createFinding(priya, missionFinding({ title: "Priya's Finding" }));
 
-    expect(bank.readDiscoveries(sam).findings.map((finding) => finding.title)).toEqual(["Sam's Finding"]);
+    expect(bank.readDiscoveries(sam).findings.map((finding) => finding.title)).toEqual([
+      "Sam's Finding",
+      "Tunewell Streaming went up from $15.00 to $18.00",
+      "Your Clipreel free trial turned paid at $12.99",
+    ]);
     expect(bank.readDiscoveries(priya).findings.map((finding) => finding.title)).toEqual(["Priya's Finding"]);
     expect(bank.readDiscoveries(priya).openFindingCount).toBe(1);
   });

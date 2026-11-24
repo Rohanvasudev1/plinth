@@ -2,9 +2,10 @@ import { DISPLAY_TIME_ZONE } from "@/app-clock";
 import type { FindingOnPage } from "@/bank";
 import { formatLocalDate } from "@/calendar";
 import { guardrailName } from "@/decisions";
-import { describeOption, findingStateLabel, type FindingKind } from "@/findings";
+import { describeOption, findingStateLabel, isLiveFinding, type FindingKind } from "@/findings";
 import { expiredReason } from "@/finding-text";
-import { FindingOptions } from "./agent-action-controls";
+import { STANDING_SEARCH_TEXT } from "@/settings-text";
+import { FindingOptions, StopLookingButton } from "./agent-action-controls";
 
 const findingTimeFormat = new Intl.DateTimeFormat("en-GB", {
   weekday: "short",
@@ -80,6 +81,12 @@ export function FindingCard({
             options={finding.options.map((option) => ({ key: option.key, ...describeOption(option, accountName) }))}
           />
         </>
+      )}
+      {finding.standingSearch && isLiveFinding(finding) && (
+        <StopLookingButton
+          search={finding.standingSearch}
+          label={STANDING_SEARCH_TEXT[finding.standingSearch].stopLooking}
+        />
       )}
       {chosen && <p className="muted">You chose: {describeOption(chosen, accountName).label}</p>}
       {finding.state === "snoozed" && finding.snoozedUntil && (

@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "2a1ec576-e243-4513-bd27-10312e35cd70",
+  "id": "a0d8fe65-d6aa-4e1c-887c-48aedcc64913",
   "prevId": "dd723f37-f1da-4bc8-a112-ef5223cb0c50",
   "tables": {
     "accounts": {
@@ -273,20 +273,6 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
-        },
-        "mission_id": {
-          "name": "mission_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "finding_id": {
-          "name": "finding_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
         }
       },
       "indexes": {
@@ -403,32 +389,6 @@
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
-        },
-        "decisions_mission_id_missions_id_fk": {
-          "name": "decisions_mission_id_missions_id_fk",
-          "tableFrom": "decisions",
-          "tableTo": "missions",
-          "columnsFrom": [
-            "mission_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "decisions_finding_id_findings_id_fk": {
-          "name": "decisions_finding_id_findings_id_fk",
-          "tableFrom": "decisions",
-          "tableTo": "findings",
-          "columnsFrom": [
-            "finding_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -444,7 +404,7 @@
         },
         "decisions_agent_uses_rule": {
           "name": "decisions_agent_uses_rule",
-          "value": "\"decisions\".\"actor\" = 'customer' OR \"decisions\".\"rule_id\" IS NOT NULL OR \"decisions\".\"mission_id\" IS NOT NULL"
+          "value": "\"decisions\".\"actor\" = 'customer' OR \"decisions\".\"rule_id\" IS NOT NULL"
         }
       }
     },
@@ -549,6 +509,20 @@
           "notNull": false,
           "autoincrement": false
         },
+        "subscription_merchant": {
+          "name": "subscription_merchant",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "subscription_price_cents": {
+          "name": "subscription_price_cents",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "state": {
           "name": "state",
           "type": "text",
@@ -602,10 +576,12 @@
           ],
           "isUnique": true
         },
-        "findings_mission_id": {
-          "name": "findings_mission_id",
+        "findings_customer_subscription_price": {
+          "name": "findings_customer_subscription_price",
           "columns": [
-            "mission_id"
+            "customer_id",
+            "subscription_merchant",
+            "subscription_price_cents"
           ],
           "isUnique": true
         }
@@ -649,19 +625,6 @@
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
-        },
-        "findings_mission_id_missions_id_fk": {
-          "name": "findings_mission_id_missions_id_fk",
-          "tableFrom": "findings",
-          "tableTo": "missions",
-          "columnsFrom": [
-            "mission_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -698,6 +661,10 @@
         "findings_standing_search_link": {
           "name": "findings_standing_search_link",
           "value": "(\"findings\".\"standing_search\" IS NOT NULL) = (\"findings\".\"kind\" = 'subscription_price_rise')"
+        },
+        "findings_subscription_price": {
+          "name": "findings_subscription_price",
+          "value": "(\"findings\".\"subscription_merchant\" IS NOT NULL AND \"findings\".\"subscription_price_cents\" IS NOT NULL) = (\"findings\".\"kind\" = 'subscription_price_rise')"
         }
       }
     },
@@ -935,99 +902,6 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}
-    },
-    "missions": {
-      "name": "missions",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "integer",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": true
-        },
-        "customer_id": {
-          "name": "customer_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "question": {
-          "name": "question",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "state": {
-          "name": "state",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "progress_label": {
-          "name": "progress_label",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "read_list": {
-          "name": "read_list",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "started_at_ms": {
-          "name": "started_at_ms",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "ended_at_ms": {
-          "name": "ended_at_ms",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "missions_customer_id": {
-          "name": "missions_customer_id",
-          "columns": [
-            "customer_id"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {
-        "missions_customer_id_customers_id_fk": {
-          "name": "missions_customer_id_customers_id_fk",
-          "tableFrom": "missions",
-          "tableTo": "customers",
-          "columnsFrom": [
-            "customer_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {
-        "missions_ended": {
-          "name": "missions_ended",
-          "value": "(\"missions\".\"state\" = 'running') = (\"missions\".\"ended_at_ms\" IS NULL)"
-        }
-      }
     },
     "pause_changes": {
       "name": "pause_changes",
@@ -1507,6 +1381,14 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
+        },
+        "subscription_price_rises": {
+          "name": "subscription_price_rises",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": true
         },
         "created_at_ms": {
           "name": "created_at_ms",

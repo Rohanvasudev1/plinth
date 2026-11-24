@@ -30,7 +30,7 @@ test("Forecast shows Sam's Usual month, November On pace, left to save and each 
   await expect(shopping).toContainText("$2,701.82");
   await expect(shopping).toContainText("+$1,381.82");
   const table = page.getByRole("table", { name: "November compared with your Usual month" });
-  await expect(table.getByRole("row", { name: /Groceries/ })).toContainText("-$236.50");
+  await expect(table.getByRole("row", { name: /Groceries/ })).toContainText("-$253.02");
   // Rent counts once for the month, not scaled up to the pace of the month so far.
   await expect(table.getByRole("row", { name: /Housing/ })).toContainText("same");
   await expect(page.getByRole("link", { name: "Forecast", exact: true })).toHaveAttribute("aria-current", "page");
