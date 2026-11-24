@@ -4,7 +4,7 @@ import type { ModelFinding } from "./mission-model";
 import { CANT_KNOW_LABEL, CANT_KNOW_SOURCE, MISSION_FAILURES, missionReportFromFacts } from "./mission-text";
 
 /** The Options a Mission's Finding may offer (ADR 0009). Move comes with its guardrail checks in a later ticket. */
-const MISSION_OPTION_KEYS = ["read_report", "remind_me", "not_now"] as const;
+export const MISSION_OPTION_KEYS = ["read_report", "remind_me", "not_now"] as const;
 
 /** The Options a Mission's Finding gets when none of the model's survive the checks. */
 const DEFAULT_OPTIONS: FindingOption[] = [{ key: "read_report" }, { key: "not_now" }];
