@@ -6,6 +6,8 @@ The reviewer applies these during `/code-review`. The hard rules in `CLAUDE.md` 
 
 - Every path through an agent action ends in a Decision log entry or in "no action taken". A guard that stops an action halfway, for example a missing or unowned account, writes a Refused entry naming the guardrail.
 - Decision log entries name only the customer's own accounts.
+- A check that may skip its work, such as a Standing search with its switch off, tests its switches and the customer's setup before it reads customer data. Every read it makes then has its access log entry (ADR 0010).
+- Who holds or owns a row is decided by an id, never by a display name.
 
 ## Domain language
 
@@ -18,10 +20,12 @@ The reviewer applies these during `/code-review`. The hard rules in `CLAUDE.md` 
 - Display text lives in pages and in `*-text.ts` formatter modules. One exception: a Decision log entry or a Finding stores its action, trigger and Why text when it is written, so the record shows what the customer was told at the time. Build that text with a formatter, not inline.
 - A customer change, such as a Rule, a setting, a Goal target or Pause, goes through its change module (`rule-changes.ts`, `settings-changes.ts`, `goal-changes.ts`, `pause.ts` or `setup.ts`), which writes the Decision log entry in the same transaction. `src/hard-rules.test.ts` checks this.
 - Ids that are easy to swap get a branded type, as `Cents` and `LocalDate` already do.
+- Work outside the database that depends on a transaction, such as settling a running Mission, runs through `customerData.afterCommit`, so a rollback leaves it undone.
+- A change one caller needs doesn't widen a shared validator or database constraint for every caller. Change the caller, or narrow the new allowance to that case, as `decisions_agent_uses_rule` allows no Rule only for Mission endings that moved no money.
 
 ## Tests
 
 - Each end-to-end test sets up the state it needs and doesn't depend on another test running first.
 - A test that one customer can't see another's data gives both customers data of their own, then reads each customer's view and checks it holds only their own figures. Checking that one customer's view doesn't change when the other acts is not enough.
 - A migration that rebuilds a table which may already hold rows, or fills a new column from existing data, comes with a test. The test applies it to a database migrated to the previous migration and holding at least one such row, then checks the row after. Running migrations on an empty database only proves the SQL parses.
-- An idempotency key names everything that makes the movement unique for that customer: `payroll:<employer>:<pay date>`, `bill:<bill id>:<due date>`, `sweep:<ledger event id>`, `finding:<finding id>`, `undo:<decision id>`.
+- An idempotency key names everything that makes the movement unique for that customer: `payroll:<employer>:<pay date>`, `bill:<bill id>:<due date>`, `sweep:<ledger event id>`, `finding:<finding id>`, `undo:<decision id>`, `closure:<customer id>:<account id>`.

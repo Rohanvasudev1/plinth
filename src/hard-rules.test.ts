@@ -96,6 +96,14 @@ describe("hard rules", () => {
     expect(offenders).toEqual([]);
   });
 
+  it("guards every test-only route under src/app/e2e with endToEndResetEnabled, so it answers 404 outside end-to-end runs", () => {
+    const unguarded = files
+      .filter((file) => file.name.startsWith(path.join("app", "e2e") + path.sep) && file.name.endsWith("route.ts"))
+      .filter((file) => !file.text.includes("endToEndResetEnabled()"))
+      .map((file) => file.name);
+    expect(unguarded).toEqual([]);
+  });
+
   it("checks sideways scrolling in end-to-end tests only through expectNoHorizontalScroll in e2e/page-checks.ts", () => {
     expect(e2eSpecs.filter((spec) => spec.text.includes("scrollWidth")).map((spec) => spec.name)).toEqual([]);
   });
