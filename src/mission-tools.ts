@@ -3,7 +3,8 @@ import type { Clock } from "./clock";
 import type { Account, Customer, CustomerData } from "./customer-data";
 import { readForecast } from "./forecast";
 import { readForecastPage } from "./forecast-page";
-import { MISSION_PROGRESS, MissionError, type MissionProgressLabel, type MissionRead } from "./missions";
+import { MISSION_PROGRESS, MISSION_TOOL_SOURCES, type MissionProgressLabel } from "./mission-text";
+import { MissionError, type MissionRead } from "./missions";
 import { projectionLines } from "./projection";
 
 // The tools a Mission's language model reads the customer's data with (ADR 0009). Each one only reads, and only the
@@ -12,6 +13,13 @@ import { projectionLines } from "./projection";
 
 /** The longest period one read_transactions call may cover. */
 const MAX_TRANSACTION_DAYS = 366;
+
+/** What the Mission tools read through: the clock for today, the customer data layer, and the merchant clearing account the Forecast needs. */
+export interface MissionToolDeps {
+  clock: Clock;
+  customerData: CustomerData;
+  merchantClearingAccountId: number;
+}
 
 export const MISSION_TOOL_NAMES = [
   "read_transactions",
@@ -52,7 +60,7 @@ const TOOLS: Record<
       additionalProperties: false,
     },
     progress: MISSION_PROGRESS.transactions,
-    source: "From your transactions",
+    source: MISSION_TOOL_SOURCES.read_transactions,
   },
   read_usual_month: {
     description:
@@ -60,13 +68,13 @@ const TOOLS: Record<
       "On pace, and Left to save, with spending by Category. Says not_enough_history when there is no full month.",
     inputSchema: NO_INPUT,
     progress: MISSION_PROGRESS.usualMonth,
-    source: "From your Usual month and On pace",
+    source: MISSION_TOOL_SOURCES.read_usual_month,
   },
   read_forecast: {
     description: "The 30-day Forecast of the checking balance: today's balance, the lowest day, the Buffer and the daily allowance.",
     inputSchema: NO_INPUT,
     progress: MISSION_PROGRESS.forecastAndGoals,
-    source: "From your 30-day Forecast",
+    source: MISSION_TOOL_SOURCES.read_forecast,
   },
   read_projection: {
     description:
@@ -74,19 +82,19 @@ const TOOLS: Record<
       "month and On pace, and the balance after 12 and 36 months at each.",
     inputSchema: NO_INPUT,
     progress: MISSION_PROGRESS.forecastAndGoals,
-    source: "From your Projection",
+    source: MISSION_TOOL_SOURCES.read_projection,
   },
   read_goals: {
     description: "The customer's Goal accounts: each one's name, savings goal, balance and target.",
     inputSchema: NO_INPUT,
     progress: MISSION_PROGRESS.forecastAndGoals,
-    source: "From your Goals",
+    source: MISSION_TOOL_SOURCES.read_goals,
   },
   read_scheduled_bills: {
     description: "The customer's Scheduled bills: payee, amount, day of the month, Category and the account they're paid from.",
     inputSchema: NO_INPUT,
     progress: MISSION_PROGRESS.forecastAndGoals,
-    source: "From your Scheduled bills",
+    source: MISSION_TOOL_SOURCES.read_scheduled_bills,
   },
 };
 
@@ -116,7 +124,7 @@ export interface MissionToolOutcome {
  * period longer than a year.
  */
 export function runMissionTool(
-  deps: { clock: Clock; customerData: CustomerData; merchantClearingAccountId: number },
+  deps: MissionToolDeps,
   customer: Customer,
   tool: string,
   input: unknown,
@@ -126,7 +134,7 @@ export function runMissionTool(
 }
 
 function readWith(
-  deps: { clock: Clock; customerData: CustomerData; merchantClearingAccountId: number },
+  deps: MissionToolDeps,
   customer: Customer,
   tool: MissionToolName,
   input: unknown,

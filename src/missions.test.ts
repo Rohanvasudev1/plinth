@@ -102,8 +102,30 @@ describe("Mission Finding checks", () => {
   });
 });
 
+describe("What Plinth can't know", () => {
+  it("fails the Mission when it states a figure, since only cited facts may carry figures", async () => {
+    const bank = bankWith(
+      modelReturning((callId) =>
+        finding({
+          facts: [{ label: "Usual month", value: "$7,020.00 in", toolCallId: callId }],
+          cantKnow: "Rents nearby average $2,100 a month.",
+        }),
+      ),
+    );
+    const sam = signInByName(bank, "Sam Calloway");
+
+    const finished = await bank.startMission(sam, "How does my rent compare?").ended;
+
+    expect(finished.state).toBe("failed");
+    expect(bank.readDecisionLog(sam)[0]?.why).toContainEqual({
+      label: "Why it stopped",
+      value: "What Plinth can't know may not state a figure",
+    });
+  });
+});
+
 describe("Mission Finding Options", () => {
-  it("drop an Option not on the list, a Move to an account that isn't the customer's, and a past reminder", async () => {
+  it("drop an Option not on the list, any Move (the Move Option comes later), a repeat and a past reminder", async () => {
     const priyasAccounts: number[] = [];
     const bank = bankWith(
       modelReturning((callId) =>
@@ -182,7 +204,9 @@ describe("Mission tools", () => {
       "read_goals",
       "read_projection",
     ]);
-    expect(priyasMission.readList).toEqual(samsMission.readList);
+    expect(JSON.stringify(samsMission.readList)).not.toMatch(/Travel fund|Priya/);
+    expect(JSON.stringify(priyasMission.readList)).not.toMatch(/House fund|Sam/);
+    expect(samsMission.readList.find((read) => read.tool === "read_transactions")?.item).toBe("Fri 21 Aug to Thu 19 Nov");
   });
 
   it("return results that carry no customer name and no account id", async () => {

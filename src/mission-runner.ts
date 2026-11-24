@@ -1,25 +1,21 @@
 import { localDateOf } from "./calendar";
-import type { Clock } from "./clock";
-import type { Customer, CustomerData } from "./customer-data";
+import type { Customer } from "./customer-data";
 import { cents } from "./money";
-import { checkMissionFinding, type CheckedMissionFinding } from "./mission-finding";
+import { checkMissionFinding, type MissionFindingToStore } from "./mission-finding";
 import { MISSION_SYSTEM_PROMPT, type MissionModel, type MissionToolAnswer } from "./mission-model";
 import {
   failedMissionAction,
   failedMissionWhy,
+  MISSION_FAILURES,
   missionTrigger,
+  QUESTION_REFUSALS,
   reportedMissionAction,
   reportedMissionWhy,
 } from "./mission-text";
-import { MISSION_TOOL_DEFINITIONS, runMissionTool } from "./mission-tools";
+import { MISSION_TOOL_DEFINITIONS, runMissionTool, type MissionToolDeps } from "./mission-tools";
 import { MAX_QUESTION_LENGTH, MISSION_PROGRESS, MissionError, type Mission } from "./missions";
 
-type CheckedFinding = Extract<CheckedMissionFinding, { ok: true }>["finding"];
-
-export interface MissionDeps {
-  clock: Clock;
-  customerData: CustomerData;
-  merchantClearingAccountId: number;
+export interface MissionDeps extends MissionToolDeps {
   model: MissionModel;
 }
 
@@ -44,10 +40,8 @@ export interface StartedMission {
 export function startMission(deps: MissionDeps, customer: Customer, question: string): StartedMission {
   const { clock, customerData, model } = deps;
   const asked = question.trim();
-  if (asked.length === 0) throw new MissionError("Type a question for your agent to look into");
-  if (asked.length > MAX_QUESTION_LENGTH) {
-    throw new MissionError(`Keep the question under ${MAX_QUESTION_LENGTH} characters`);
-  }
+  if (asked.length === 0) throw new MissionError(QUESTION_REFUSALS.blank);
+  if (asked.length > MAX_QUESTION_LENGTH) throw new MissionError(QUESTION_REFUSALS.tooLong(MAX_QUESTION_LENGTH));
   const mission = customerData.createMission(customer, asked, MISSION_PROGRESS.transactions);
   const sources = new Map<string, string>();
 
@@ -81,12 +75,14 @@ export function startMission(deps: MissionDeps, customer: Customer, question: st
       if (checked.ok) return report(checked.finding);
       reason = checked.reason;
     } catch (error) {
-      reason = error instanceof Error ? error.message : String(error);
+      // The model's own error message is not customer copy, so the log says only that the model failed.
+      console.error(`Mission ${mission.id} failed in the language model`, error);
+      reason = MISSION_FAILURES.modelError;
     }
     return fail(reason);
   }
 
-  function report(finding: CheckedFinding): Mission {
+  function report(finding: MissionFindingToStore): Mission {
     return customerData.inOneTransaction(() => {
       const created = customerData.createFinding(customer, { kind: "mission", missionId: mission.id, ...finding });
       const ended = customerData.endMission(customer, mission.id, "reported");

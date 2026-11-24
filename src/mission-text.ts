@@ -2,8 +2,50 @@ import type { WhyRow } from "./decisions";
 import type { FindingFact } from "./findings";
 import type { MissionRead } from "./missions";
 
-// Text a Mission stores when it ends: its Decision log entry, and the parts of its Finding code writes
-// (see CODING_STANDARDS.md).
+// Text a Mission stores and shows: its progress labels, the Sources of its tools, its Decision log entry, and the
+// parts of its Finding code writes (see CODING_STANDARDS.md).
+
+/** The fixed progress labels a running Mission shows, each tied to the kind of tool in use. */
+export const MISSION_PROGRESS = {
+  transactions: "Reading your transactions",
+  usualMonth: "Checking your Usual month and this month's pace",
+  forecastAndGoals: "Checking your Forecast and Goals",
+  writingUp: "Writing up what it found",
+} as const;
+export type MissionProgressLabel = (typeof MISSION_PROGRESS)[keyof typeof MISSION_PROGRESS];
+
+/** The three suggested questions on Discoveries, which the fake model has scripts for. */
+export const SUGGESTED_QUESTIONS = [
+  "Could I take 3 months off work next summer?",
+  "What would a $500 a month raise change?",
+  "Am I on track for my House fund?",
+] as const;
+
+/** The Source of a fact citing each Mission tool. read_transactions adds the period it read. */
+export const MISSION_TOOL_SOURCES = {
+  read_transactions: "From your transactions",
+  read_usual_month: "From your Usual month and On pace",
+  read_forecast: "From your 30-day Forecast",
+  read_projection: "From your Projection",
+  read_goals: "From your Goals",
+  read_scheduled_bills: "From your Scheduled bills",
+} as const;
+
+/** Why a Mission couldn't finish, for its Decision log entry's Why panel. */
+export const MISSION_FAILURES = {
+  noTitle: "The Finding has no title",
+  noFacts: "The Finding has no facts",
+  blankFact: "A fact has no label or value",
+  uncited: (label: string) => `The fact “${label}” cites no tool call from this Mission`,
+  cantKnowFigure: "What Plinth can't know may not state a figure",
+  modelError: "The language model couldn't finish",
+} as const;
+
+/** Why a question can't start a Mission. */
+export const QUESTION_REFUSALS = {
+  blank: "Type a question for your agent to look into",
+  tooLong: (max: number) => `Keep the question under ${max} characters`,
+} as const;
 
 /** The label of the fact saying what Plinth can't know, when a question needs outside facts. */
 export const CANT_KNOW_LABEL = "What Plinth can't know";

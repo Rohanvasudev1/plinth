@@ -186,7 +186,7 @@ async function raise(
       ),
     );
   }
-  const cantKnow = `How much of ${dollars(extra)} you would keep after tax. Plinth sees your pay as it lands, not your tax.`;
+  const cantKnow = "How much of the raise you would keep after tax. Plinth sees your pay as it lands, not your tax.";
   return {
     title,
     facts,

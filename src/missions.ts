@@ -1,17 +1,11 @@
 // No database imports here: the schema reads MISSION_STATES.
+import { MISSION_PROGRESS, type MissionProgressLabel } from "./mission-text";
+
+export { MISSION_PROGRESS, SUGGESTED_QUESTIONS, type MissionProgressLabel } from "./mission-text";
 
 /** Running until it ends as reported, with one Finding, or as stopped or failed, keeping nothing. */
 export const MISSION_STATES = ["running", "reported", "stopped", "failed"] as const;
 export type MissionState = (typeof MISSION_STATES)[number];
-
-/** The fixed progress labels a running Mission shows, each tied to the kind of tool in use. */
-export const MISSION_PROGRESS = {
-  transactions: "Reading your transactions",
-  usualMonth: "Checking your Usual month and this month's pace",
-  forecastAndGoals: "Checking your Forecast and Goals",
-  writingUp: "Writing up what it found",
-} as const;
-export type MissionProgressLabel = (typeof MISSION_PROGRESS)[keyof typeof MISSION_PROGRESS];
 
 /** One piece of the customer's data a Mission read: the tool it used and the period or item it read. */
 export interface MissionRead {
@@ -34,13 +28,6 @@ export interface Mission {
   /** Null while it runs. */
   endedAt: Date | null;
 }
-
-/** The three suggested questions on Discoveries, which the fake model has scripts for. */
-export const SUGGESTED_QUESTIONS = [
-  "Could I take 3 months off work next summer?",
-  "What would a $500 a month raise change?",
-  "Am I on track for my House fund?",
-] as const;
 
 /** The longest question the customer can send. */
 export const MAX_QUESTION_LENGTH = 500;
