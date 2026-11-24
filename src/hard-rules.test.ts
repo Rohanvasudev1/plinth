@@ -35,6 +35,11 @@ const rules = [
     pattern: /from ["'](\.\/|\.\.\/|@\/)*db\/schema["']/,
     allowed: ["customer-data.ts", "system-data.ts", "simulated-clock.ts", path.join("db", "database.ts")],
   },
+  {
+    rule: "changes customer choices only in the modules that also write the Decision log entry (ADR 0007)",
+    pattern: /customerData\.(reviseRule|createRule|saveSettings|savePause|setGoalTarget)\(/,
+    allowed: ["rule-changes.ts", "settings-changes.ts", "goal-changes.ts", "pause.ts", "setup.ts", "seed.ts"],
+  },
 ];
 
 describe("hard rules", () => {
