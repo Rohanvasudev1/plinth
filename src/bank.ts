@@ -9,6 +9,7 @@ import type { Decision, DecisionResult } from "./decisions";
 import { chooseOption, type ChooseOptionOutcome } from "./finding-choices";
 import type { Finding, FindingOptionKey } from "./findings";
 import { setGoalTarget } from "./goal-changes";
+import { readForecast, type Forecast } from "./forecast";
 import { createLedgerEventDispatcher, type LedgerEventDispatcher } from "./ledger-events";
 import { cents, type Cents } from "./money";
 import {
@@ -33,6 +34,7 @@ export type { BillBeforePayday, BillsBeforePayday, SafeToSpend } from "./safe-to
 export type { UndoOutcome } from "./undo";
 export type { ActivityRow } from "./activity";
 export type { CategoryFigures, ForecastFigures, ForecastPage } from "./forecast-page";
+export type { Forecast } from "./forecast";
 export type { ChooseOptionOutcome } from "./finding-choices";
 
 export interface GoalProgress {
@@ -63,6 +65,8 @@ export interface HomeView {
   billsBeforePayday: BillsBeforePayday;
   /** Null when the customer has no checking account. */
   safeToSpend: SafeToSpend | null;
+  /** The 30-day Forecast of the checking balance. Null when the customer has no checking account. */
+  forecast: Forecast | null;
   /** The customer's open Findings, newest first, so they can pick an Option, then their latest closed one, if any. */
   findings: Finding[];
   /** "What your agent did": every action the customer's agent took or tried to take, newest first. */
@@ -95,6 +99,11 @@ export interface Bank extends Simulator, RuleChanges {
    */
   readForecastPage(customer: Customer): ForecastPage;
   billsBeforePayday(customer: Customer): BillsBeforePayday;
+  /**
+   * The 30-day Forecast of the customer's checking balance, worked out from the ledger now, or null if they have no
+   * checking account.
+   */
+  readForecast(customer: Customer): Forecast | null;
   /** Every action the customer's agent took or tried to take, and every Undo, newest first. */
   readDecisionLog(customer: Customer): Decision[];
   /** Undoes one of the customer's agent actions by posting a reversing ledger transaction (ADR 0002). */
@@ -153,10 +162,15 @@ export function createBank(deps: { db: Database; clock: SettableClock }): Bank {
     createCustomerData({ db, clock: seedClock, ledgerEvents: createLedgerEventDispatcher() }),
   );
   const simulator = createSimulator({ clock, systemData, customerData });
+  const merchantClearingAccountId = systemData.ensureSystemAccount("merchant");
   startBufferAgent({ clock, customerData, systemData, ledgerEvents });
 
   function billsBeforePayday(customer: Customer): BillsBeforePayday {
     return billsBeforePaydayOf(customerData, customer, localDateOf(clock.now()));
+  }
+
+  function forecastFor(customer: Customer): Forecast | null {
+    return readForecast({ customerData, merchantClearingAccountId }, customer, clock.now());
   }
 
   return {
@@ -174,6 +188,7 @@ export function createBank(deps: { db: Database; clock: SettableClock }): Bank {
       return customer;
     },
     billsBeforePayday,
+    readForecast: forecastFor,
     readSettings: (customer) => customerData.getSettings(customer),
     changeSettings: (customer, change) => changeSettings(customerData, customer, change),
     finishSetup: (customer, answers) => applySetup(customerData, customer, answers, "survey"),
@@ -208,6 +223,7 @@ export function createBank(deps: { db: Database; clock: SettableClock }): Bank {
         safeToSpend: checking
           ? safeToSpend(checking, bufferRuleFor(customerData.listRules(customer), checking.id)?.parameters.buffer ?? cents(0), bills)
           : null,
+        forecast: forecastFor(customer),
         findings: findingsOnHome(customerData.listFindings(customer)),
         agentActions: customerData
           .listDecisions(customer)
