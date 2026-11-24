@@ -136,7 +136,7 @@ _Avoid_: Function, plugin, API
 
 **Read list**:
 The record a Mission keeps of each piece of data it read: the Mission tool and the period or item.
-_Avoid_: Access history, audit
+_Avoid_: Access log, access history, audit
 
 **Progress label**:
 The fixed line a running Mission shows for what it is doing now, such as "Reading your transactions".
@@ -231,3 +231,33 @@ _Avoid_: Inbox, notifications
 **Snoozed**:
 The state of a Finding the customer asked to be reminded about. It opens again once the simulated clock reaches the date they picked.
 _Avoid_: Dismissed, hidden
+
+## Accounts and privacy
+
+**Institution**:
+A simulated outside bank, card issuer, lender or retirement plan that holds an account the customer can link to Plinth.
+_Avoid_: Provider, other bank, external bank
+
+**Linked account**:
+An account the customer holds at an Institution, which Plinth can see but not move money in or out of. Plinth keeps a copy of its balance, not its transactions.
+_Avoid_: External account, connected account, outside account
+
+**Consent**:
+The customer's permission for Plinth to see one Linked account, which lasts 12 months from the link date and can be renewed.
+_Avoid_: Data choice, permission, authorization
+
+**Sync**:
+One read of a Linked account's balance from its Institution, made when the account is linked and once each simulated day while its Consent lasts.
+_Avoid_: Refresh, import, fetch
+
+**Net worth**:
+Cash plus Investments plus Debt, across Plinth accounts and every Linked account whose Consent has not ended. Debt is below zero.
+_Avoid_: Total balance, wealth, assets
+
+**Access log**:
+The customer-visible, permanent record of every read of the customer's data by anything other than the customer's own page views: who read it, what, why and when.
+_Avoid_: Audit trail, Read list, access history
+
+**Closed customer**:
+A customer who used Close and delete. Plinth has paid out their balances, deleted their working data, and kept the Ledger, Decision log and Access log as records. They can no longer sign in.
+_Avoid_: Deleted customer, deactivated account
