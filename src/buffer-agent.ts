@@ -1,3 +1,4 @@
+import { sweepCheckAccess } from "./access-log-text";
 import { localDateOf } from "./calendar";
 import type { Clock } from "./clock";
 import type { Customer, CustomerData, LedgerTransaction } from "./customer-data";
@@ -31,7 +32,8 @@ interface PayrollDeposit {
  * dollars. If the Autonomy level lets the agent move it alone, sweeps it to savings and writes a Decision log
  * entry; otherwise makes a sweep Finding for the customer to pick from. Each paycheck first expires the
  * customer's open sweep Finding, whose numbers it makes stale. A customer with no settings record hasn't finished
- * setup, so their agent takes no action. Returns a function that stops it.
+ * setup, so their agent takes no action. For a customer who has, each paycheck's check writes one access log entry,
+ * whatever comes of it (ADR 0010). Returns a function that stops it.
  */
 export function startBufferAgent(deps: {
   clock: Clock;
@@ -140,6 +142,8 @@ export function startBufferAgent(deps: {
       customerData.expireOpenFindings(customer, "sweep");
       const settings = customerData.getSettings(customer);
       if (!settings) return;
+      // The check reads the customer's balances whatever comes of it, so it is logged even when no action is taken.
+      customerData.recordAccess(customer, sweepCheckAccess(`${formatDollars(deposit.amount)} from ${deposit.employerName}`));
       // One sweep per paycheck, under the key sweep:<ledger event id>. A buffer Rule with no sweep target, as after
       // Skip, keeps the Buffer but has nowhere to sweep to, so no action is taken.
       const rule = bufferRuleFor(customerData.listRules(customer), deposit.accountId);

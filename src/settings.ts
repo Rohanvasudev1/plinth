@@ -41,10 +41,14 @@ export interface RiskAnswers {
 }
 
 /** The customer's data choices. Each is off unless the customer turns it on. */
-export interface DataChoices {
-  trainModels: boolean;
-  shareWithPartners: boolean;
-  keepChatHistory: boolean;
+export type DataChoices = Record<DataChoice, boolean>;
+
+/** Every Data choice, in the order pages list them. */
+export const DATA_CHOICE_KEYS = ["trainModels", "shareWithPartners", "keepChatHistory"] as const;
+export type DataChoice = (typeof DATA_CHOICE_KEYS)[number];
+
+export function isDataChoice(value: string): value is DataChoice {
+  return (DATA_CHOICE_KEYS as readonly string[]).includes(value);
 }
 
 /** Each Standing search's on/off switch. */

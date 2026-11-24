@@ -2,6 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { restoreSeed } from "./restore-seed";
 import { turnOnAgentAskingFirst } from "./setup-survey";
 import { expectNoHorizontalScroll } from "./page-checks";
+import { openFromMoreMenu } from "./nav";
 
 test.use({ viewport: { width: 390, height: 844 } });
 
@@ -9,10 +10,10 @@ test.use({ viewport: { width: 390, height: 844 } });
 async function samWithSweepFinding(page: Page): Promise<void> {
   await page.goto("/sign-in");
   await page.getByRole("button", { name: "Sam Calloway" }).click();
-  await page.getByRole("link", { name: "Agent & limits" }).click();
+  await openFromMoreMenu(page, "Agent & limits");
   await page.getByRole("link", { name: "Run setup again" }).click();
   await turnOnAgentAskingFirst(page);
-  await page.getByRole("link", { name: "Simulator" }).click();
+  await openFromMoreMenu(page, "Simulator");
   await page.getByRole("button", { name: "Advance clock one day" }).click();
   await expect(page.getByRole("status")).toContainText("Posted your Acme Corp paycheck");
 }

@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { restoreSeed } from "./restore-seed";
 import { expectNoHorizontalScroll } from "./page-checks";
+import { openFromMoreMenu } from "./nav";
 
 test.use({ viewport: { width: 390, height: 844 } });
 
@@ -10,7 +11,7 @@ test("Activity shows Sam's paycheck as Income and the agent's $340 sweep with th
   await page.getByRole("button", { name: "Sam Calloway" }).click();
 
   // The clock starts on Thursday 19 November. Moving it to Friday 20 November posts Sam's paycheck, and the agent sweeps.
-  await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Simulator" }).click();
+  await openFromMoreMenu(page, "Simulator");
   await page.getByRole("button", { name: "Advance clock one day" }).click();
   await expect(page.getByRole("status")).toContainText("Posted your Acme Corp paycheck of $3,240.00 for 2026-11-20.");
 
@@ -35,26 +36,32 @@ test("Activity shows Sam's paycheck as Income and the agent's $340 sweep with th
   await expectNoHorizontalScroll(page);
 });
 
-test("every signed-in page has the nav bar, and it fits at 390px", async ({ page }) => {
+test("every signed-in page has the nav bar and its More menu, and both fit at 390px", async ({ page }) => {
   await restoreSeed(page);
   await page.goto("/sign-in");
   await page.getByRole("button", { name: "Sam Calloway" }).click();
   await expect(page.getByRole("heading", { name: "Home" })).toBeVisible();
 
-  for (const path of ["/", "/activity", "/forecast", "/agent", "/decision-log", "/simulator", "/setup"]) {
+  for (const path of ["/", "/activity", "/forecast", "/discoveries", "/agent", "/privacy", "/decision-log", "/simulator", "/setup"]) {
     await page.goto(path);
     const nav = page.getByRole("navigation", { name: "Main" });
-    for (const name of ["Home", "Activity", "Forecast", "Agent & limits"]) {
+    for (const name of ["Home", "Activity", "Forecast"]) {
       await expect(nav.getByRole("link", { name, exact: true })).toBeVisible();
     }
-    await expect(nav.getByRole("link", { name: "Simulator (testing tool)" })).toBeVisible();
+    await expect(nav.getByRole("link", { name: /^Discoveries/ })).toBeVisible();
+    const more = ["Agent & limits", "Privacy", "Decision log", "Simulator (testing tool)"];
+    for (const name of more) await expect(nav.getByRole("link", { name, exact: true })).toBeHidden();
+    await expectNoHorizontalScroll(page);
+
+    await nav.locator("summary", { hasText: "More" }).click();
+    for (const name of more) await expect(nav.getByRole("link", { name, exact: true })).toBeVisible();
     await expectNoHorizontalScroll(page);
   }
 
   await page.goto("/activity");
   const nav = page.getByRole("navigation", { name: "Main" });
   await expect(nav.getByRole("link", { name: "Activity", exact: true })).toHaveAttribute("aria-current", "page");
-  await nav.getByRole("link", { name: "Agent & limits", exact: true }).click();
+  await openFromMoreMenu(page, "Agent & limits");
   await expect(page.getByRole("heading", { name: "Agent & limits" })).toBeVisible();
   await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Home", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Home" })).toBeVisible();

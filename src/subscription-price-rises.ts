@@ -1,3 +1,4 @@
+import { subscriptionPurchaseAccess, subscriptionScanAccess } from "./access-log-text";
 import { localDateOf, sameDayNextMonth } from "./calendar";
 import type { Clock } from "./clock";
 import type { Customer, CustomerData, LedgerTransaction } from "./customer-data";
@@ -33,6 +34,9 @@ interface SubscriptionPurchase {
  * customer, and makes a Finding when the price went up, or when a Free-trial Merchant took its first Card purchase.
  * A customer has at most one Finding per Merchant and price, so posting the same price again finds nothing.
  *
+ * Each Card purchase it checks, and each scan of existing purchases, writes one access log entry in the same
+ * transaction (ADR 0010), but only while the switch is on and the customer has finished setup.
+ *
  * The seed posts history without ledger events reaching any agent, so it also checks every customer's existing card
  * purchases now. Returns a function that stops it.
  */
@@ -43,10 +47,15 @@ export function startSubscriptionPriceRises(deps: SearchDeps & { ledgerEvents: L
     const customer = systemData.findCustomer(event.customerId);
     if (!customer) return;
     customerData.inOneTransaction(() => {
+      // Nothing past the new transaction is read until the search may run on it, so every read it makes is logged.
+      if (!searchIsOn(deps, customer)) return;
+      const posted = customerData.getLedgerTransaction(customer, event.ledgerTransactionId);
+      const purchase = posted && subscriptionPurchase(deps, posted);
+      if (!purchase) return;
+      customerData.recordAccess(customer, subscriptionPurchaseAccess(purchase.merchant));
       const purchases = subscriptionPurchases(deps, customer);
-      const index = purchases.findIndex((purchase) => purchase.transaction.id === event.ledgerTransactionId);
-      const purchase = purchases[index];
-      if (purchase) checkPurchase(deps, customer, purchase, purchases.slice(0, index));
+      const index = purchases.findIndex((each) => each.transaction.id === purchase.transaction.id);
+      checkPurchase(deps, customer, purchase, purchases.slice(0, index));
     });
   });
 }
@@ -57,6 +66,8 @@ export function startSubscriptionPriceRises(deps: SearchDeps & { ledgerEvents: L
  */
 export function searchExistingPurchases(deps: SearchDeps, customer: Customer): void {
   deps.customerData.inOneTransaction(() => {
+    if (!searchIsOn(deps, customer)) return;
+    deps.customerData.recordAccess(customer, subscriptionScanAccess());
     const purchases = subscriptionPurchases(deps, customer);
     purchases.forEach((purchase, index) => checkPurchase(deps, customer, purchase, purchases.slice(0, index)));
   });
@@ -64,7 +75,6 @@ export function searchExistingPurchases(deps: SearchDeps, customer: Customer): v
 
 function checkPurchase(deps: SearchDeps, customer: Customer, purchase: SubscriptionPurchase, earlier: SubscriptionPurchase[]): void {
   const { clock, customerData } = deps;
-  if (!customerData.getSettings(customer)?.standingSearches.subscription_price_rises) return;
   const previous = earlier.filter((candidate) => candidate.merchant === purchase.merchant).at(-1);
   const found = previous
     ? purchase.amount > previous.amount && priceRise(previous, purchase)
@@ -85,6 +95,11 @@ function checkPurchase(deps: SearchDeps, customer: Customer, purchase: Subscript
     ledgerEventId: purchase.transaction.ledgerEventId,
     options: [{ key: "keep_paying" }, { key: "remind_me", date: sameDayNextMonth(localDateOf(clock.now())) }],
   });
+}
+
+/** Whether the customer has finished setup and has the search switched on. It reads nothing until both are true. */
+function searchIsOn(deps: SearchDeps, customer: Customer): boolean {
+  return deps.customerData.getSettings(customer)?.standingSearches.subscription_price_rises ?? false;
 }
 
 function priceRise(previous: SubscriptionPurchase, purchase: SubscriptionPurchase): Pick<NewFinding, "title" | "facts"> {
@@ -114,10 +129,16 @@ function fact(label: string, value: string): FindingFact {
 
 /** The customer's Card purchases at Subscriptions Merchants, in the order they posted. */
 function subscriptionPurchases(deps: SearchDeps, customer: Customer): SubscriptionPurchase[] {
-  const merchantClearing = deps.systemData.ensureSystemAccount("merchant");
   return deps.customerData.listLedgerTransactions(customer).flatMap((transaction) => {
-    const paid = transaction.entries.find((entry) => entry.accountId === merchantClearing && entry.amount > 0);
-    if (!paid || transaction.category !== "Subscriptions" || transaction.counterparty === null) return [];
-    return [{ transaction, merchant: transaction.counterparty, amount: cents(paid.amount) }];
+    const purchase = subscriptionPurchase(deps, transaction);
+    return purchase ? [purchase] : [];
   });
+}
+
+/** The ledger transaction as a Card purchase at a Subscriptions Merchant, or undefined if it isn't one. */
+function subscriptionPurchase(deps: SearchDeps, transaction: LedgerTransaction): SubscriptionPurchase | undefined {
+  const merchantClearing = deps.systemData.ensureSystemAccount("merchant");
+  const paid = transaction.entries.find((entry) => entry.accountId === merchantClearing && entry.amount > 0);
+  if (!paid || transaction.category !== "Subscriptions" || transaction.counterparty === null) return undefined;
+  return { transaction, merchant: transaction.counterparty, amount: cents(paid.amount) };
 }

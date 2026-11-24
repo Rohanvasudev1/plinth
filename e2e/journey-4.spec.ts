@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import { restoreSeed } from "./restore-seed";
 import { expectNoHorizontalScroll } from "./page-checks";
 import { advanceClock } from "./simulator";
+import { openFromMoreMenu } from "./nav";
 
 test.use({ viewport: { width: 390, height: 844 } });
 
@@ -70,7 +71,7 @@ test("Journey 4: Sam sends a Mission, asks for the Agent's view, is reminded, ke
   await expect(finding).not.toContainText("Snoozed until");
   await expect(finding.getByRole("button", { name: /Not now/ })).toBeVisible();
 
-  await page.getByRole("link", { name: "Decision log" }).click();
+  await openFromMoreMenu(page, "Decision log");
   const reopened = page.getByRole("article", { name: `Showed you “${MISSION_FINDING}” again` });
   await expect(reopened).toBeVisible();
   await reopened.getByText("Why?").click();

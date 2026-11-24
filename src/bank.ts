@@ -1,3 +1,4 @@
+import type { AccessLogEntry } from "./access-log";
 import { readActivity, type ActivityRow } from "./activity";
 import { readForecastPage, type ForecastPage } from "./forecast-page";
 import { startBufferAgent } from "./buffer-agent";
@@ -28,8 +29,8 @@ import { bufferRuleFor } from "./rules";
 import { createRuleChanges, type RuleChanges } from "./rule-changes";
 import { setAgentPaused } from "./pause";
 import { seedDemoData } from "./seed";
-import type { Settings } from "./settings";
-import { changeSettings, type SettingsChange } from "./settings-changes";
+import type { DataChoice, DataChoices, Settings } from "./settings";
+import { changeSettings, setDataChoice, type SettingsChange } from "./settings-changes";
 import { applySetup, readSetupAnswers } from "./setup";
 import { STANDARD_SETUP, type SetupAnswers } from "./setup-answers";
 import { createSimulator, type Simulator } from "./simulator";
@@ -48,6 +49,7 @@ export type { ChooseOptionOutcome } from "./finding-choices";
 export type { AgentsViewOnPage, DiscoveriesPage, FindingOnPage } from "./discoveries-page";
 export type { StartedMission } from "./mission-runner";
 export type { Mission } from "./missions";
+export type { AccessLogEntry, AccessReader } from "./access-log";
 
 export interface GoalProgress {
   target: Cents;
@@ -90,6 +92,14 @@ export interface HomeView {
   agentActions: AgentActionOnHome[];
   /** Agent actions the customer hasn't been shown yet, newest first, for the toast. */
   unseenAgentActions: Decision[];
+}
+
+/** The Privacy page: the customer's Data choices and their access log. */
+export interface PrivacyView {
+  /** Null for a customer who hasn't finished setup, so has no settings record to hold them. */
+  dataChoices: DataChoices | null;
+  /** Every read of the customer's data by anything other than their own page views, newest first. */
+  accessLog: AccessLogEntry[];
 }
 
 export class UnknownCustomerError extends Error {
@@ -190,6 +200,13 @@ export interface Bank extends Simulator, RuleChanges {
   stopMission(customer: Customer, missionId: number): Mission;
   /** The customer's Mission with this id, or undefined if it doesn't exist or isn't theirs. */
   readMission(customer: Customer, missionId: number): Mission | undefined;
+  /** The Privacy page: the customer's Data choices and access log. Reading it writes no access log entry. */
+  readPrivacy(customer: Customer): PrivacyView;
+  /**
+   * Turns one of the customer's Data choices on or off, writing the next settings version and a Decision log entry.
+   * Asking for the state it is already in changes nothing. Throws SettingsError, saving nothing, before setup.
+   */
+  setDataChoice(customer: Customer, choice: DataChoice, on: boolean): Settings;
 }
 
 /**
@@ -286,6 +303,11 @@ export function createBank(deps: {
     startMission: (customer, question) => missions.start(customer, question),
     stopMission: (customer, missionId) => missions.stop(customer, missionId),
     readMission: (customer, missionId) => customerData.getMission(customer, missionId),
+    setDataChoice: (customer, choice, on) => setDataChoice(customerData, customer, choice, on),
+    readPrivacy: (customer) => ({
+      dataChoices: customerData.getSettings(customer)?.dataChoices ?? null,
+      accessLog: customerData.listAccessLog(customer),
+    }),
     readHome(customer) {
       const accounts = customerData.listAccounts(customer);
       const checking = accounts.find((account) => account.kind === "checking");

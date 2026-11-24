@@ -2,6 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { expectNoHorizontalScroll } from "./page-checks";
 import { restoreSeed } from "./restore-seed";
 import { turnOnAgentAskingFirst } from "./setup-survey";
+import { openFromMoreMenu } from "./nav";
 
 test.use({ viewport: { width: 390, height: 844 } });
 
@@ -43,7 +44,7 @@ test("Sam stops a running Mission, which keeps nothing, and a second Mission is 
   await expect(ended.getByRole("button", { name: "Try again" })).toHaveCount(0);
   await expectNoHorizontalScroll(page);
 
-  await page.getByRole("link", { name: "Decision log" }).click();
+  await openFromMoreMenu(page, "Decision log");
   const entry = page.getByRole("article", { name: `Stopped looking into “${RUN_LONG}”` });
   await expect(entry).toContainText("Stopped");
   await entry.getByText("Why?").click();
@@ -76,10 +77,10 @@ test("Sam picks the Move a Mission Finding offers, and it moves the money", asyn
   // With Ask me before everything, Sam's paycheck stays in Checking, so the House fund Mission has money to offer.
   await page.goto("/sign-in");
   await page.getByRole("button", { name: "Sam Calloway" }).click();
-  await page.getByRole("link", { name: "Agent & limits" }).click();
+  await openFromMoreMenu(page, "Agent & limits");
   await page.getByRole("link", { name: "Run setup again" }).click();
   await turnOnAgentAskingFirst(page);
-  await page.getByRole("link", { name: "Simulator" }).click();
+  await openFromMoreMenu(page, "Simulator");
   await page.getByRole("button", { name: "Advance clock one day" }).click();
   await expect(page.getByRole("status")).toContainText("Posted your Acme Corp paycheck");
 

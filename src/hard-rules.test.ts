@@ -47,6 +47,27 @@ const rules = [
   },
 ];
 
+/**
+ * ADR 0010: an action that writes a Decision log entry, a Finding or a Mission ending also writes its own access log
+ * entry. The exceptions record only a change the customer made, which is not a read by someone else; the seed; and
+ * the sweep module, which both the buffer agent and a picked Move call, so the buffer agent writes the sweep check's
+ * entry.
+ */
+const RECORDS_AN_ACTION = /customerData\.(recordDecision|createFinding|endMission)\(/;
+const WRITES_ACCESS_LOG = /customerData\.recordAccess\(/;
+const NO_ACCESS_LOG_NEEDED = [
+  "settings-changes.ts",
+  "goal-changes.ts",
+  "pause.ts",
+  "rule-changes.ts",
+  "setup.ts",
+  "undo.ts",
+  "finding-choices.ts",
+  "finding-reminders.ts",
+  "seed.ts",
+  "sweep.ts",
+];
+
 const E2E = path.join(__dirname, "..", "e2e");
 const e2eSpecs = readdirSync(E2E)
   .filter((name) => name.endsWith(".spec.ts"))
@@ -61,6 +82,14 @@ describe("hard rules", () => {
       expect(offenders).toEqual([]);
     });
   }
+
+  it("writes an access log entry in every module that writes a Decision log entry, a Finding or a Mission ending (ADR 0010)", () => {
+    const offenders = files
+      .filter((file) => !NO_ACCESS_LOG_NEEDED.includes(file.name))
+      .filter((file) => RECORDS_AN_ACTION.test(file.text) && !WRITES_ACCESS_LOG.test(file.text))
+      .map((file) => file.name);
+    expect(offenders).toEqual([]);
+  });
 
   it("checks sideways scrolling in end-to-end tests only through expectNoHorizontalScroll in e2e/page-checks.ts", () => {
     expect(e2eSpecs.filter((spec) => spec.text.includes("scrollWidth")).map((spec) => spec.name)).toEqual([]);

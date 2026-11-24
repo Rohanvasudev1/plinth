@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { restoreSeed } from "./restore-seed";
 import { expectNoHorizontalScroll } from "./page-checks";
+import { openFromMoreMenu } from "./nav";
 
 test.use({ viewport: { width: 390, height: 844 } });
 
@@ -59,7 +60,7 @@ test("Alex answers the Setup survey on Home at phone width, and gets a Goal acco
   await expect(travel.getByRole("progressbar")).toHaveCount(0);
   await expect(page.getByRole("region", { name: "House fund" })).toContainText("$0.00");
 
-  await page.getByRole("link", { name: "Agent & limits" }).click();
+  await openFromMoreMenu(page, "Agent & limits");
   const rules = page.getByRole("region", { name: "Your rules" });
   await expect(rules).toContainText("Keep a $1,000 buffer in Checking");
   await expect(rules).toContainText("move anything above it to Travel fund");
@@ -73,7 +74,7 @@ test("Alex answers the Setup survey on Home at phone width, and gets a Goal acco
   await page.getByRole("link", { name: "Home" }).click();
   await expect(page.getByRole("region", { name: "Travel fund" }).getByRole("progressbar")).toBeVisible();
 
-  await page.getByRole("link", { name: "Decision log" }).click();
+  await openFromMoreMenu(page, "Decision log");
   await expect(page.getByRole("article").filter({ hasText: "Saved your settings from the Setup survey" })).toBeVisible();
   await expect(page.getByRole("article").filter({ hasText: "Set the Travel fund target to $3,000" })).toBeVisible();
 });
@@ -98,7 +99,7 @@ test("Skip applies standard rules with no sweep target, and Run setup again on A
   await page.getByRole("button", { name: "Skip for now" }).click();
 
   await expect(page.getByRole("heading", { name: "Home" })).toBeVisible();
-  await page.getByRole("link", { name: "Agent & limits" }).click();
+  await openFromMoreMenu(page, "Agent & limits");
   const rules = page.getByRole("region", { name: "Your rules" });
   await expect(rules).toContainText("Keep a $1,500 buffer in Checking");
   await expect(rules).toContainText("No savings goal to move anything above it to");
@@ -112,6 +113,6 @@ test("Skip applies standard rules with no sweep target, and Run setup again on A
   await page.getByRole("button", { name: "Turn on my agent" }).click();
 
   await expect(page.getByRole("region", { name: "Emergency cushion" })).toContainText("$0.00");
-  await page.getByRole("link", { name: "Agent & limits" }).click();
+  await openFromMoreMenu(page, "Agent & limits");
   await expect(rules).toContainText("move anything above it to Emergency cushion");
 });

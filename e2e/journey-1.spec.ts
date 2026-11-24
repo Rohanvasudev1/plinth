@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { restoreSeed } from "./restore-seed";
 import { expectNoHorizontalScroll } from "./page-checks";
+import { openFromMoreMenu } from "./nav";
 
 test.use({ viewport: { width: 390, height: 844 } });
 
@@ -11,7 +12,7 @@ test("Journey 1: Sam's paycheck lands, the agent sweeps $340, Sam checks Why and
   await expect(page.getByRole("heading", { name: "Home" })).toBeVisible();
 
   // The clock starts on Thursday 19 November. Moving it to Friday 20 November posts Sam's paycheck.
-  await page.getByRole("link", { name: "Simulator" }).click();
+  await openFromMoreMenu(page, "Simulator");
   await page.getByRole("button", { name: "Advance clock one day" }).click();
   await expect(page.getByRole("status")).toContainText("Posted your Acme Corp paycheck of $3,240.00 for 2026-11-20.");
 
@@ -41,7 +42,7 @@ test("Journey 1: Sam's paycheck lands, the agent sweeps $340, Sam checks Why and
   await page.reload();
   await expect(page.getByRole("status", { name: "New from your agent" })).toHaveCount(0);
 
-  await page.getByRole("link", { name: "Decision log" }).click();
+  await openFromMoreMenu(page, "Decision log");
   const reversal = page.getByRole("article", { name: "Moved $340 back to Checking" });
   await expect(reversal).toContainText("Reversed");
   await expect(reversal).toContainText(" · You · Rule #");

@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { expectNoHorizontalScroll } from "./page-checks";
 import { restoreSeed } from "./restore-seed";
+import { openFromMoreMenu } from "./nav";
 
 test.use({ viewport: { width: 390, height: 844 } });
 
@@ -42,7 +43,7 @@ test("Sam asks a suggested question, sees the Mission run, then reads its Findin
   await expect(report).toContainText("Without pay, 3 months of Usual spending is $15,324.00.");
   await expectNoHorizontalScroll(page);
 
-  await page.getByRole("link", { name: "Decision log" }).click();
+  await openFromMoreMenu(page, "Decision log");
   const entry = page.getByRole("article", { name: /Reported back: “3 months without pay/ });
   await expect(entry).toContainText("Reported");
   await entry.getByText("Why?").click();

@@ -1,3 +1,4 @@
+import { missionAccess } from "./access-log-text";
 import { localDateOf } from "./calendar";
 import type { Customer } from "./customer-data";
 import { cents } from "./money";
@@ -48,13 +49,15 @@ export interface MissionRunner {
    * If the Finding passes its checks, one database transaction stores it, ends the Mission as reported and writes a
    * Reported Decision log entry linking it. If the model fails, the Finding fails its checks, the Mission runs past
    * its time limit or asks for more than its tool calls, it ends as failed with a Failed entry, and no Finding is
-   * kept. Throws MissionError, starting nothing, for a blank or overlong question, while another of the customer's
+   * kept. However it ends, the transaction that ends it also writes one access log entry listing what it read
+   * (ADR 0010). Throws MissionError, starting nothing, for a blank or overlong question, while another of the customer's
    * Missions runs, or once they have sent the day's most Missions by the simulated clock.
    */
   start(customer: Customer, question: string): StartedMission;
   /**
    * Stops the customer's running Mission: ends it as stopped, keeping nothing it found, and writes a Stopped entry.
-   * A Mission that has already ended is returned unchanged. Throws MissionError if it isn't the customer's.
+   * A stop writes one access log entry, as every ending does. A Mission that has already ended is returned
+   * unchanged. Throws MissionError if it isn't the customer's.
    */
   stop(customer: Customer, missionId: number): Mission;
 }
@@ -171,6 +174,7 @@ export function createMissionRunner(deps: MissionDeps): MissionRunner {
           why: reportedMissionWhy(asked, reported.readList, created.title),
           findingId: created.id,
         });
+        customerData.recordAccess(customer, missionAccess(asked, reported.readList));
         return customerData.getMission(customer, missionId) ?? reported;
       });
     }
@@ -185,6 +189,7 @@ export function createMissionRunner(deps: MissionDeps): MissionRunner {
           why: failedMissionWhy(asked, failed.readList, reason),
           findingId: null,
         });
+        customerData.recordAccess(customer, missionAccess(asked, failed.readList));
         return failed;
       });
     }
@@ -205,6 +210,7 @@ export function createMissionRunner(deps: MissionDeps): MissionRunner {
         why: stoppedMissionWhy(mission.question, ended.readList),
         findingId: null,
       });
+      customerData.recordAccess(customer, missionAccess(mission.question, ended.readList));
       return ended;
     });
     settlers.get(missionId)?.(stopped);
