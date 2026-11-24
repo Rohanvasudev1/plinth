@@ -4,6 +4,7 @@ import { DECISION_RESULTS } from "../decisions";
 import { FINDING_KINDS, FINDING_STATES, STANDING_SEARCHES } from "../findings";
 import { ACCESS_READERS } from "../access-log";
 import { MISSION_STATES } from "../missions";
+import { LINKED_ACCOUNT_TYPES } from "../open-banking";
 import { SAVINGS_GOALS } from "../settings";
 import { check, index, integer, sqliteTable, text, uniqueIndex, type AnySQLiteColumn } from "drizzle-orm/sqlite-core";
 
@@ -412,4 +413,33 @@ export const accessLogTable = sqliteTable(
     why: text("why").notNull(),
   },
   (table) => [index("access_log_customer_id").on(table.customerId)],
+);
+
+
+/**
+ * A Linked account: an account the customer holds at an Institution, which Plinth can see but not move money in or
+ * out of. It holds a copy of the balance from the last Sync and the customer's Consent, from `consent_start` to
+ * `consent_end` (YYYY-MM-DD dates in the bank's time zone). It has no ledger entries. Unlinking deletes the row.
+ * `institution_account` names the open banking adapter's account, at most one Linked account each per customer.
+ */
+export const linkedAccountsTable = sqliteTable(
+  "linked_accounts",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    customerId: integer("customer_id")
+      .notNull()
+      .references(() => customersTable.id),
+    institutionAccount: text("institution_account").notNull(),
+    institution: text("institution").notNull(),
+    type: text("type", { enum: LINKED_ACCOUNT_TYPES }).notNull(),
+    /** Below zero when owed. */
+    balanceCents: integer("balance_cents").notNull(),
+    syncedAtMs: integer("synced_at_ms").notNull(),
+    consentStart: text("consent_start").notNull(),
+    consentEnd: text("consent_end").notNull(),
+  },
+  (table) => [
+    uniqueIndex("linked_accounts_customer_institution_account").on(table.customerId, table.institutionAccount),
+    check("linked_accounts_consent_order", sql`${table.consentStart} < ${table.consentEnd}`),
+  ],
 );

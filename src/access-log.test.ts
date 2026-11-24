@@ -27,6 +27,11 @@ function accessLogOf(bank: Bank, customer: Customer) {
   return bank.readPrivacy(customer).accessLog;
 }
 
+/** Only the entries the customer's agent wrote, leaving out Plinth's Syncs of their Linked accounts. */
+function agentEntriesOf(bank: Bank, customer: Customer) {
+  return accessLogOf(bank, customer).filter((entry) => entry.who === "agent");
+}
+
 describe("Access log: the buffer agent's sweep check", () => {
   it("writes one entry by Your agent when the sweep is Done", () => {
     const bank = bankAt(SAM_PAYDAY_9AM);
@@ -99,14 +104,15 @@ describe("Access log: the buffer agent's sweep check", () => {
     // Sam is paid on 20 Nov and Priya on 25 Nov.
     for (let day = 0; day < 6; day += 1) bank.advanceClock();
 
-    // Each log holds the bank start's scan of existing purchases, then only that customer's own paycheck check.
+    // Each log's agent entries are the bank start's scan of existing purchases, then only that customer's own paycheck
+    // check. Sam's log also holds Plinth's Syncs of his Linked accounts.
     const scan = "Your Card purchases at Subscriptions Merchants";
     const paycheckCheck = "Your checking and savings balances, bills before payday and buffer Rule";
-    expect(accessLogOf(bank, sam).map((entry) => [entry.what, entry.why.match(/\$[\d,.]+ from Acme Corp/)?.[0]])).toEqual([
+    expect(agentEntriesOf(bank, sam).map((entry) => [entry.what, entry.why.match(/\$[\d,.]+ from Acme Corp/)?.[0]])).toEqual([
       [paycheckCheck, "$3,240.00 from Acme Corp"],
       [scan, undefined],
     ]);
-    expect(accessLogOf(bank, priya).map((entry) => [entry.what, entry.why.match(/\$[\d,.]+ from Acme Corp/)?.[0]])).toEqual([
+    expect(agentEntriesOf(bank, priya).map((entry) => [entry.what, entry.why.match(/\$[\d,.]+ from Acme Corp/)?.[0]])).toEqual([
       [paycheckCheck, "$2,480.00 from Acme Corp"],
       [scan, undefined],
     ]);
@@ -168,7 +174,7 @@ describe("Access log: Subscription price rises", () => {
     const bank = openTestBank();
 
     for (const name of ["Sam Calloway", "Priya Natarajan"]) {
-      expect(accessLogOf(bank, signInByName(bank, name))).toMatchObject([
+      expect(agentEntriesOf(bank, signInByName(bank, name))).toMatchObject([
         { who: "agent", what: "Your Card purchases at Subscriptions Merchants" },
       ]);
     }

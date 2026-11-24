@@ -447,3 +447,10 @@ table.categories { width: 100%; border-collapse: collapse; }
 .mission { display: flex; flex-direction: column; gap: 2px; overflow-wrap: anywhere; }
 .pill.reported { color: var(--good); border-color: var(--good); }
 .pill.failed { color: var(--bad); border-color: var(--bad); }
+
+/* All accounts and Link another bank */
+.accounts .account-detail { font-size: 0.82rem; margin-top: 2px; }
+.account-actions { display: flex; gap: 12px; margin-top: 4px; }
+.linkable { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.linkable-account { display: flex; flex-direction: column; gap: 8px; }
+.linkable-account p { margin: 0; }

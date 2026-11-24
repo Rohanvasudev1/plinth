@@ -41,6 +41,11 @@ const rules = [
     allowed: ["rule-changes.ts", "settings-changes.ts", "goal-changes.ts", "pause.ts", "setup.ts", "seed.ts"],
   },
   {
+    rule: "links, renews and unlinks Linked accounts only in the module that also writes the Decision log entry",
+    pattern: /customerData\.(createLinkedAccount|saveConsent|deleteLinkedAccount)\(/,
+    allowed: ["linked-account-changes.ts"],
+  },
+  {
     rule: "writes negative amounts with formatDollars, never a hand-typed minus sign (U+2212)",
     pattern: /\u2212/,
     allowed: [],

@@ -125,3 +125,10 @@ export function sameDayNextMonth(date: LocalDate): LocalDate {
   const firstOfNext = firstOfNextMonth(date);
   return addDays(firstOfNext, Math.min(dayOfMonth(date), daysInMonth(firstOfNext)) - 1);
 }
+
+/** The same day of the same month a year later, or 28 Feb when `date` is 29 Feb. */
+export function sameDayNextYear(date: LocalDate): LocalDate {
+  const { year, month, day } = partsOf(date);
+  const firstOfThatMonth = localDate(`${year + 1}-${String(month).padStart(2, "0")}-01`);
+  return addDays(firstOfThatMonth, Math.min(day, daysInMonth(firstOfThatMonth)) - 1);
+}

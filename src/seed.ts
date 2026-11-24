@@ -1,11 +1,16 @@
+import { syncAccess } from "./access-log-text";
+import { SIMULATION_START } from "./app-clock";
 import { dayOfMonth, localDate, localDateOf, sameMonth, sameTimeNextDay, type LocalDate } from "./calendar";
 import { fixedClock, type Clock } from "./clock";
 import type { Account, Customer, CustomerData, NewAccount, NewPayroll, NewScheduledBill } from "./customer-data";
+import { institutionAccountName } from "./linked-account-text";
 import { cents, type Cents } from "./money";
+import { OPEN_BANKING_FROM, openBankingAdapter, type InstitutionAccountKey } from "./open-banking";
 import { STANDING_SEARCHES_ON, type GoalPreference, type SettingsChoices } from "./settings";
 import { billPaymentTransaction, createSimulator, paycheckTransaction, type MerchantKey } from "./simulator";
 import { isBillDue, isOnPayCycle } from "./schedules";
 import type { SystemData } from "./system-data";
+import type { Consent } from "./linked-accounts";
 
 /**
  * A Card purchase from checking on a day of the month, from 1 to 28 so it falls in every month, posted only on
@@ -47,6 +52,8 @@ interface SeedCustomer {
   setup: { buffer: Cents; goal: GoalPreference } | null;
   /** None for a customer who is new to the bank. */
   history: SeedHistory | null;
+  /** The Institution accounts the customer has linked, each with this Consent and last synced at the simulation start. */
+  linkedAccounts: { accounts: InstitutionAccountKey[]; consent: Consent } | null;
 }
 
 /**
@@ -186,6 +193,10 @@ const SEED_CUSTOMERS: SeedCustomer[] = [
       novemberPurchases: SAMS_NOVEMBER_PURCHASES,
       monthlyTransfer: { day: 8, amount: cents(1_750_00) },
     },
+    linkedAccounts: {
+      accounts: ["summit-card", "northwind", "keystone-student-lending"],
+      consent: { start: localDate("2026-05-23"), end: localDate("2027-05-23") },
+    },
   },
   {
     name: "Priya Natarajan",
@@ -206,6 +217,7 @@ const SEED_CUSTOMERS: SeedCustomer[] = [
       novemberPurchases: [],
       monthlyTransfer: { day: 14, amount: cents(1_000_00) },
     },
+    linkedAccounts: null,
   },
   {
     name: "Alex Okafor",
@@ -214,6 +226,7 @@ const SEED_CUSTOMERS: SeedCustomer[] = [
     bills: [],
     setup: null,
     history: null,
+    linkedAccounts: null,
   },
 ];
 
@@ -234,6 +247,7 @@ export function seedDemoData(system: SystemData, data: CustomerData, customerDat
   const ledger = customerDataOn(historyClock);
   const simulator = createSimulator({ clock: historyClock, systemData: system, customerData: ledger });
   const openingBalances = system.ensureSystemAccount("openingBalances");
+  const atSimulationStart = customerDataOn(fixedClock(SIMULATION_START));
   data.inOneTransaction(() => {
     for (const seed of SEED_CUSTOMERS) {
       historyClock.setTo(HISTORY_OPENS);
@@ -256,6 +270,7 @@ export function seedDemoData(system: SystemData, data: CustomerData, customerDat
         }
       }
       if (seed.history) postHistory(customer, seed.history);
+      if (seed.linkedAccounts) linkAccounts(customer, seed.linkedAccounts);
       if (!seed.setup) continue;
       data.createRule(customer, {
         kind: "buffer",
@@ -266,6 +281,23 @@ export function seedDemoData(system: SystemData, data: CustomerData, customerDat
       data.saveSettings(customer, seedSettings(seed.setup.goal));
     }
   });
+
+  /** Stores the customer's Linked accounts as synced at the simulation start, with one access log entry per Sync. */
+  function linkAccounts(customer: Customer, { accounts, consent }: NonNullable<SeedCustomer["linkedAccounts"]>): void {
+    const held = openBankingAdapter.listAccounts(customer);
+    for (const key of accounts) {
+      const account = held.find((candidate) => candidate.key === key);
+      if (!account) throw new Error(`${customer.name} holds no Institution account ${key}`);
+      atSimulationStart.createLinkedAccount(customer, {
+        institutionAccount: key,
+        institution: account.institution,
+        type: account.type,
+        balance: openBankingAdapter.balanceOn(customer, key, OPEN_BANKING_FROM),
+        consent,
+      });
+      atSimulationStart.recordAccess(customer, syncAccess(institutionAccountName(account)));
+    }
+  }
 
   /** Posts each date's paychecks, then bills, then Card purchases, then the transfer, at 9am on that date. */
   function postHistory(customer: Customer, history: SeedHistory): void {
