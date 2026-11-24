@@ -85,6 +85,13 @@
       "when": 1795529272435,
       "tag": "0011_goal_accounts",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1795538489421,
+      "tag": "0012_counterparty_and_category",
+      "breakpoints": true
     }
   ]
 }

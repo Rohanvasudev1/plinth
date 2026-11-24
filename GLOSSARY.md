@@ -148,6 +148,10 @@ _Avoid_: Rollback, cancel
 The kind of spending a merchant or Scheduled bill belongs to, such as Groceries or Housing.
 _Avoid_: Tag, label, bucket
 
+**Counterparty**:
+Who a ledger transaction's money moved to or from: a Merchant, a Scheduled bill's payee, an Employer, or, for a move between the customer's own accounts, the account the money went to.
+_Avoid_: Other party, recipient
+
 **Merchant**:
 A simulated business the customer pays by Card purchase, with a fixed Category.
 _Avoid_: Vendor, payee, shop

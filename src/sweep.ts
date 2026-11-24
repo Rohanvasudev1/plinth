@@ -142,6 +142,8 @@ export function recordSweep(
   const posted = customerData.postLedgerTransaction(customer, {
     idempotencyKey: entry.idempotencyKey,
     description: `Sweep to ${savings.name}`,
+    counterparty: savings.name,
+    category: "Savings",
     entries: [
       { accountId: checking.id, amount: cents(-amount) },
       { accountId: savings.id, amount },

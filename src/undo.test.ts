@@ -67,7 +67,7 @@ describe("Undo", () => {
     const { bank, sam, sweep } = afterSamsSweep();
     const [, houseFund] = bank.customerData.listAccounts(sam);
     if (!houseFund) throw new Error("Sam's House fund is missing");
-    bank.cardPurchase(sam, { accountId: houseFund.id, amount: cents(12_500_00), idempotencyKey: "card:drain" });
+    bank.cardPurchase(sam, { accountId: houseFund.id, merchant: "harbor-and-pine-goods", amount: cents(12_500_00), idempotencyKey: "card:drain" });
 
     expect(bank.undo(sam, sweep.id)).toEqual({
       ok: false,

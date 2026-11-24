@@ -234,7 +234,7 @@ describe("Card purchase", () => {
     const { sam, houseFund } = samWithAccounts(bank);
     const merchant = bank.systemData.ensureSystemAccount("merchant");
 
-    bank.cardPurchase(sam, { accountId: houseFund.id, amount: cents(12_000_00), idempotencyKey: "card:test-1" });
+    bank.cardPurchase(sam, { accountId: houseFund.id, merchant: "harbor-and-pine-goods", amount: cents(12_000_00), idempotencyKey: "card:test-1" });
 
     expect(samsBalances(bank)).toEqual({ checking: 227_00, houseFund: 400_00 });
     expect(bank.customerData.listLedgerTransactions(sam).at(-1)?.entries).toEqual([
@@ -246,7 +246,7 @@ describe("Card purchase", () => {
   it("changes nothing when the same purchase is submitted twice", () => {
     const bank = withoutSweeps(openTestBank());
     const { sam, checking } = samWithAccounts(bank);
-    const purchase = { accountId: checking.id, amount: cents(19_99), idempotencyKey: "card:test-2" };
+    const purchase = { accountId: checking.id, merchant: "harbor-and-pine-goods" as const, amount: cents(19_99), idempotencyKey: "card:test-2" };
 
     bank.cardPurchase(sam, purchase);
     const repeat = bank.cardPurchase(sam, purchase);
@@ -258,7 +258,7 @@ describe("Card purchase", () => {
   it("treats a repeat of a purchase that emptied the account as already done, not declined", () => {
     const bank = withoutSweeps(openTestBank());
     const { sam, houseFund } = samWithAccounts(bank);
-    const purchase = { accountId: houseFund.id, amount: cents(12_400_00), idempotencyKey: "card:test-5" };
+    const purchase = { accountId: houseFund.id, merchant: "harbor-and-pine-goods" as const, amount: cents(12_400_00), idempotencyKey: "card:test-5" };
 
     bank.cardPurchase(sam, purchase);
 
@@ -271,7 +271,7 @@ describe("Card purchase", () => {
     const { sam, checking } = samWithAccounts(bank);
 
     expect(() =>
-      bank.cardPurchase(sam, { accountId: checking.id, amount: cents(227_01), idempotencyKey: "card:test-3" }),
+      bank.cardPurchase(sam, { accountId: checking.id, merchant: "harbor-and-pine-goods", amount: cents(227_01), idempotencyKey: "card:test-3" }),
     ).toThrow(CardDeclinedError);
     expect(samsBalances(bank).checking).toBe(227_00);
   });
@@ -282,7 +282,7 @@ describe("Card purchase", () => {
 
     for (const amount of [0, -5_00]) {
       expect(() =>
-        bank.cardPurchase(sam, { accountId: checking.id, amount: cents(amount), idempotencyKey: `card:zero${amount}` }),
+        bank.cardPurchase(sam, { accountId: checking.id, merchant: "harbor-and-pine-goods", amount: cents(amount), idempotencyKey: `card:zero${amount}` }),
       ).toThrow(CardDeclinedError);
     }
     expect(samsBalances(bank).checking).toBe(227_00);
@@ -294,7 +294,7 @@ describe("Card purchase", () => {
     const priya = signInByName(bank, "Priya Natarajan");
 
     expect(() =>
-      bank.cardPurchase(priya, { accountId: houseFund.id, amount: cents(1_00), idempotencyKey: "card:test-4" }),
+      bank.cardPurchase(priya, { accountId: houseFund.id, merchant: "harbor-and-pine-goods", amount: cents(1_00), idempotencyKey: "card:test-4" }),
     ).toThrow(CardDeclinedError);
     expect(samsBalances(bank).houseFund).toBe(12_400_00);
   });

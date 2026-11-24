@@ -6,7 +6,7 @@ import { localDateOf } from "@/calendar";
 import { formatDollars, parseDollars } from "@/money";
 import type { Customer } from "@/customer-data";
 import { requireCustomer } from "@/session";
-import { CardDeclinedError, type PostedTransaction } from "@/simulator";
+import { CardDeclinedError, isMerchantKey, MERCHANTS, type PostedTransaction } from "@/simulator";
 
 /** What the last Simulator button did, shown under the buttons. */
 export interface SimulatorResult {
@@ -56,15 +56,17 @@ export async function cardPurchase(_previous: SimulatorResult | null, form: Form
   } catch {
     return { ok: false, message: "Enter an amount in dollars, such as 25 or 25.50." };
   }
+  const merchant = String(form.get("merchant") ?? "");
+  if (!isMerchantKey(merchant)) return { ok: false, message: "Pick a Merchant." };
   const accountId = Number(form.get("accountId"));
   const purchaseId = String(form.get("purchaseId") ?? "");
   if (purchaseId === "") return { ok: false, message: "Reload the page and try again." };
   try {
-    const posted = bank.cardPurchase(customer, { accountId, amount, idempotencyKey: `card:${purchaseId}` });
+    const posted = bank.cardPurchase(customer, { accountId, merchant, amount, idempotencyKey: `card:${purchaseId}` });
     revalidatePath("/", "layout");
     const account = bank.customerData.getAccount(customer, accountId);
     return posted.created
-      ? { ok: true, message: `Spent ${formatDollars(amount)} from ${account?.name ?? "the account"} at the Merchant.` }
+      ? { ok: true, message: `Spent ${formatDollars(amount)} from ${account?.name ?? "the account"} at ${MERCHANTS[merchant].name}.` }
       : { ok: true, message: "That purchase already went through. Nothing changed." };
   } catch (error) {
     if (error instanceof CardDeclinedError) return { ok: false, message: `Declined: ${error.message}.` };
