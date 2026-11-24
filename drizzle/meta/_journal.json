@@ -92,6 +92,13 @@
       "when": 1795538489421,
       "tag": "0012_counterparty_and_category",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1795544645942,
+      "tag": "0013_findings_for_every_kind",
+      "breakpoints": true
     }
   ]
 }

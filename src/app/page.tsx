@@ -5,12 +5,12 @@ import { getAppBank } from "@/app-bank";
 import type { AgentActionOnHome, BillsBeforePayday, HomeAccount, SafeToSpend } from "@/bank";
 import { formatLocalDate, type LocalDate } from "@/calendar";
 import { cents, formatDollars } from "@/money";
-import { guardrailName, type Decision } from "@/decisions";
-import { describeOption, findingStateLabel, type Finding } from "@/findings";
+import type { Decision } from "@/decisions";
 import { requireCustomer } from "@/session";
 import { STANDARD_SETUP } from "@/setup-answers";
 import { SetupSurvey } from "./setup/setup-survey";
-import { AgentActionsToast, FindingOptions, UndoButton } from "./agent-action-controls";
+import { AgentActionsToast, UndoButton } from "./agent-action-controls";
+import { FindingCard } from "./finding-card";
 import { ForecastChart } from "./forecast-chart";
 import { NavBar } from "./nav-bar";
 import { WhyPanel } from "./why-panel";
@@ -64,55 +64,6 @@ function AgentActionsCard({ actions }: { actions: AgentActionOnHome[] }) {
           ))}
         </ol>
       )}
-    </section>
-  );
-}
-
-/** A sweep Finding's heading: the fact it reports, how much is above the Buffer, without leaning to an Option. */
-function findingTitle(finding: Finding, accountName: (accountId: number) => string): string {
-  const move = finding.options.find((option) => option.key === "move");
-  if (!move) return "Your agent found something";
-  return `${formatDollars(move.amount)} above your Buffer in ${accountName(move.fromAccountId)}`;
-}
-
-function FindingCard({ finding, accountName }: { finding: Finding; accountName: (accountId: number) => string }) {
-  const headingId = `finding-${finding.id}`;
-  const chosen = finding.options.find((option) => option.key === finding.chosenOption);
-  return (
-    <section className="card finding" aria-labelledby={headingId}>
-      <div className="decision-head">
-        <span className="finding-tag">Your agent is asking</span>
-        <span className={`pill ${finding.state}`}>
-          {findingStateLabel(finding.state)}
-        </span>
-      </div>
-      <h2 id={headingId}>{findingTitle(finding, accountName)}</h2>
-      <p className="muted">
-        <time dateTime={finding.at.toISOString()}>{actionTimeFormat.format(finding.at)}</time>
-      </p>
-      <dl className="facts">
-        {finding.facts.map((fact) => (
-          <div key={fact.label}>
-            <dt>{fact.label}</dt>
-            <dd>{fact.value}</dd>
-          </div>
-        ))}
-      </dl>
-      {finding.state === "open" && (
-        <>
-          {finding.refusal && (
-            <p className="result refused">
-              Not moved. The {guardrailName(finding.refusal.guardrail)} guardrail refused it: {finding.refusal.reason}.
-            </p>
-          )}
-          <FindingOptions
-            findingId={finding.id}
-            options={finding.options.map((option) => ({ key: option.key, ...describeOption(option, accountName) }))}
-          />
-        </>
-      )}
-      {chosen && <p className="muted">You chose: {describeOption(chosen, accountName).label}</p>}
-      {finding.state === "expired" && <p className="muted">A newer paycheck changed the numbers, so this expired.</p>}
     </section>
   );
 }
@@ -194,7 +145,7 @@ export default async function HomePage() {
     // A customer with no settings record hasn't finished setup, so the agent waits for the Setup survey.
     return (
       <main className="page narrow">
-        <NavBar customerName={customer.name} current="home" />
+        <NavBar customer={customer} current="home" />
         <header className="top">
           <div>
             <h1>Before your agent does anything, tell it how you want to be looked after</h1>
@@ -213,7 +164,7 @@ export default async function HomePage() {
   const accountName = (accountId: number) => accounts.find((account) => account.id === accountId)?.name ?? "an account";
   return (
     <main className="page">
-      <NavBar customerName={home.customerName} current="home" />
+      <NavBar customer={customer} current="home" />
       <header className="top">
         <div>
           <h1>Home</h1>
@@ -231,8 +182,17 @@ export default async function HomePage() {
       )}
 
       {home.findings.map((finding) => (
-        <FindingCard key={finding.id} finding={finding} accountName={accountName} />
+        <FindingCard key={finding.id} finding={{ ...finding, agentsView: null }} accountName={accountName} />
       ))}
+
+      {home.openFindingCount > 0 && (
+        <Link href="/discoveries" className="card link-card">
+          <strong>
+            Your agent found {home.openFindingCount} {home.openFindingCount === 1 ? "thing" : "things"}.
+          </strong>{" "}
+          <span className="muted">Nothing changes unless you choose.</span>
+        </Link>
+      )}
 
       {home.checking && (
         <AccountCard account={home.checking}>

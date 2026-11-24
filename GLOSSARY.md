@@ -203,3 +203,11 @@ _Avoid_: Budget, savings plan
 **Activity**:
 The customer's list of posted ledger transactions, newest first.
 _Avoid_: Statement, history, transactions page
+
+**Discoveries**:
+The page that lists every one of the customer's Findings, newest first, whatever made them. The nav bar's Discoveries link shows how many are open.
+_Avoid_: Inbox, notifications
+
+**Snoozed**:
+The state of a Finding the customer asked to be reminded about. It opens again once the simulated clock reaches the date they picked.
+_Avoid_: Dismissed, hidden

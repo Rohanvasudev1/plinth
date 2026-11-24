@@ -55,7 +55,7 @@ export default async function DecisionLogPage() {
   const decisions = getAppBank().readDecisionLog(customer);
   return (
     <main className="page">
-      <NavBar customerName={customer.name} current="decision-log" />
+      <NavBar customer={customer} current="decision-log" />
       <header className="top">
         <div>
           <h1>Decision log</h1>

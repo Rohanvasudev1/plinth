@@ -17,7 +17,7 @@ export default async function ActivityPage() {
   const rows = getAppBank().readActivity(customer);
   return (
     <main className="page">
-      <NavBar customerName={customer.name} current="activity" />
+      <NavBar customer={customer} current="activity" />
       <header className="top">
         <div>
           <h1>Activity</h1>

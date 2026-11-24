@@ -27,7 +27,7 @@ export default async function SimulatorPage() {
   const now = bank.clock.now();
   return (
     <main className="page">
-      <NavBar customerName={customer.name} current="simulator" />
+      <NavBar customer={customer} current="simulator" />
       <header className="top">
         <div>
           <h1>Simulator</h1>

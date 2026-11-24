@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import { CATEGORIES } from "../categories";
-import { FINDING_KINDS, FINDING_STATES } from "../findings";
+import { FINDING_KINDS, FINDING_STATES, STANDING_SEARCHES } from "../findings";
 import { SAVINGS_GOALS } from "../settings";
 import { check, index, integer, sqliteTable, text, uniqueIndex, type AnySQLiteColumn } from "drizzle-orm/sqlite-core";
 
@@ -284,9 +284,11 @@ export const pauseChangesTable = sqliteTable(
 
 /**
  * A Finding: facts the agent reports to a customer with Options, where nothing happens until the customer picks
- * one. `facts` is a JSON array of label and value pairs, and `options` a JSON array of typed Options whose amounts
- * are fixed when the Finding is made. `state` moves from open to chosen or expired, never back. A refused pick
- * leaves it open and records the guardrail and reason, so the customer can see why nothing moved.
+ * one. `facts` is a JSON array of label, value and Source triples, and `options` a JSON array of typed Options whose
+ * details are fixed when the Finding is made. `state` moves from open to chosen or expired, never back, or to
+ * snoozed until `snoozed_until`, when it opens again. A refused pick leaves it open and records the guardrail and
+ * reason, so the customer can see why nothing moved. A sweep Finding names the paycheck and Rule behind it; a
+ * Mission Finding names neither, and holds the Mission's full report.
  */
 export const findingsTable = sqliteTable(
   "findings",
@@ -297,17 +299,24 @@ export const findingsTable = sqliteTable(
       .references(() => customersTable.id),
     kind: text("kind", { enum: FINDING_KINDS }).notNull(),
     createdAtMs: integer("created_at_ms").notNull(),
+    title: text("title").notNull(),
     /** The ledger event that caused the Finding, such as the paycheck behind a sweep Finding. */
-    ledgerEventId: integer("ledger_event_id")
-      .notNull()
-      .references(() => ledgerEventsTable.id),
-    ruleId: integer("rule_id")
-      .notNull()
-      .references(() => rulesTable.id),
-    ruleVersion: integer("rule_version").notNull(),
+    ledgerEventId: integer("ledger_event_id").references(() => ledgerEventsTable.id),
+    ruleId: integer("rule_id").references(() => rulesTable.id),
+    ruleVersion: integer("rule_version"),
     facts: text("facts", { mode: "json" }).notNull(),
     options: text("options", { mode: "json" }).notNull(),
+    /** The Option the agent would pick, and why, shown only as far as the Advice setting allows. */
+    agentsView: text("agents_view"),
+    /** A Mission's full report. */
+    report: text("report"),
+    /** The Mission that made the Finding. */
+    missionId: integer("mission_id"),
+    /** The Standing search that made the Finding. */
+    standingSearch: text("standing_search", { enum: STANDING_SEARCHES }),
     state: text("state", { enum: FINDING_STATES }).notNull(),
+    /** The YYYY-MM-DD date a snoozed Finding opens again. */
+    snoozedUntil: text("snoozed_until"),
     /** The key of the Option the customer picked, once the Finding is chosen. */
     chosenOption: text("chosen_option"),
     /** The guardrail that refused the customer's last pick, while the Finding is still open. */
@@ -319,5 +328,17 @@ export const findingsTable = sqliteTable(
     uniqueIndex("findings_customer_event_kind").on(table.customerId, table.ledgerEventId, table.kind),
     check("findings_chosen_option", sql`(${table.state} = 'chosen') = (${table.chosenOption} IS NOT NULL)`),
     check("findings_refusal", sql`(${table.refusedBy} IS NULL) = (${table.refusalReason} IS NULL)`),
+    check("findings_snoozed_until", sql`(${table.state} = 'snoozed') = (${table.snoozedUntil} IS NOT NULL)`),
+    check("findings_rule_version", sql`(${table.ruleId} IS NULL) = (${table.ruleVersion} IS NULL)`),
+    check(
+      "findings_sweep_names_paycheck_and_rule",
+      sql`${table.kind} <> 'sweep' OR (${table.ledgerEventId} IS NOT NULL AND ${table.ruleId} IS NOT NULL)`,
+    ),
+    check("findings_report_on_mission", sql`${table.report} IS NULL OR ${table.kind} = 'mission'`),
+    check("findings_mission_link", sql`${table.missionId} IS NULL OR ${table.kind} = 'mission'`),
+    check(
+      "findings_standing_search_link",
+      sql`(${table.standingSearch} IS NOT NULL) = (${table.kind} = 'subscription_price_rise')`,
+    ),
   ],
 );

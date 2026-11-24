@@ -44,7 +44,12 @@ describe("The Autonomy level and the sweep", () => {
         { key: "leave", accountId: checking?.id },
       ],
     });
-    expect(finding?.facts).toContainEqual({ label: "Paycheck", value: "$3,240.00 from Acme Corp" });
+    expect(finding?.title).toBe("$340.00 above your Buffer in Checking");
+    expect(finding?.facts).toContainEqual({
+      label: "Paycheck",
+      value: "$3,240.00 from Acme Corp",
+      source: "From your paycheck deposit",
+    });
   });
 
   it("with within_rules, sweeps alone and makes no Finding", () => {
@@ -85,6 +90,7 @@ describe("The Autonomy level and the sweep", () => {
         expect(finding?.facts).toContainEqual({
           label: "Why your agent is asking",
           value: "$340.00 is over your $339.00 Payment limit",
+          source: "From your settings and Rules",
         });
       }
     }
@@ -323,6 +329,7 @@ describe("Sweep Findings over time", () => {
     expect(finding?.facts).toContainEqual({
       label: "Why your agent is asking",
       value: "You asked your agent to ask you before everything",
+      source: "From your settings and Rules",
     });
     expect(JSON.stringify(finding?.facts)).not.toMatch(/guardrail/i);
     expect(finding?.refusal).toBeNull();
