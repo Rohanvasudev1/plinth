@@ -1,7 +1,7 @@
 import { RuleNotFoundError, type Customer, type CustomerData } from "./customer-data";
-import type { WhyRow } from "./decisions";
-import { cents, formatDollarsBriefly, type Cents } from "./money";
-import { BUFFER_RANGE, checkWholeDollars, RuleParametersError, type Rule } from "./rules";
+import { customerChangeDecision, type WhyRow } from "./decisions";
+import { formatDollarsBriefly, type Cents } from "./money";
+import { BUFFER_RANGE, checkWholeDollars, type Rule } from "./rules";
 
 /**
  * The customer's own changes to their Rules, made on Agent & limits. Each writes the Rule's next version and a
@@ -11,9 +11,15 @@ import { BUFFER_RANGE, checkWholeDollars, RuleParametersError, type Rule } from 
 export interface RuleChanges {
   /** Switches the customer's Rule on or off. */
   switchRule(customer: Customer, ruleId: number, on: boolean): Rule;
-  /** Sets the Buffer of the customer's buffer Rule. Throws RuleParametersError, saving nothing, if out of range. */
+  /**
+   * Sets the Buffer of the customer's buffer Rule. Throws RuleParametersError, saving nothing, if out of range, and
+   * RuleNotFoundError if the Rule isn't one of the customer's buffer Rules.
+   */
   setBuffer(customer: Customer, ruleId: number, buffer: Cents): Rule;
-  /** Sets the customer's Payment limit. Throws RuleParametersError, saving nothing, if out of range. */
+  /**
+   * Sets the customer's Payment limit. Throws RuleParametersError, saving nothing, if out of range, and
+   * RuleNotFoundError if the Rule isn't one of the customer's payment limit Rules.
+   */
   setPaymentLimit(customer: Customer, ruleId: number, paymentLimit: Cents): Rule;
 }
 
@@ -40,20 +46,15 @@ export function createRuleChanges(customerData: CustomerData): RuleChanges {
         { label: "Before", value: `${describeRule(current, name)}, ${switchedText(current.on)}` },
         { label: "After", value: `${describeRule(revised, name)}, ${switchedText(revised.on)}` },
       ];
-      customerData.recordDecision(customer, {
-        actor: "customer",
-        trigger: { ledgerEventId: null, description: "You changed a Rule" },
-        rule: { id: revised.id, version: revised.version },
-        action,
-        fromAccountId: null,
-        toAccountId: null,
-        amount: cents(0),
-        result: "Done",
-        refusedBy: null,
-        why,
-        ledgerTransactionId: null,
-        reversesDecisionId: null,
-      });
+      customerData.recordDecision(
+        customer,
+        customerChangeDecision({
+          trigger: "You changed a Rule",
+          rule: { id: revised.id, version: revised.version },
+          action,
+          why,
+        }),
+      );
       return revised;
     });
   }
@@ -76,7 +77,7 @@ export function createRuleChanges(customerData: CustomerData): RuleChanges {
         customer,
         ruleId,
         (current) => {
-          if (current.kind !== "buffer") throw new RuleParametersError(`Rule ${ruleId} is not a buffer Rule`);
+          if (current.kind !== "buffer") throw new RuleNotFoundError(`Rule ${ruleId} is not a buffer Rule`);
           return { parameters: { ...current.parameters, buffer } };
         },
         () => ({
@@ -91,7 +92,7 @@ export function createRuleChanges(customerData: CustomerData): RuleChanges {
         ruleId,
         (current) => {
           if (current.kind !== "payment_limit") {
-            throw new RuleParametersError(`Rule ${ruleId} is not a payment limit Rule`);
+            throw new RuleNotFoundError(`Rule ${ruleId} is not a payment limit Rule`);
           }
           return { parameters: { paymentLimit } };
         },

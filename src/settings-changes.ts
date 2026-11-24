@@ -1,6 +1,5 @@
 import type { Customer, CustomerData } from "./customer-data";
-import type { WhyRow } from "./decisions";
-import { cents } from "./money";
+import { customerChangeDecision, type WhyRow } from "./decisions";
 import {
   SettingsError,
   type AdviceSetting,
@@ -33,23 +32,18 @@ export function changeSettings(customerData: CustomerData, customer: Customer, c
       { label: "Settings", value: `Version ${current.version} to version ${saved.version}` },
       ...changed,
     ];
-    customerData.recordDecision(customer, {
-      actor: "customer",
-      trigger: { ledgerEventId: null, description: "You changed your settings" },
-      rule: null,
-      action:
-        changed.length === 0
-          ? "Saved your settings unchanged"
-          : `Changed your settings: ${changed.map((row) => row.label).join(", ")}`,
-      fromAccountId: null,
-      toAccountId: null,
-      amount: cents(0),
-      result: "Done",
-      refusedBy: null,
-      why,
-      ledgerTransactionId: null,
-      reversesDecisionId: null,
-    });
+    customerData.recordDecision(
+      customer,
+      customerChangeDecision({
+        trigger: "You changed your settings",
+        rule: null,
+        action:
+          changed.length === 0
+            ? "Saved your settings unchanged"
+            : `Changed your settings: ${changed.map((row) => row.label).join(", ")}`,
+        why,
+      }),
+    );
     return saved;
   });
 }
@@ -77,13 +71,13 @@ function describeDifferences(before: SettingsChoices, after: SettingsChoices): W
   return rows.filter(([, from, to]) => from !== to).map(([label, from, to]) => ({ label, value: `${from} → ${to}` }));
 }
 
-export const AUTONOMY_LEVEL_TEXT: Record<AutonomyLevel, string> = {
+const AUTONOMY_LEVEL_TEXT: Record<AutonomyLevel, string> = {
   ask_first: "Ask me before everything",
   small_things: "Handle small things, ask about big ones",
   within_rules: "Act on anything within my rules",
 };
 
-export const ADVICE_SETTING_TEXT: Record<AdviceSetting, string> = {
+const ADVICE_SETTING_TEXT: Record<AdviceSetting, string> = {
   never: "Facts and options only",
   on_request: "Facts and options, and the agent's view only if I ask",
   always: "Facts, options and what the agent would pick",
@@ -102,7 +96,7 @@ const TIME_HORIZON_TEXT: Record<TimeHorizonAnswer, string> = {
   over_10_years: "More than 10 years",
 };
 
-export const GOAL_PREFERENCE_TEXT: Record<GoalPreference, string> = {
+const GOAL_PREFERENCE_TEXT: Record<GoalPreference, string> = {
   buy_home: "Buy a home",
   emergency_cushion: "Emergency cushion",
   clear_debt: "Clear debt",

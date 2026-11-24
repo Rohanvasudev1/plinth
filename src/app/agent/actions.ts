@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { getAppBank } from "@/app-bank";
 import { RuleNotFoundError, type Customer } from "@/customer-data";
-import { formatDollarsBriefly, parseDollars, type Cents } from "@/money";
+import { formatDollarRange, formatDollarsBriefly, parseDollars, type Cents, type CentsRange } from "@/money";
 import { BUFFER_RANGE, PAYMENT_LIMIT_RANGE, RuleParametersError } from "@/rules";
 import { requireCustomer } from "@/session";
 
@@ -45,13 +45,13 @@ export async function setPaymentLimit(_previous: AgentFormResult | null, form: F
 async function setAmount(
   form: FormData,
   name: string,
-  range: { min: Cents; max: Cents },
+  range: CentsRange,
   save: (customer: Customer, ruleId: number, amount: Cents) => unknown,
 ): Promise<AgentFormResult> {
   const customer = await requireCustomer();
   const outOfRange = {
     ok: false,
-    message: `The ${name} must be a whole-dollar amount from ${formatDollarsBriefly(range.min)} to ${formatDollarsBriefly(range.max)}. Nothing was saved.`,
+    message: `The ${name} must be a whole-dollar amount from ${formatDollarRange(range)}. Nothing was saved.`,
   };
   let amount: Cents;
   try {

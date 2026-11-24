@@ -1,4 +1,4 @@
-import type { Cents } from "./money";
+import { cents, type Cents } from "./money";
 
 export type DecisionResult = "Done" | "Refused" | "Reversed";
 
@@ -53,6 +53,32 @@ export interface Decision {
 }
 
 export type NewDecision = Omit<Decision, "id" | "at" | "reversedByDecisionId">;
+
+/**
+ * A Decision log entry for a change the customer made to their agent, such as a Rule or settings edit: Done, by
+ * the customer, moving no money.
+ */
+export function customerChangeDecision(change: {
+  trigger: string;
+  rule: Decision["rule"];
+  action: string;
+  why: WhyRow[];
+}): NewDecision {
+  return {
+    actor: "customer",
+    trigger: { ledgerEventId: null, description: change.trigger },
+    rule: change.rule,
+    action: change.action,
+    fromAccountId: null,
+    toAccountId: null,
+    amount: cents(0),
+    result: "Done",
+    refusedBy: null,
+    why: change.why,
+    ledgerTransactionId: null,
+    reversesDecisionId: null,
+  };
+}
 
 export function isGuardrail(name: string): name is Guardrail {
   return (GUARDRAILS as readonly string[]).includes(name);

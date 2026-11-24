@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { getAppBank } from "@/app-bank";
 import { BUFFER_RANGE, PAYMENT_LIMIT_RANGE, type Rule } from "@/rules";
-import { formatDollarsBriefly, type Cents } from "@/money";
+import { formatDollarRange, formatDollarsBriefly, formatDollarsForInput } from "@/money";
 import { requireCustomer } from "@/session";
 import { RuleAmountForm, RuleSwitch } from "./agent-forms";
 
@@ -25,16 +25,6 @@ function ruleText(rule: Rule, accountName: (accountId: number) => string): { tit
 
 const RULE_LABELS: Record<Rule["kind"], string> = { buffer: "Buffer Rule", payment_limit: "Payment limit Rule" };
 
-/** An amount as plain digits for a form input, such as "1500", or "1839.50" when it has cents. */
-function dollarsInput(amount: Cents): string {
-  const remainder = amount % 100;
-  const dollars = String((amount - remainder) / 100);
-  return remainder === 0 ? dollars : `${dollars}.${String(remainder).padStart(2, "0")}`;
-}
-
-function rangeHint(range: { min: Cents; max: Cents }): string {
-  return `A whole-dollar amount from ${formatDollarsBriefly(range.min)} to ${formatDollarsBriefly(range.max)}`;
-}
 
 export default async function AgentAndLimitsPage() {
   const customer = await requireCustomer();
@@ -89,8 +79,8 @@ export default async function AgentAndLimitsPage() {
             kind="buffer"
             ruleId={rule.id}
             label="Always keep this much, in dollars"
-            hint={rangeHint(BUFFER_RANGE)}
-            dollars={dollarsInput(rule.parameters.buffer)}
+            hint={`A whole-dollar amount from ${formatDollarRange(BUFFER_RANGE)}`}
+            dollars={formatDollarsForInput(rule.parameters.buffer)}
           />
         </section>
       ))}
@@ -99,11 +89,11 @@ export default async function AgentAndLimitsPage() {
         <section className="card" aria-labelledby="payment-limit">
           <h2 id="payment-limit">Payment limit</h2>
           <RuleAmountForm
-            kind="paymentLimit"
+            kind="payment_limit"
             ruleId={paymentLimitRule.id}
             label="Largest move without asking, in dollars"
-            hint={rangeHint(PAYMENT_LIMIT_RANGE)}
-            dollars={dollarsInput(paymentLimitRule.parameters.paymentLimit)}
+            hint={`A whole-dollar amount from ${formatDollarRange(PAYMENT_LIMIT_RANGE)}`}
+            dollars={formatDollarsForInput(paymentLimitRule.parameters.paymentLimit)}
           />
         </section>
       )}

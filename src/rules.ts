@@ -1,4 +1,4 @@
-import { cents, type Cents } from "./money";
+import { cents, type Cents, type CentsRange } from "./money";
 
 /** The buffer Rule: keep `buffer` in the checking account after bills before payday, and sweep the rest to savings. */
 export interface BufferRuleParameters {
@@ -17,8 +17,8 @@ export interface PaymentLimitRuleParameters {
  * its range. The buffer schema takes any amount of cents from zero, and the range applies when the customer
  * sets the Buffer.
  */
-export const BUFFER_RANGE = { min: cents(0), max: cents(100_000_00) } as const;
-export const PAYMENT_LIMIT_RANGE = { min: cents(0), max: cents(10_000_00) } as const;
+export const BUFFER_RANGE: CentsRange = { min: cents(0), max: cents(100_000_00) };
+export const PAYMENT_LIMIT_RANGE: CentsRange = { min: cents(0), max: cents(10_000_00) };
 
 export const RULE_KINDS = ["buffer", "payment_limit"] as const;
 export type RuleKind = (typeof RULE_KINDS)[number];
@@ -104,7 +104,7 @@ function fieldsOf(name: string, parameters: unknown, expected: string[]): Record
 }
 
 /** Returns `value` as Cents if it is a whole number of dollars inside `range`, or throws RuleParametersError. */
-export function checkWholeDollars(value: unknown, range: { min: Cents; max: Cents }): Cents {
+export function checkWholeDollars(value: unknown, range: CentsRange): Cents {
   if (
     typeof value !== "number" ||
     !Number.isSafeInteger(value) ||

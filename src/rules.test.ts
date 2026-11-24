@@ -157,7 +157,7 @@ describe("customer changes to the buffer Rule", () => {
     const sam = signInByName(bank, "Sam Calloway");
     const limit = paymentLimitRuleOf(bank, sam);
 
-    expect(() => bank.setBuffer(sam, limit.id, cents(1_000_00))).toThrow(RuleParametersError);
+    expect(() => bank.setBuffer(sam, limit.id, cents(1_000_00))).toThrow(RuleNotFoundError);
     expect(bank.customerData.getRule(sam, limit.id)).toEqual(limit);
     expect(bank.readDecisionLog(sam)).toEqual([]);
   });

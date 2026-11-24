@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import type { RuleKind } from "@/rules";
 import { setBuffer, setPaymentLimit, switchRule, type AgentFormResult } from "./actions";
 
 function Result({ result }: { result: AgentFormResult | null }) {
@@ -29,11 +30,11 @@ export function RuleSwitch(props: { ruleId: number; on: boolean; label: string }
 
 /** A form that sets one whole-dollar amount on a Rule: the Buffer or the Payment limit. */
 export function RuleAmountForm(props: {
-  kind: "buffer" | "paymentLimit";
+  kind: RuleKind;
   ruleId: number;
   label: string;
   hint: string;
-  /** The current amount in whole dollars, as the input's starting text. */
+  /** The current amount, as the input's starting text. */
   dollars: string;
 }) {
   const [result, action, pending] = useActionState(props.kind === "buffer" ? setBuffer : setPaymentLimit, null);

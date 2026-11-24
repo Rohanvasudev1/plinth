@@ -36,6 +36,26 @@ export function parseDollars(text: string): Cents {
   return cents(Number(dollars || "0") * 100 + Number(fraction.padEnd(2, "0")));
 }
 
+/** An inclusive range of amounts. */
+export interface CentsRange {
+  min: Cents;
+  max: Cents;
+}
+
+/** Formats an amount as plain text for a form input that `parseDollars` reads back, such as `1500` or `1839.50`. */
+export function formatDollarsForInput(amount: Cents): string {
+  const sign = amount < 0 ? "-" : "";
+  const absolute = Math.abs(amount);
+  const remainder = absolute % 100;
+  const dollars = String((absolute - remainder) / 100);
+  return remainder === 0 ? `${sign}${dollars}` : `${sign}${dollars}.${String(remainder).padStart(2, "0")}`;
+}
+
+/** Formats a range briefly, such as `$0 to $10,000`. */
+export function formatDollarRange(range: CentsRange): string {
+  return `${formatDollarsBriefly(range.min)} to ${formatDollarsBriefly(range.max)}`;
+}
+
 /** Formats cents as US dollars, leaving off zero cents, such as `$340` or `$12.50`. */
 export function formatDollarsBriefly(amount: Cents): string {
   return amount % 100 === 0 ? formatDollars(amount).slice(0, -3) : formatDollars(amount);

@@ -140,7 +140,10 @@ export interface CustomerData {
   listRules(customer: Customer): Rule[];
   /** The customer's Rule at `version`, or its latest version when `version` is left out. */
   getRule(customer: Customer, ruleId: number, version?: number): Rule | undefined;
-  /** Switches the customer's Rule on or off by writing its next version. Throws if the Rule isn't theirs. */
+  /**
+   * Switches the customer's Rule on or off by writing its next version. Throws if the Rule isn't theirs. Writes no
+   * Decision log entry: a customer's own switch goes through the bank's `switchRule`, which writes one.
+   */
   switchRule(customer: Customer, ruleId: number, on: boolean): Rule;
   /**
    * Writes the next version of the customer's Rule with the change applied. Throws RuleNotFoundError if the Rule
