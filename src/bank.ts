@@ -6,6 +6,7 @@ import type { Database } from "./db/database";
 import type { Decision, DecisionResult } from "./decisions";
 import { chooseOption, type ChooseOptionOutcome } from "./finding-choices";
 import type { Finding, FindingOptionKey } from "./findings";
+import { setGoalTarget } from "./goal-changes";
 import { createLedgerEventDispatcher, type LedgerEventDispatcher } from "./ledger-events";
 import { cents, type Cents } from "./money";
 import {
@@ -20,6 +21,8 @@ import { setAgentPaused } from "./pause";
 import { seedDemoData } from "./seed";
 import type { Settings } from "./settings";
 import { changeSettings, type SettingsChange } from "./settings-changes";
+import { applySetup, readSetupAnswers } from "./setup";
+import { STANDARD_SETUP, type SetupAnswers } from "./setup-answers";
 import { createSimulator, type Simulator } from "./simulator";
 import { createSystemData, type SystemData } from "./system-data";
 import { undoAgentAction, type UndoOutcome } from "./undo";
@@ -92,6 +95,21 @@ export interface Bank extends Simulator, RuleChanges {
    * Throws SettingsError, saving nothing, if they have no settings record or the change doesn't fit its schema.
    */
   changeSettings(customer: Customer, change: SettingsChange): Settings;
+  /**
+   * Applies the Setup survey's answers in one database transaction: settings, Rules, Goal accounts and Decision log
+   * entries. Running it again reuses Goal accounts, and a dropped goal keeps its account and money. If anything
+   * fails, nothing is written.
+   */
+  finishSetup(customer: Customer, answers: SetupAnswers): Settings;
+  /** The customer's current survey answers, for running setup again, or undefined if they haven't finished setup. */
+  readSetupAnswers(customer: Customer): SetupAnswers | undefined;
+  /** Applies the standard Rules and settings, with no goals and so no sweep target, as `finishSetup` does. */
+  skipSetup(customer: Customer): Settings;
+  /**
+   * Sets the Goal's target on one of the customer's savings accounts and writes a Decision log entry with them as
+   * actor, or throws GoalError, saving nothing.
+   */
+  setGoalTarget(customer: Customer, accountId: number, target: Cents): Account;
   /** Whether the customer's agent is paused. */
   isAgentPaused(customer: Customer): boolean;
   /**
@@ -144,6 +162,10 @@ export function createBank(deps: { db: Database; clock: SettableClock }): Bank {
     billsBeforePayday,
     readSettings: (customer) => customerData.getSettings(customer),
     changeSettings: (customer, change) => changeSettings(customerData, customer, change),
+    finishSetup: (customer, answers) => applySetup(customerData, customer, answers, "survey"),
+    setGoalTarget: (customer, accountId, target) => setGoalTarget(customerData, customer, accountId, target),
+    readSetupAnswers: (customer) => readSetupAnswers(customerData, customer),
+    skipSetup: (customer) => applySetup(customerData, customer, STANDARD_SETUP, "skip"),
     isAgentPaused: (customer) => customerData.isAgentPaused(customer),
     setAgentPaused: (customer, paused) => setAgentPaused(customerData, customer, paused),
     readDecisionLog: (customer) => customerData.listDecisions(customer),

@@ -11,10 +11,11 @@ interface SeedCustomer {
   payroll?: Omit<NewPayroll, "accountId">;
   /** Paid from the customer's checking account. */
   bills: Omit<NewScheduledBill, "accountId">[];
-  /** The Buffer of the customer's buffer Rule, which sweeps checking to their first savings account. */
-  buffer: Cents;
-  /** The goal their savings account is for. */
-  goal: GoalPreference;
+  /**
+   * The customer's finished setup: the Buffer of their buffer Rule, which sweeps checking to their first savings
+   * account, and the goal that account is for. Null for a customer who hasn't finished setup.
+   */
+  setup: { buffer: Cents; goal: GoalPreference } | null;
 }
 
 /**
@@ -34,13 +35,16 @@ function seedSettings(goal: GoalPreference): SettingsChoices {
 /** The Payment limit every seeded customer starts with. */
 const SEED_PAYMENT_LIMIT = cents(500_00);
 
-/** Fictional customers. Sam's numbers make the 20 Nov 2026 paycheck sweep exactly $340. */
+/**
+ * Fictional customers. Sam's numbers make the 20 Nov 2026 paycheck sweep exactly $340. Alex hasn't finished
+ * setup, so sees the Setup survey.
+ */
 const SEED_CUSTOMERS: SeedCustomer[] = [
   {
     name: "Sam Calloway",
     accounts: [
       { kind: "checking", name: "Checking", openingBalance: cents(227_00) },
-      { kind: "savings", name: "House fund", goalTarget: cents(40_000_00), openingBalance: cents(12_400_00) },
+      { kind: "savings", name: "House fund", goal: "buy_home", goalTarget: cents(40_000_00), openingBalance: cents(12_400_00) },
     ],
     payroll: { employer: "acme-corp", amount: cents(3_240_00), firstPayDate: localDate("2026-11-20"), intervalDays: 14 },
     bills: [
@@ -49,14 +53,13 @@ const SEED_CUSTOMERS: SeedCustomer[] = [
       { payee: "Phone", amount: cents(45_00), dayOfMonth: 3 },
       { payee: "Power", amount: cents(70_00), dayOfMonth: 3 },
     ],
-    buffer: cents(1_500_00),
-    goal: "buy_home",
+    setup: { buffer: cents(1_500_00), goal: "buy_home" },
   },
   {
     name: "Priya Natarajan",
     accounts: [
       { kind: "checking", name: "Checking", openingBalance: cents(1_836_42) },
-      { kind: "savings", name: "Travel fund", goalTarget: cents(6_000_00), openingBalance: cents(2_150_00) },
+      { kind: "savings", name: "Travel fund", goal: "travel", goalTarget: cents(6_000_00), openingBalance: cents(2_150_00) },
     ],
     payroll: { employer: "acme-corp", amount: cents(2_480_00), firstPayDate: localDate("2026-11-25"), intervalDays: 14 },
     bills: [
@@ -64,14 +67,21 @@ const SEED_CUSTOMERS: SeedCustomer[] = [
       { payee: "Phone", amount: cents(38_00), dayOfMonth: 30 },
       { payee: "Gym", amount: cents(29_00), dayOfMonth: 6 },
     ],
-    buffer: cents(500_00),
-    goal: "travel",
+    setup: { buffer: cents(500_00), goal: "travel" },
+  },
+  {
+    name: "Alex Okafor",
+    accounts: [{ kind: "checking", name: "Checking", openingBalance: cents(400_00) }],
+    payroll: { employer: "acme-corp", amount: cents(2_100_00), firstPayDate: localDate("2026-11-27"), intervalDays: 14 },
+    bills: [],
+    setup: null,
   },
 ];
 
 /**
- * Seeds the demo customers, their accounts, balances, payrolls, Scheduled bills, buffer and payment limit Rules
- * and settings records, and the clearing accounts, once per database.
+ * Seeds the demo customers, their accounts, balances, payrolls, Scheduled bills, and, for customers who have
+ * finished setup, their buffer and payment limit Rules and settings records, plus the clearing accounts, once per
+ * database.
  */
 export function seedDemoData(system: SystemData, data: CustomerData): void {
   system.ensureSystemAccount("acmePayroll");
@@ -99,12 +109,13 @@ export function seedDemoData(system: SystemData, data: CustomerData): void {
         for (const bill of seed.bills) data.addScheduledBill(customer, { ...bill, accountId: account.id });
       }
     }
+    if (!seed.setup) continue;
     data.createRule(customer, {
       kind: "buffer",
-      parameters: { checkingAccountId: accountIds.checking, savingsAccountId: accountIds.savings, buffer: seed.buffer },
+      parameters: { checkingAccountId: accountIds.checking, savingsAccountId: accountIds.savings, buffer: seed.setup.buffer },
       on: true,
     });
     data.createRule(customer, { kind: "payment_limit", parameters: { paymentLimit: SEED_PAYMENT_LIMIT }, on: true });
-    data.saveSettings(customer, seedSettings(seed.goal));
+    data.saveSettings(customer, seedSettings(seed.setup.goal));
   }
 }

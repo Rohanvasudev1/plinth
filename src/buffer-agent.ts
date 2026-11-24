@@ -55,7 +55,8 @@ export function startBufferAgent(deps: {
   ): void {
     // Only the customer's own accounts come back, so an account that isn't theirs reads as missing.
     const checking = customerData.getAccount(customer, rule.parameters.checkingAccountId);
-    const savings = customerData.getAccount(customer, rule.parameters.savingsAccountId);
+    const { savingsAccountId } = rule.parameters;
+    const savings = savingsAccountId === null ? undefined : customerData.getAccount(customer, savingsAccountId);
     const bills = billsBeforePayday(customerData, customer, localDateOf(clock.now()));
     const safe = checking ? safeToSpend(checking, rule.parameters.buffer, bills) : null;
     // Round down to whole dollars.
@@ -130,9 +131,10 @@ export function startBufferAgent(deps: {
       customerData.expireOpenFindings(customer, "sweep");
       const settings = customerData.getSettings(customer);
       if (!settings) return;
-      // One sweep per paycheck, under the key sweep:<ledger event id>.
+      // One sweep per paycheck, under the key sweep:<ledger event id>. A buffer Rule with no sweep target, as after
+      // Skip, keeps the Buffer but has nowhere to sweep to, so no action is taken.
       const rule = bufferRuleFor(customerData.listRules(customer), deposit.accountId);
-      if (rule?.on) sweep(customer, rule, settings.autonomyLevel, event, deposit);
+      if (rule?.on && rule.parameters.savingsAccountId !== null) sweep(customer, rule, settings.autonomyLevel, event, deposit);
     });
   });
 }

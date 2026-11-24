@@ -28,9 +28,10 @@ import {
   type NewFinding,
 } from "./findings";
 import type { LedgerEvent, LedgerEventDispatcher } from "./ledger-events";
+import { checkGoalTarget, GoalError } from "./goals";
 import { cents, type Cents } from "./money";
 import { isRuleKind, parseRuleContent, type NewRule, type Rule } from "./rules";
-import { parseSettingsChoices, SettingsError, type Settings, type SettingsChoices } from "./settings";
+import { parseSettingsChoices, SettingsError, type SavingsGoal, type Settings, type SettingsChoices } from "./settings";
 import { isEmployer, type Employer } from "./system-data";
 
 /** A seeded customer. Every customer-scoped read and write takes one as its first argument. */
@@ -47,14 +48,18 @@ export interface Account {
   name: string;
   /** The sum of every ledger entry on the account. */
   balance: Cents;
-  /** The Goal's target amount, if this is a savings account with a Goal. */
+  /** The Goal's target amount, if this is a savings account with a Goal that has one. */
   goalTarget: Cents | null;
+  /** The savings goal this Goal account is for, or null for an account that isn't one. */
+  goal: SavingsGoal | null;
 }
 
 export interface NewAccount {
   kind: CustomerAccountKind;
   name: string;
   goalTarget?: Cents;
+  /** Only on a savings account. A customer has at most one account per savings goal. */
+  goal?: SavingsGoal;
 }
 
 export interface LedgerEntryInput {
@@ -116,6 +121,11 @@ export interface CustomerData {
   /** The customer's account with this id, or undefined if it doesn't exist or isn't theirs. */
   getAccount(customer: Customer, accountId: number): Account | undefined;
   openAccount(customer: Customer, account: NewAccount): Account;
+  /**
+   * Sets the Goal's target on one of the customer's savings accounts. Throws GoalError, saving nothing, if the
+   * account isn't one of their savings accounts or the target is out of range. Writes no Decision log entry.
+   */
+  setGoalTarget(customer: Customer, accountId: number, target: Cents): Account;
   /**
    * Posts a pair of entries that sum to zero, plus a ledger event, in one database transaction, then hands
    * the event to subscribers. Each entry must be on the customer's own account or a system account.
@@ -261,6 +271,7 @@ export function createCustomerData(deps: {
         kind: accountsTable.kind,
         name: accountsTable.name,
         goalCents: accountsTable.goalCents,
+        goal: accountsTable.goal,
         balanceCents,
       })
       .from(accountsTable)
@@ -282,6 +293,7 @@ export function createCustomerData(deps: {
         name: row.name,
         balance: cents(row.balanceCents),
         goalTarget: row.goalCents === null ? null : cents(row.goalCents),
+        goal: row.goal,
       };
     });
   }
@@ -761,12 +773,31 @@ export function createCustomerData(deps: {
     openAccount(customer, account) {
       const row = db
         .insert(accountsTable)
-        .values({ customerId: customer.id, kind: account.kind, name: account.name, goalCents: account.goalTarget ?? null })
+        .values({
+          customerId: customer.id,
+          kind: account.kind,
+          name: account.name,
+          goalCents: account.goalTarget ?? null,
+          goal: account.goal ?? null,
+        })
         .returning({ id: accountsTable.id })
         .get();
       const opened = getAccount(customer, row.id);
       if (!opened) throw new Error(`Account ${row.id} vanished after it was opened`);
       return opened;
+    },
+    setGoalTarget(customer, accountId, target) {
+      const checked = checkGoalTarget(target);
+      if (getAccount(customer, accountId)?.kind !== "savings") {
+        throw new GoalError("A Goal's target can only be set on one of your own savings accounts");
+      }
+      db.update(accountsTable)
+        .set({ goalCents: checked })
+        .where(and(eq(accountsTable.id, accountId), eq(accountsTable.customerId, customer.id)))
+        .run();
+      const updated = getAccount(customer, accountId);
+      if (!updated) throw new Error(`Account ${accountId} vanished after its Goal target was set`);
+      return updated;
     },
     postLedgerTransaction,
     inOneTransaction,

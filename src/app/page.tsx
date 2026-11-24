@@ -8,6 +8,8 @@ import { cents, formatDollars } from "@/money";
 import { guardrailName, type Decision } from "@/decisions";
 import { describeOption, findingStateLabel, type Finding } from "@/findings";
 import { requireCustomer } from "@/session";
+import { STANDARD_SETUP } from "@/setup-answers";
+import { SetupSurvey } from "./setup/setup-survey";
 import { AgentActionsToast, FindingOptions, UndoButton } from "./agent-action-controls";
 import { WhyPanel } from "./why-panel";
 
@@ -185,7 +187,28 @@ function AccountCard({ account, children }: { account: HomeAccount; children?: R
 
 export default async function HomePage() {
   const customer = await requireCustomer();
-  const home = getAppBank().readHome(customer);
+  const bank = getAppBank();
+  if (!bank.readSettings(customer)) {
+    // A customer with no settings record hasn't finished setup, so the agent waits for the Setup survey.
+    return (
+      <main className="page narrow">
+        <header className="top">
+          <div>
+            <h1>Before your agent does anything, tell it how you want to be looked after</h1>
+            <p className="muted">
+              Six questions. Your answers become the rules your agent can&rsquo;t break. You can change any of them later in
+              Agent &amp; limits.
+            </p>
+          </div>
+          <p className="muted signed-in">
+            {customer.name} · <Link href="/sign-in">Switch</Link>
+          </p>
+        </header>
+        <SetupSurvey initial={STANDARD_SETUP} firstRun />
+      </main>
+    );
+  }
+  const home = bank.readHome(customer);
   const accounts = [...(home.checking ? [home.checking] : []), ...home.savings];
   const accountName = (accountId: number) => accounts.find((account) => account.id === accountId)?.name ?? "an account";
   return (

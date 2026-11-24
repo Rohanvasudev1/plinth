@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import { FINDING_KINDS, FINDING_STATES } from "../findings";
+import { SAVINGS_GOALS } from "../settings";
 import { check, index, integer, sqliteTable, text, uniqueIndex, type AnySQLiteColumn } from "drizzle-orm/sqlite-core";
 
 /** The app's simulated time. It holds at most one row, with id 1. */
@@ -29,6 +30,8 @@ export const accountsTable = sqliteTable(
     systemKey: text("system_key").unique(),
     /** The Goal's target amount, only on savings accounts that have one. */
     goalCents: integer("goal_cents"),
+    /** The savings goal this Goal account is for, such as `buy_home`. At most one account per goal per customer. */
+    goal: text("goal", { enum: SAVINGS_GOALS }),
   },
   (table) => [
     index("accounts_customer_id").on(table.customerId),
@@ -37,6 +40,8 @@ export const accountsTable = sqliteTable(
       sql`(${table.kind} = 'system') = (${table.customerId} IS NULL AND ${table.systemKey} IS NOT NULL)`,
     ),
     check("accounts_goal_on_savings", sql`${table.goalCents} IS NULL OR (${table.kind} = 'savings' AND ${table.goalCents} > 0)`),
+    check("accounts_savings_goal_on_savings", sql`${table.goal} IS NULL OR ${table.kind} = 'savings'`),
+    uniqueIndex("accounts_customer_goal").on(table.customerId, table.goal),
   ],
 );
 
@@ -181,7 +186,7 @@ export const ruleVersionsTable = sqliteTable(
 /**
  * The Decision log: one row per agent action, with what triggered it, the Rule version it used, and its result,
  * plus one row, written by the customer, for each agent action they undo and each change they make to a Rule or
- * their settings record. Only a settings change has no Rule.
+ * their settings record. A customer change that isn't to a Rule, such as a settings or Goal target change, has no Rule.
  * `why` is a JSON array of label and value pairs.
  */
 export const decisionsTable = sqliteTable(

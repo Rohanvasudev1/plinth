@@ -1,9 +1,12 @@
 import { cents, formatDollarRange, type Cents, type CentsRange } from "./money";
 
-/** The buffer Rule: keep `buffer` in the checking account after bills before payday, and sweep the rest to savings. */
+/**
+ * The buffer Rule: keep `buffer` in the checking account after bills before payday, and sweep the rest to the
+ * savings account, its sweep target. With no sweep target, it keeps the Buffer and sweeps nothing.
+ */
 export interface BufferRuleParameters {
   checkingAccountId: number;
-  savingsAccountId: number;
+  savingsAccountId: number | null;
   buffer: Cents;
 }
 
@@ -72,7 +75,9 @@ export function parseRuleContent(kind: RuleKind, parameters: unknown): RuleConte
         "buffer",
       ]);
       if (!isId(checkingAccountId)) throw new RuleParametersError("checkingAccountId must be an account id");
-      if (!isId(savingsAccountId)) throw new RuleParametersError("savingsAccountId must be an account id");
+      if (savingsAccountId !== null && !isId(savingsAccountId)) {
+        throw new RuleParametersError("savingsAccountId must be an account id or null");
+      }
       return {
         kind,
         parameters: { checkingAccountId, savingsAccountId, buffer: checkWholeDollars(buffer, BUFFER_RANGE) },
