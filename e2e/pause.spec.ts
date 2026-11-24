@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { restoreSeed } from "./restore-seed";
 import { expectNoHorizontalScroll } from "./page-checks";
+import { openFromMoreMenu } from "./nav";
 
 test.use({ viewport: { width: 390, height: 844 } });
 
@@ -10,7 +11,7 @@ test("Sam pauses the agent, a paycheck is refused with Agent paused, and unpausi
   await page.getByRole("button", { name: "Sam Calloway" }).click();
   await expect(page.getByRole("region", { name: "Your agent is paused" })).toHaveCount(0);
 
-  await page.getByRole("link", { name: "Agent & limits" }).click();
+  await openFromMoreMenu(page, "Agent & limits");
   await page.getByRole("button", { name: "Pause agent" }).click();
   await expect(page.getByRole("region", { name: "Your agent is paused" }).getByRole("status")).toHaveText(
     "Agent paused. Nothing will happen automatically.",
@@ -22,7 +23,7 @@ test("Sam pauses the agent, a paycheck is refused with Agent paused, and unpausi
   await expectNoHorizontalScroll(page);
 
   // The clock starts on Thursday 19 November. Moving it to Friday 20 November posts Sam's paycheck.
-  await page.getByRole("link", { name: "Simulator" }).click();
+  await openFromMoreMenu(page, "Simulator");
   await page.getByRole("button", { name: "Advance clock one day" }).click();
   await expect(page.getByRole("status")).toContainText("Posted your Acme Corp paycheck");
 

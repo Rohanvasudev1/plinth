@@ -1,0 +1,109 @@
+import Link from "next/link";
+import { DISPLAY_TIME_ZONE } from "@/app-clock";
+import { getAppBank } from "@/app-bank";
+import type { AccessLogEntry } from "@/bank";
+import type { DataChoices } from "@/settings";
+import { DATA_CHOICE_TEXT } from "@/settings-text";
+import { requireCustomer } from "@/session";
+import { NavBar } from "../nav-bar";
+import { DataChoiceSwitch } from "./privacy-forms";
+
+export const dynamic = "force-dynamic";
+
+const timeFormat = new Intl.DateTimeFormat("en-GB", {
+  weekday: "short",
+  day: "numeric",
+  month: "short",
+  hour: "numeric",
+  minute: "2-digit",
+  hour12: true,
+  timeZone: DISPLAY_TIME_ZONE,
+});
+
+/** Each Data choice in the order Privacy lists them, with a note on what it means today where the card's intro doesn't say. */
+const DATA_CHOICES: { choice: keyof DataChoices; detail?: string }[] = [
+  { choice: "trainModels" },
+  { choice: "shareWithPartners" },
+  { choice: "keepChatHistory", detail: "Applies once Ask Plinth exists. There is no chat to keep yet." },
+];
+
+function AccessLogItem({ entry }: { entry: AccessLogEntry }) {
+  return (
+    <li className="access-entry">
+      <p>
+        <strong>{entry.who}</strong> · <time dateTime={entry.at.toISOString()}>{timeFormat.format(entry.at)}</time>
+      </p>
+      <dl className="access-detail">
+        <div>
+          <dt>What</dt>
+          <dd>{entry.what}</dd>
+        </div>
+        <div>
+          <dt>Why</dt>
+          <dd>{entry.why}</dd>
+        </div>
+      </dl>
+    </li>
+  );
+}
+
+export default async function PrivacyPage() {
+  const customer = await requireCustomer();
+  const { dataChoices, accessLog } = getAppBank().readPrivacy(customer);
+
+  return (
+    <main className="page">
+      <NavBar customer={customer} current="privacy" />
+      <header className="top">
+        <div>
+          <h1>Privacy</h1>
+          <p className="muted">Your Data choices, and every time anything other than you read your data.</p>
+        </div>
+      </header>
+
+      <section className="card" aria-labelledby="data-choices">
+        <h2 id="data-choices">Data choices</h2>
+        <p className="muted">
+          Plinth doesn&rsquo;t train models on your data or share it with partners today. These record what you&rsquo;d
+          allow. Each change is kept in the Decision log.
+        </p>
+        <ul className="rules">
+          {DATA_CHOICES.map(({ choice, detail }) => (
+            <li key={choice} className="rule">
+              <div>
+                <b>{DATA_CHOICE_TEXT[choice]}</b>
+                {detail && <p className="muted">{detail}</p>}
+              </div>
+              {dataChoices ? (
+                <DataChoiceSwitch choice={choice} on={dataChoices[choice]} label={DATA_CHOICE_TEXT[choice]} />
+              ) : (
+                <span className="muted">Off</span>
+              )}
+            </li>
+          ))}
+        </ul>
+        {!dataChoices && (
+          <p>
+            You haven&rsquo;t finished setup, so each choice is off. <Link href="/setup">Set them in the Setup survey</Link>
+          </p>
+        )}
+      </section>
+
+      <section className="card" aria-labelledby="access-log">
+        <h2 id="access-log">Access log</h2>
+        <p className="muted">
+          Who read your data, what and why, newest first. Your own page views aren&rsquo;t listed. Nothing is ever removed.
+        </p>
+        {accessLog.length === 0 ? (
+          <p className="muted">Nothing has read your data yet.</p>
+        ) : (
+          <ol className="access-log">
+            {accessLog.map((entry) => (
+              <AccessLogItem key={entry.id} entry={entry} />
+            ))}
+          </ol>
+        )}
+      </section>
+    </main>
+  );
+}

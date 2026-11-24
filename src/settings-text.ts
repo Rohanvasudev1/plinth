@@ -2,6 +2,7 @@ import { STANDING_SEARCHES, type StandingSearch } from "./findings";
 import type {
   AdviceSetting,
   AutonomyLevel,
+  DataChoices,
   GoalPreference,
   MarketDropAnswer,
   SettingsChoices,
@@ -9,6 +10,13 @@ import type {
 } from "./settings";
 
 // Display text for the settings record's choices, shared by the Decision log, the Setup survey and its summary.
+
+/** Each Data choice's name, as the Decision log and Privacy show it. */
+export const DATA_CHOICE_TEXT: Record<keyof DataChoices, string> = {
+  trainModels: "Train models on my data",
+  shareWithPartners: "Share my data with partners",
+  keepChatHistory: "Keep chat history",
+};
 
 export const AUTONOMY_LEVEL_TEXT: Record<AutonomyLevel, string> = {
   ask_first: "Ask me before everything",
@@ -68,9 +76,9 @@ export function settingsRows(choices: SettingsChoices): { label: string; value: 
     { label: "Advice setting", value: ADVICE_SETTING_TEXT[choices.adviceSetting] },
     { label: "If investments fell 20% in a month", value: MARKET_DROP_TEXT[choices.riskAnswers.marketDrop] },
     { label: "When you'll need invested money", value: TIME_HORIZON_TEXT[choices.riskAnswers.timeHorizon] },
-    { label: "Train models on my data", value: onOff(choices.dataChoices.trainModels) },
-    { label: "Share my data with partners", value: onOff(choices.dataChoices.shareWithPartners) },
-    { label: "Keep chat history", value: onOff(choices.dataChoices.keepChatHistory) },
+    { label: DATA_CHOICE_TEXT.trainModels, value: onOff(choices.dataChoices.trainModels) },
+    { label: DATA_CHOICE_TEXT.shareWithPartners, value: onOff(choices.dataChoices.shareWithPartners) },
+    { label: DATA_CHOICE_TEXT.keepChatHistory, value: onOff(choices.dataChoices.keepChatHistory) },
     { label: "Goals, in order", value: goalsText(choices.goalPreferences) },
     ...STANDING_SEARCHES.map((search) => ({
       label: STANDING_SEARCH_TEXT[search].name,

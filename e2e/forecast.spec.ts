@@ -1,6 +1,7 @@
 import { expect, type Page, test } from "@playwright/test";
 import { restoreSeed } from "./restore-seed";
 import { expectNoHorizontalScroll } from "./page-checks";
+import { openFromMoreMenu } from "./nav";
 
 test.use({ viewport: { width: 390, height: 844 } });
 
@@ -88,7 +89,7 @@ test("Forecast shows no Projection, and says why, when Sam's buffer Rule has no 
   await signInAs(page, "Sam Calloway");
   await expect(page.getByRole("heading", { name: "Home" })).toBeVisible();
   // Run setup again and unpick Buy a home, Sam's only goal, keeping every other answer.
-  await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Agent & limits" }).click();
+  await openFromMoreMenu(page, "Agent & limits");
   await page.getByRole("link", { name: "Run setup again" }).click();
   await page.getByRole("checkbox", { name: /Buy a home/ }).uncheck();
   for (let step = 0; step < 6; step++) await page.getByRole("button", { name: "Next", exact: true }).click();

@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import { CATEGORIES } from "../categories";
 import { DECISION_RESULTS } from "../decisions";
 import { FINDING_KINDS, FINDING_STATES, STANDING_SEARCHES } from "../findings";
+import { ACCESS_READERS } from "../access-log";
 import { MISSION_STATES } from "../missions";
 import { SAVINGS_GOALS } from "../settings";
 import { check, index, integer, sqliteTable, text, uniqueIndex, type AnySQLiteColumn } from "drizzle-orm/sqlite-core";
@@ -391,4 +392,24 @@ export const missionsTable = sqliteTable(
     index("missions_customer_id").on(table.customerId),
     check("missions_ended", sql`(${table.state} = 'running') = (${table.endedAtMs} IS NULL)`),
   ],
+);
+
+/**
+ * The access log: one row per read of a customer's data by anything other than their own page views (ADR 0010).
+ * `who` is the reader, and `what` and `why` are the text the customer is shown, stored when written. Rows are never
+ * updated or deleted: database triggers refuse both.
+ */
+export const accessLogTable = sqliteTable(
+  "access_log",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    customerId: integer("customer_id")
+      .notNull()
+      .references(() => customersTable.id),
+    createdAtMs: integer("created_at_ms").notNull(),
+    who: text("who", { enum: ACCESS_READERS }).notNull(),
+    what: text("what").notNull(),
+    why: text("why").notNull(),
+  },
+  (table) => [index("access_log_customer_id").on(table.customerId)],
 );

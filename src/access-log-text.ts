@@ -1,0 +1,39 @@
+import type { NewAccessLogEntry } from "./access-log";
+import type { MissionRead } from "./missions";
+import { readListText } from "./mission-text";
+
+/** The buffer agent's check of one paycheck, whatever came of it. `paycheck` reads like "$3,240.00 from Acme Corp". */
+export function sweepCheckAccess(paycheck: string): NewAccessLogEntry {
+  return {
+    who: "Your agent",
+    what: "Your checking and savings balances, bills before payday and buffer Rule",
+    why: `To check whether to sweep money above your Buffer after your paycheck of ${paycheck}`,
+  };
+}
+
+/** A Mission's ending, reported, stopped or failed, listing what it read. */
+export function missionAccess(question: string, readList: MissionRead[]): NewAccessLogEntry {
+  return {
+    who: "Your agent",
+    what: readListText(readList),
+    why: `To answer your Mission: “${question}”`,
+  };
+}
+
+/** The Subscription price rises Standing search's check of one new Card purchase at a Subscriptions Merchant. */
+export function subscriptionPurchaseAccess(merchant: string): NewAccessLogEntry {
+  return {
+    who: "Your agent",
+    what: `Your Card purchases at ${merchant}`,
+    why: "Subscription price rises: to check whether a new Card purchase costs more than the last one",
+  };
+}
+
+/** The Subscription price rises Standing search's scan of every existing Card purchase at Subscriptions Merchants. */
+export function subscriptionScanAccess(): NewAccessLogEntry {
+  return {
+    who: "Your agent",
+    what: "Your Card purchases at Subscriptions Merchants",
+    why: "Subscription price rises: to check your existing Card purchases for price rises and free trials turned paid",
+  };
+}

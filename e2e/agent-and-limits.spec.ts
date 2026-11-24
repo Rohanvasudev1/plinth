@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { restoreSeed } from "./restore-seed";
 import { expectNoHorizontalScroll } from "./page-checks";
+import { openFromMoreMenu } from "./nav";
 
 test.use({ viewport: { width: 390, height: 844 } });
 
@@ -15,7 +16,7 @@ test("Priya edits her Rules on Agent & limits at phone width, and each change is
   await restoreSeed(page);
   await page.goto("/sign-in");
   await page.getByRole("button", { name: "Priya Natarajan" }).click();
-  await page.getByRole("link", { name: "Agent & limits" }).click();
+  await openFromMoreMenu(page, "Agent & limits");
 
   await expect(page.getByRole("heading", { name: "Agent & limits" })).toBeVisible();
   const rules = page.getByRole("region", { name: "Your rules" });

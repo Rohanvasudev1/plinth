@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { restoreSeed } from "./restore-seed";
 import { expectNoHorizontalScroll } from "./page-checks";
+import { openFromMoreMenu } from "./nav";
 
 test.use({ viewport: { width: 390, height: 844 } });
 
@@ -39,7 +40,7 @@ test("Sam picks Keep paying on the Tunewell Finding, then switches Subscription 
   await expect(tunewell).toContainText("You chose: Keep paying");
   await expectNoHorizontalScroll(page);
 
-  await page.getByRole("link", { name: "Decision log" }).click();
+  await openFromMoreMenu(page, "Decision log");
   await expect(page.getByText("Changed your settings: Subscription price rises").first()).toBeVisible();
 });
 

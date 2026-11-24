@@ -3,6 +3,7 @@ import { restoreSeed } from "./restore-seed";
 import { turnOnAgentAskingFirst } from "./setup-survey";
 import { expectNoHorizontalScroll } from "./page-checks";
 import { advanceClock } from "./simulator";
+import { openFromMoreMenu } from "./nav";
 
 test.use({ viewport: { width: 390, height: 844 } });
 
@@ -34,7 +35,7 @@ test("Journey 2: Alex sets up the agent to ask first, picks Move on the sweep Fi
   await expect(page.getByRole("region", { name: "House fund", exact: true })).toContainText("$1,000.00");
 
   // 4. The move is Done in the Decision log.
-  await page.getByRole("link", { name: "Decision log" }).click();
+  await openFromMoreMenu(page, "Decision log");
   const moved = page.getByRole("article", { name: "Moved $1,000 to House fund" });
   await expect(moved).toContainText("Done");
   await moved.getByText("Why?").click();

@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { restoreSeed } from "./restore-seed";
 import { expectNoHorizontalScroll } from "./page-checks";
+import { openFromMoreMenu } from "./nav";
 
 test.use({ viewport: { width: 390, height: 844 } });
 
@@ -30,7 +31,7 @@ test("Journey 3: Sam checks the Forecast, tries the slider, and after payday fin
   await expect(withChanges).toContainText("saving $2,207.05 a month: $91,853.80");
 
   // 4. Advancing the clock to Friday 20 November posts Sam's paycheck, and the agent sweeps $340.
-  await nav.getByRole("link", { name: "Simulator (testing tool)" }).click();
+  await openFromMoreMenu(page, "Simulator");
   await page.getByRole("button", { name: "Advance clock one day" }).click();
   await expect(page.getByRole("status")).toContainText("Posted your Acme Corp paycheck of $3,240.00 for 2026-11-20.");
 

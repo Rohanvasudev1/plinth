@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { restoreSeed } from "./restore-seed";
+import { openFromMoreMenu } from "./nav";
 
 test.use({ viewport: { width: 390, height: 844 } });
 
@@ -7,7 +8,7 @@ test("a Card purchase in the Simulator picks a Merchant and spends from the chos
   await restoreSeed(page);
   await page.goto("/sign-in");
   await page.getByRole("button", { name: "Sam Calloway" }).click();
-  await page.getByRole("link", { name: "Simulator" }).click();
+  await openFromMoreMenu(page, "Simulator");
 
   const purchase = page.getByRole("region", { name: "Card purchase" });
   await purchase.getByLabel("Merchant").selectOption({ label: "Lantern Noodle Bar (Eating out)" });

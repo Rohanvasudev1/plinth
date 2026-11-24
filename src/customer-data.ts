@@ -3,7 +3,9 @@ import { alias } from "drizzle-orm/sqlite-core";
 import { localDate, type LocalDate } from "./calendar";
 import type { Clock } from "./clock";
 import type { Database } from "./db/database";
+import type { AccessLogEntry, NewAccessLogEntry } from "./access-log";
 import {
+  accessLogTable,
   accountsTable,
   decisionsTable,
   findingsTable,
@@ -261,6 +263,13 @@ export interface CustomerData {
   recordMissionProgress(customer: Customer, missionId: number, progressLabel: MissionProgressLabel, read?: MissionRead): Mission;
   /** Ends the customer's running Mission, timed by the clock. Throws MissionError if it isn't running. */
   endMission(customer: Customer, missionId: number, state: Exclude<MissionState, "running">): Mission;
+  /**
+   * Writes one access log entry, timed by the clock (ADR 0010). Call it in the same transaction as the action that
+   * read the customer's data. Entries are never changed or removed.
+   */
+  recordAccess(customer: Customer, entry: NewAccessLogEntry): AccessLogEntry;
+  /** The customer's access log, newest first. */
+  listAccessLog(customer: Customer): AccessLogEntry[];
 }
 
 /** A change to a Rule: its switch, its parameters, or both. Whatever is left out stays as it is. */
@@ -921,7 +930,30 @@ export function createCustomerData(deps: {
     return recorded;
   }
 
+  function selectAccessLog(customer: Customer, entryId?: number): AccessLogEntry[] {
+    return db
+      .select()
+      .from(accessLogTable)
+      .where(
+        and(eq(accessLogTable.customerId, customer.id), entryId === undefined ? undefined : eq(accessLogTable.id, entryId)),
+      )
+      .orderBy(desc(accessLogTable.createdAtMs), desc(accessLogTable.id))
+      .all()
+      .map((row) => ({ id: row.id, at: new Date(row.createdAtMs), who: row.who, what: row.what, why: row.why }));
+  }
+
   return {
+    recordAccess(customer, entry) {
+      const row = db
+        .insert(accessLogTable)
+        .values({ customerId: customer.id, createdAtMs: clock.now().getTime(), ...entry })
+        .returning({ id: accessLogTable.id })
+        .get();
+      const recorded = selectAccessLog(customer, row.id)[0];
+      if (!recorded) throw new Error(`Access log entry ${row.id} vanished after it was recorded`);
+      return recorded;
+    },
+    listAccessLog: (customer) => selectAccessLog(customer),
     listAccounts: (customer) => selectAccounts(customer),
     getAccount,
     openAccount(customer, account) {
