@@ -123,7 +123,7 @@ export interface CustomerData {
   openAccount(customer: Customer, account: NewAccount): Account;
   /**
    * Sets the Goal's target on one of the customer's savings accounts. Throws GoalError, saving nothing, if the
-   * account isn't one of their savings accounts or the target is out of range.
+   * account isn't one of their savings accounts or the target is out of range. Writes no Decision log entry.
    */
   setGoalTarget(customer: Customer, accountId: number, target: Cents): Account;
   /**

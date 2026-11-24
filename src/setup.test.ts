@@ -231,6 +231,51 @@ describe("Setup survey", () => {
     ]);
   });
 
+  it("setting a Goal's target writes a Decision log entry with the customer as actor, naming the goal and both targets", () => {
+    const bank = openTestBank();
+    const sam = signInByName(bank, "Sam Calloway");
+    const alex = signInByName(bank, "Alex Okafor");
+    const [, houseFund] = bank.customerData.listAccounts(sam);
+
+    bank.setGoalTarget(sam, houseFund!.id, cents(45_000_00));
+
+    expect(bank.readDecisionLog(sam)).toEqual([
+      expect.objectContaining({
+        actor: "customer",
+        trigger: { ledgerEventId: null, description: "You changed a Goal's target on Agent & limits" },
+        rule: null,
+        action: "Changed the House fund target from $40,000 to $45,000",
+        amount: 0,
+        result: "Done",
+        why: [
+          { label: "Trigger", value: "You changed a Goal's target on Agent & limits" },
+          { label: "Goal", value: "House fund, for Buy a home" },
+          { label: "Before", value: "$40,000" },
+          { label: "After", value: "$45,000" },
+        ],
+      }),
+    ]);
+
+    bank.finishSetup(alex, ALEX_ANSWERS);
+    const [, travel] = bank.customerData.listAccounts(alex);
+    bank.setGoalTarget(alex, travel!.id, cents(3_000_00));
+    expect(bank.readDecisionLog(alex)[0]).toMatchObject({
+      action: "Set the Travel fund target to $3,000",
+      why: expect.arrayContaining([{ label: "Before", value: "No target" }]),
+    });
+  });
+
+  it("a refused target writes no Decision log entry", () => {
+    const bank = openTestBank();
+    const sam = signInByName(bank, "Sam Calloway");
+    const [checking, houseFund] = bank.customerData.listAccounts(sam);
+
+    expect(() => bank.setGoalTarget(sam, houseFund!.id, cents(50))).toThrow(GoalError);
+    expect(() => bank.setGoalTarget(sam, checking!.id, cents(1_000_00))).toThrow(GoalError);
+
+    expect(bank.readDecisionLog(sam)).toEqual([]);
+  });
+
   it("refuses a target that isn't a whole-dollar amount from $1 to $10,000,000, or isn't on the customer's own savings account", () => {
     const bank = openTestBank();
     const alex = signInByName(bank, "Alex Okafor");

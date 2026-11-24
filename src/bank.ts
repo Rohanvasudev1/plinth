@@ -6,6 +6,7 @@ import type { Database } from "./db/database";
 import type { Decision, DecisionResult } from "./decisions";
 import { chooseOption, type ChooseOptionOutcome } from "./finding-choices";
 import type { Finding, FindingOptionKey } from "./findings";
+import { setGoalTarget } from "./goal-changes";
 import { createLedgerEventDispatcher, type LedgerEventDispatcher } from "./ledger-events";
 import { cents, type Cents } from "./money";
 import {
@@ -104,7 +105,10 @@ export interface Bank extends Simulator, RuleChanges {
   readSetupAnswers(customer: Customer): SetupAnswers | undefined;
   /** Applies the standard Rules and settings, with no goals and so no sweep target, as `finishSetup` does. */
   skipSetup(customer: Customer): Settings;
-  /** Sets the Goal's target on one of the customer's savings accounts, or throws GoalError, saving nothing. */
+  /**
+   * Sets the Goal's target on one of the customer's savings accounts and writes a Decision log entry with them as
+   * actor, or throws GoalError, saving nothing.
+   */
   setGoalTarget(customer: Customer, accountId: number, target: Cents): Account;
   /** Whether the customer's agent is paused. */
   isAgentPaused(customer: Customer): boolean;
@@ -159,7 +163,7 @@ export function createBank(deps: { db: Database; clock: SettableClock }): Bank {
     readSettings: (customer) => customerData.getSettings(customer),
     changeSettings: (customer, change) => changeSettings(customerData, customer, change),
     finishSetup: (customer, answers) => applySetup(customerData, customer, answers, "survey"),
-    setGoalTarget: (customer, accountId, target) => customerData.setGoalTarget(customer, accountId, target),
+    setGoalTarget: (customer, accountId, target) => setGoalTarget(customerData, customer, accountId, target),
     readSetupAnswers: (customer) => readSetupAnswers(customerData, customer),
     skipSetup: (customer) => applySetup(customerData, customer, STANDARD_SETUP, "skip"),
     isAgentPaused: (customer) => customerData.isAgentPaused(customer),

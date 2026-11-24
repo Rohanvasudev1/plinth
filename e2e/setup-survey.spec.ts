@@ -79,6 +79,7 @@ test("Alex answers the Setup survey on Home at phone width, and gets a Goal acco
 
   await page.getByRole("link", { name: "Decision log" }).click();
   await expect(page.getByRole("article").filter({ hasText: "Saved your settings from the Setup survey" })).toBeVisible();
+  await expect(page.getByRole("article").filter({ hasText: "Set the Travel fund target to $3,000" })).toBeVisible();
 });
 
 test("leaving the survey halfway saves nothing", async ({ page }) => {

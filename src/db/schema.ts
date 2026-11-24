@@ -186,7 +186,7 @@ export const ruleVersionsTable = sqliteTable(
 /**
  * The Decision log: one row per agent action, with what triggered it, the Rule version it used, and its result,
  * plus one row, written by the customer, for each agent action they undo and each change they make to a Rule or
- * their settings record. Only a settings change has no Rule.
+ * their settings record. A customer change that isn't to a Rule, such as a settings or Goal target change, has no Rule.
  * `why` is a JSON array of label and value pairs.
  */
 export const decisionsTable = sqliteTable(
