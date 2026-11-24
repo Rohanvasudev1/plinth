@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 /** The signed-in pages the nav bar can mark as current. */
-export type NavPage = "home" | "activity" | "agent" | "decision-log" | "simulator" | "setup";
+export type NavPage = "home" | "activity" | "agent" | "decision-log" | "simulator";
 
 const MAIN_LINKS: { page: NavPage; href: string; label: string }[] = [
   { page: "home", href: "/", label: "Home" },
@@ -11,9 +11,9 @@ const MAIN_LINKS: { page: NavPage; href: string; label: string }[] = [
 
 /**
  * The nav bar on every signed-in page: the main pages, then the Simulator, marked as a testing tool, and who is
- * signed in. It wraps rather than scrolls at phone width.
+ * signed in. It wraps rather than scrolls at phone width. `current` is left out on a page with no link here.
  */
-export function NavBar({ customerName, current }: { customerName: string; current: NavPage }) {
+export function NavBar({ customerName, current }: { customerName: string; current?: NavPage }) {
   const currentProps = (page: NavPage) => (page === current ? { "aria-current": "page" as const } : {});
   return (
     <div className="nav-bar">

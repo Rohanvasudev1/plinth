@@ -13,7 +13,7 @@ export default async function RunSetupAgainPage() {
   const current = bank.readSetupAnswers(customer);
   return (
     <main className="page narrow">
-      <NavBar customerName={customer.name} current="setup" />
+      <NavBar customerName={customer.name} />
       <header className="top">
         <h1>Run setup again</h1>
       </header>

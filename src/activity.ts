@@ -1,6 +1,7 @@
 import { localDateOf, type LocalDate } from "./calendar";
 import type { Category } from "./categories";
 import type { Customer, CustomerData, LedgerTransaction } from "./customer-data";
+import { isAgentMove } from "./decisions";
 import { cents, type Cents } from "./money";
 
 /** One posted ledger transaction in the customer's Activity. */
@@ -29,7 +30,7 @@ export function readActivity(customerData: CustomerData, customer: Customer): Ac
   const agentMade = new Set(
     customerData
       .listDecisions(customer)
-      .filter((decision) => decision.actor === "agent" && decision.result === "Done")
+      .filter(isAgentMove)
       .map((decision) => decision.ledgerTransactionId),
   );
   return customerData
