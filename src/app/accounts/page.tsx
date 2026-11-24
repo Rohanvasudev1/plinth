@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { getAppBank } from "@/app-bank";
 import type { LinkedAccountOnPage, NetWorthFigures } from "@/bank";
-import { formatConsentDate, LINKED_ACCOUNT_TYPE_TEXT } from "@/linked-account-text";
+import { formatLocalDateWithYear } from "@/calendar";
+import { LINKED_ACCOUNT_TYPE_TEXT } from "@/linked-account-text";
 import { formatDollars } from "@/money";
 import { requireCustomer } from "@/session";
 import { NavBar } from "../nav-bar";
@@ -39,11 +40,11 @@ function LinkedAccountRow({ linked }: { linked: LinkedAccountOnPage }) {
         </div>
         <div className="muted account-detail">
           {linked.consentEnded ? (
-            <>Consent ended on {formatConsentDate(linked.consentEnd)}</>
+            <>Consent ended on {formatLocalDateWithYear(linked.consentEnd)}</>
           ) : (
             <>
               synced <time dateTime={linked.syncedAt.toISOString()}>{entryTimeFormat.format(linked.syncedAt)}</time> · Consent
-              until {formatConsentDate(linked.consentEnd)}
+              until {formatLocalDateWithYear(linked.consentEnd)}
             </>
           )}
         </div>

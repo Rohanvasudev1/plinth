@@ -44,7 +44,14 @@ import {
   type MissionState,
 } from "./missions";
 import { checkGoalTarget, GoalError } from "./goals";
-import { LinkedAccountError, type Consent, type LinkedAccount, type NewLinkedAccount } from "./linked-accounts";
+import {
+  asLinkedAccountId,
+  LinkedAccountError,
+  type Consent,
+  type LinkedAccount,
+  type LinkedAccountId,
+  type NewLinkedAccount,
+} from "./linked-accounts";
 import { isInstitutionAccountKey } from "./open-banking";
 import type { Category } from "./categories";
 import { cents, type Cents } from "./money";
@@ -281,16 +288,16 @@ export interface CustomerData {
   /** The customer's Linked accounts, in the order they were linked. */
   listLinkedAccounts(customer: Customer): LinkedAccount[];
   /** The customer's Linked account with this id, or undefined if it doesn't exist or isn't theirs. */
-  getLinkedAccount(customer: Customer, linkedAccountId: number): LinkedAccount | undefined;
+  getLinkedAccount(customer: Customer, linkedAccountId: LinkedAccountId): LinkedAccount | undefined;
   /** Stores the balance a Sync read for the customer's Linked account, synced now. Throws LinkedAccountError if it isn't theirs. */
-  saveLinkedAccountSync(customer: Customer, linkedAccountId: number, balance: Cents): LinkedAccount;
+  saveLinkedAccountSync(customer: Customer, linkedAccountId: LinkedAccountId, balance: Cents): LinkedAccount;
   /** Replaces the Consent on the customer's Linked account. Throws LinkedAccountError if it isn't theirs. */
-  saveConsent(customer: Customer, linkedAccountId: number, consent: Consent): LinkedAccount;
+  saveConsent(customer: Customer, linkedAccountId: LinkedAccountId, consent: Consent): LinkedAccount;
   /**
    * Deletes the customer's Linked account and its Consent, keeping nothing of it, and returns what it held. Throws
    * LinkedAccountError if it isn't theirs.
    */
-  deleteLinkedAccount(customer: Customer, linkedAccountId: number): LinkedAccount;
+  deleteLinkedAccount(customer: Customer, linkedAccountId: LinkedAccountId): LinkedAccount;
 }
 
 /** A change to a Rule: its switch, its parameters, or both. Whatever is left out stays as it is. */
@@ -963,7 +970,7 @@ export function createCustomerData(deps: {
       .map((row) => ({ id: row.id, at: new Date(row.createdAtMs), who: row.who, what: row.what, why: row.why }));
   }
 
-  function selectLinkedAccounts(customer: Customer, linkedAccountId?: number): LinkedAccount[] {
+  function selectLinkedAccounts(customer: Customer, linkedAccountId?: LinkedAccountId): LinkedAccount[] {
     return db
       .select()
       .from(linkedAccountsTable)
@@ -980,7 +987,7 @@ export function createCustomerData(deps: {
           throw new Error(`Linked account ${row.id} names no Institution account: ${row.institutionAccount}`);
         }
         return {
-          id: row.id,
+          id: asLinkedAccountId(row.id),
           institutionAccount: row.institutionAccount,
           institution: row.institution,
           type: row.type,
@@ -991,7 +998,7 @@ export function createCustomerData(deps: {
       });
   }
 
-  function requireLinkedAccount(customer: Customer, linkedAccountId: number): LinkedAccount {
+  function requireLinkedAccount(customer: Customer, linkedAccountId: LinkedAccountId): LinkedAccount {
     const linked = selectLinkedAccounts(customer, linkedAccountId)[0];
     if (!linked) throw new LinkedAccountError("That Linked account isn't yours");
     return linked;
@@ -1000,7 +1007,7 @@ export function createCustomerData(deps: {
   /** Updates one of the customer's Linked accounts, then reads it back. */
   function updateLinkedAccount(
     customer: Customer,
-    linkedAccountId: number,
+    linkedAccountId: LinkedAccountId,
     values: Partial<typeof linkedAccountsTable.$inferInsert>,
   ): LinkedAccount {
     requireLinkedAccount(customer, linkedAccountId);
@@ -1029,7 +1036,7 @@ export function createCustomerData(deps: {
         })
         .returning({ id: linkedAccountsTable.id })
         .get();
-      return requireLinkedAccount(customer, row.id);
+      return requireLinkedAccount(customer, asLinkedAccountId(row.id));
     },
     listLinkedAccounts: (customer) => selectLinkedAccounts(customer),
     getLinkedAccount: (customer, linkedAccountId) => selectLinkedAccounts(customer, linkedAccountId)[0],

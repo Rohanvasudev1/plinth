@@ -3,10 +3,21 @@ import { sameDayNextYear, type LocalDate } from "./calendar";
 import type { Cents } from "./money";
 import type { InstitutionAccountKey, LinkedAccountType } from "./open-banking";
 
-/** The customer's permission for Plinth to see one Linked account, from its start date to its end date. */
+/** What the customer allows Plinth to see of one Linked account: its balance, from the start date to the end date. */
 export interface Consent {
   start: LocalDate;
   end: LocalDate;
+}
+
+declare const linkedAccountIdBrand: unique symbol;
+
+/** A Linked account's id, kept apart from Plinth account ids so the two can't be swapped. */
+export type LinkedAccountId = number & { readonly [linkedAccountIdBrand]: true };
+
+/** Returns `id` as a LinkedAccountId, or throws RangeError if it isn't a positive whole number. */
+export function asLinkedAccountId(id: number): LinkedAccountId {
+  if (!Number.isSafeInteger(id) || id <= 0) throw new RangeError(`Not a Linked account id: ${id}`);
+  return id as LinkedAccountId;
 }
 
 /**
@@ -14,7 +25,7 @@ export interface Consent {
  * copy of its balance from the last Sync and its Consent. It has no ledger entries.
  */
 export interface LinkedAccount {
-  id: number;
+  id: LinkedAccountId;
   /** The open banking adapter's account it copies. */
   institutionAccount: InstitutionAccountKey;
   institution: string;

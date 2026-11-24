@@ -2,6 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { openFromMoreMenu } from "./nav";
 import { expectNoHorizontalScroll } from "./page-checks";
 import { restoreSeed } from "./restore-seed";
+import { setClock } from "./set-clock";
 
 test.use({ viewport: { width: 390, height: 844 } });
 
@@ -83,6 +84,34 @@ test("Sam unlinks Summit Card, is told Plinth deleted its copy, and can link it 
 
   await page.getByRole("link", { name: "Link another bank" }).click();
   await expect(page.getByRole("heading", { name: "Summit Card" })).toBeVisible();
+});
+
+test("on 23 May 2027 Sam's Consents have ended: no balance, Renew and Unlink, and Renew syncs Summit Card again", async ({ page }) => {
+  await signInAs(page, "Sam Calloway");
+  // 9am in New York (EDT) on the day Sam's seeded Consents end.
+  await setClock(page, "2027-05-23T13:00:00Z");
+  await page.goto("/accounts");
+
+  const summit = page.getByRole("table", { name: "Accounts" }).getByRole("row").filter({ hasText: "Summit Card" });
+  await expect(summit).toContainText("Consent ended on 23 May 2027");
+  await expect(summit).not.toContainText("$");
+  await expect(summit).not.toContainText("synced");
+  await expect(summit.getByRole("button", { name: "Unlink Summit Card" })).toBeVisible();
+  await expect(figure(page, "Investments")).toHaveText("$0.00");
+  await expect(figure(page, "Debt")).toHaveText("$0.00");
+  await expectNoHorizontalScroll(page);
+
+  await summit.getByRole("button", { name: "Renew Summit Card" }).click();
+
+  await expect(page.getByRole("status")).toHaveText("Renewed for 12 months. Plinth read its balance just now.");
+  await expect(summit).toContainText("synced Sun 23 May, 9:00 am");
+  await expect(summit).toContainText("Consent until 23 May 2028");
+  await expect(summit.getByRole("button", { name: "Renew Summit Card" })).toHaveCount(0);
+  await expect(summit).toContainText("-$");
+  await expect(figure(page, "Debt")).not.toHaveText("$0.00");
+  await expect(page.getByRole("table", { name: "Accounts" }).getByRole("row").filter({ hasText: "Northwind" })).toContainText(
+    "Consent ended on 23 May 2027",
+  );
 });
 
 test("the nav shows Accounts between Activity and Forecast and doesn't scroll sideways, with More open or closed", async ({ page }) => {

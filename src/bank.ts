@@ -9,7 +9,7 @@ import {
   unlinkAccount,
   type LinkableAccount,
 } from "./linked-account-changes";
-import type { LinkedAccount } from "./linked-accounts";
+import type { LinkedAccount, LinkedAccountId } from "./linked-accounts";
 import type { InstitutionAccountKey } from "./open-banking";
 import { readForecastPage, type ForecastPage } from "./forecast-page";
 import { startBufferAgent } from "./buffer-agent";
@@ -149,12 +149,12 @@ export interface Bank extends Simulator, RuleChanges {
    * and writes a Decision log entry with them as actor, in one transaction. Throws LinkedAccountError, saving nothing,
    * if it isn't theirs or its Consent hasn't ended.
    */
-  renewConsent(customer: Customer, linkedAccountId: number): LinkedAccount;
+  renewConsent(customer: Customer, linkedAccountId: LinkedAccountId): LinkedAccount;
   /**
    * Deletes one of the customer's Linked accounts and its Consent at once, writing a Decision log entry with them as
    * actor and an access log entry. Throws LinkedAccountError, saving nothing, if it isn't theirs.
    */
-  unlinkAccount(customer: Customer, linkedAccountId: number): LinkedAccount;
+  unlinkAccount(customer: Customer, linkedAccountId: LinkedAccountId): LinkedAccount;
   /** The customer's Activity: their posted ledger transactions, newest first, each tagged if their agent made it. */
   readActivity(customer: Customer): ActivityRow[];
   /**

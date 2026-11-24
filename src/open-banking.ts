@@ -10,14 +10,20 @@ import { cents, type Cents } from "./money";
 export const LINKED_ACCOUNT_TYPES = ["checking", "savings", "credit_card", "loan", "retirement"] as const;
 export type LinkedAccountType = (typeof LINKED_ACCOUNT_TYPES)[number];
 
+/**
+ * Sam Calloway's customer id. The seed creates Sam first, in a database with no customers, so he is customer 1 in
+ * every database (`seed.ts`). The adapter keys holdings on the id, never the name, so two customers can share a name.
+ */
+const SAM = 1;
+
 /** The first date the adapter has balances for: the day the simulation starts. */
 export const OPEN_BANKING_FROM = localDate("2026-11-19");
 
 interface InstitutionAccountPlan {
   institution: string;
   type: LinkedAccountType;
-  /** The customers who hold it, by name, or every customer. */
-  heldBy: "everyone" | readonly string[];
+  /** The ids of the customers who hold it, or every customer. */
+  heldBy: "everyone" | readonly number[];
   /** The balance on OPEN_BANKING_FROM. */
   opening: Cents;
   /** What each later date adds to the balance. */
@@ -29,7 +35,7 @@ const INSTITUTION_ACCOUNTS = {
   "summit-card": {
     institution: "Summit Card",
     type: "credit_card",
-    heldBy: ["Sam Calloway"],
+    heldBy: [SAM],
     opening: cents(-2_310_55),
     stepOn: (date) => -45_00 + (dayOfMonth(date) === 3 ? 1_350_00 : 0),
   },
@@ -37,7 +43,7 @@ const INSTITUTION_ACCOUNTS = {
   northwind: {
     institution: "Northwind",
     type: "retirement",
-    heldBy: ["Sam Calloway"],
+    heldBy: [SAM],
     opening: cents(41_200_00),
     stepOn: (date) => (dayOfMonth(date) === 1 ? 270_00 : 0),
   },
@@ -45,7 +51,7 @@ const INSTITUTION_ACCOUNTS = {
   "keystone-student-lending": {
     institution: "Keystone Student Lending",
     type: "loan",
-    heldBy: ["Sam Calloway"],
+    heldBy: [SAM],
     opening: cents(-14_800_00),
     stepOn: (date) => (dayOfMonth(date) === 15 ? 310_00 : 0),
   },
@@ -95,7 +101,7 @@ export interface OpenBankingAdapter {
 }
 
 function holds(customer: Customer, plan: InstitutionAccountPlan): boolean {
-  return plan.heldBy === "everyone" || plan.heldBy.includes(customer.name);
+  return plan.heldBy === "everyone" || plan.heldBy.includes(customer.id);
 }
 
 export const openBankingAdapter: OpenBankingAdapter = {

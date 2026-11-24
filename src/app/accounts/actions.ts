@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getAppBank } from "@/app-bank";
-import { LinkedAccountError } from "@/linked-accounts";
+import { asLinkedAccountId, LinkedAccountError, type LinkedAccountId } from "@/linked-accounts";
 import { isInstitutionAccountKey } from "@/open-banking";
 import { requireCustomer } from "@/session";
 import type { AccountsNotice } from "./notices";
@@ -32,16 +32,25 @@ export async function linkAccountAction(form: FormData): Promise<void> {
   await change(() => getAppBank().linkAccount(customer, key), "linked", "/accounts/link");
 }
 
+/** The Linked account id the form names, or back to All accounts with the refused notice for one that isn't an id. */
+function linkedAccountIdIn(form: FormData): LinkedAccountId {
+  try {
+    return asLinkedAccountId(Number(form.get("linkedAccountId")));
+  } catch {
+    redirect("/accounts?notice=refused");
+  }
+}
+
 /** Renews the Consent on one of the signed-in customer's Linked accounts whose Consent has ended. */
 export async function renewConsentAction(form: FormData): Promise<void> {
   const customer = await requireCustomer();
-  const linkedAccountId = Number(form.get("linkedAccountId"));
+  const linkedAccountId = linkedAccountIdIn(form);
   await change(() => getAppBank().renewConsent(customer, linkedAccountId), "renewed");
 }
 
 /** Unlinks one of the signed-in customer's Linked accounts. */
 export async function unlinkAccountAction(form: FormData): Promise<void> {
   const customer = await requireCustomer();
-  const linkedAccountId = Number(form.get("linkedAccountId"));
+  const linkedAccountId = linkedAccountIdIn(form);
   await change(() => getAppBank().unlinkAccount(customer, linkedAccountId), "unlinked");
 }

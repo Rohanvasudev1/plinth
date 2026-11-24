@@ -3,10 +3,16 @@ import { SIMULATION_START } from "./app-clock";
 import type { Bank } from "./bank";
 import { localDate } from "./calendar";
 import type { Customer } from "./customer-data";
-import { consentFrom, LinkedAccountError } from "./linked-accounts";
+import { consentFrom, LinkedAccountError, type LinkedAccountId } from "./linked-accounts";
 import { openTestBank, signInByName } from "./test-bank";
 
 describe("All accounts", () => {
+  it("seeds Sam as customer 1, the id the open banking adapter holds his Institution accounts under", () => {
+    const bank = openTestBank();
+
+    expect(signInByName(bank, "Sam Calloway").id).toBe(1);
+  });
+
   it("shows Sam's Cash, Investments, Debt and Net worth to the cent on 19 Nov", () => {
     const bank = openTestBank();
     const sam = signInByName(bank, "Sam Calloway");
@@ -146,6 +152,13 @@ describe("Link another bank", () => {
 /** 9am in New York on 20 Nov 2026, after one clock advance. */
 const NOV_20_9AM = new Date("2026-11-20T14:00:00Z");
 
+/** Sam's first Linked account, Summit Card, or a failed test if he has none. */
+function summitCardId(bank: Bank, customer: Customer): LinkedAccountId {
+  const summit = bank.readAllAccounts(customer).linkedAccounts.find((linked) => linked.institution === "Summit Card");
+  if (!summit) throw new Error(`${customer.name} has no Summit Card`);
+  return summit.id;
+}
+
 function plinthEntries(bank: Bank, customer: Customer) {
   return bank.readPrivacy(customer).accessLog.filter((entry) => entry.who === "plinth");
 }
@@ -264,7 +277,7 @@ describe("Consent", () => {
     const bank = openTestBank();
     const sam = signInByName(bank, "Sam Calloway");
     const priya = signInByName(bank, "Priya Natarajan");
-    const summitId = bank.readAllAccounts(sam).linkedAccounts[0]?.id ?? -1;
+    const summitId = summitCardId(bank, sam);
 
     expect(() => bank.renewConsent(sam, summitId)).toThrow(LinkedAccountError);
     bank.clock.setTo(MAY_23_2027_9AM);
@@ -280,7 +293,7 @@ describe("Unlink", () => {
   it("deletes Summit Card at once, with a Decision log entry by Sam and an access log entry by Plinth", () => {
     const bank = openTestBank();
     const sam = signInByName(bank, "Sam Calloway");
-    const summitId = bank.readAllAccounts(sam).linkedAccounts[0]?.id ?? -1;
+    const summitId = summitCardId(bank, sam);
     const logBefore = plinthEntries(bank, sam).length;
 
     bank.unlinkAccount(sam, summitId);
@@ -297,7 +310,7 @@ describe("Unlink", () => {
   it("lets Sam link Summit Card again with a new Consent", () => {
     const bank = openTestBank();
     const sam = signInByName(bank, "Sam Calloway");
-    bank.unlinkAccount(sam, bank.readAllAccounts(sam).linkedAccounts[0]?.id ?? -1);
+    bank.unlinkAccount(sam, summitCardId(bank, sam));
 
     expect(bank.listLinkableAccounts(sam).map((account) => account.key)).toContain("summit-card");
     bank.linkAccount(sam, "summit-card");
@@ -313,7 +326,7 @@ describe("Unlink", () => {
     const bank = openTestBank();
     const sam = signInByName(bank, "Sam Calloway");
     const priya = signInByName(bank, "Priya Natarajan");
-    const summitId = bank.readAllAccounts(sam).linkedAccounts[0]?.id ?? -1;
+    const summitId = summitCardId(bank, sam);
 
     expect(() => bank.unlinkAccount(priya, summitId)).toThrow(LinkedAccountError);
     bank.clock.setTo(new Date("2027-06-01T13:00:00Z"));
@@ -348,6 +361,19 @@ describe("Linked accounts are kept apart", () => {
 
     // Priya's Plinth entries: Harbor's Sync on link and on the advance. Sam's: three seeded, Harbor on link, four on the advance.
     expect(plinthEntries(bank, priya).map((entry) => entry.what)).toEqual(Array(2).fill("Your Harbor Credit Union checking balance"));
-    expect(plinthEntries(bank, sam)).toHaveLength(8);
+    const summit = "Your Summit Card credit card balance";
+    const northwind = "Your Northwind retirement (401(k)) balance";
+    const keystone = "Your Keystone Student Lending loan balance";
+    const harbor = "Your Harbor Credit Union checking balance";
+    expect(plinthEntries(bank, sam).map((entry) => [entry.what, entry.at.toISOString()])).toEqual([
+      [harbor, NOV_20_9AM.toISOString()],
+      [keystone, NOV_20_9AM.toISOString()],
+      [northwind, NOV_20_9AM.toISOString()],
+      [summit, NOV_20_9AM.toISOString()],
+      [harbor, SIMULATION_START.toISOString()],
+      [keystone, SIMULATION_START.toISOString()],
+      [northwind, SIMULATION_START.toISOString()],
+      [summit, SIMULATION_START.toISOString()],
+    ]);
   });
 });

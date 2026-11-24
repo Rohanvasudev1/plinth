@@ -5,7 +5,7 @@ import type { Customer, CustomerData } from "./customer-data";
 import type { SystemData } from "./system-data";
 import { customerChangeDecision } from "./decisions";
 import { institutionAccountName, linkDecisionText, renewDecisionText, unlinkDecisionText } from "./linked-account-text";
-import { consentFrom, hasConsentEnded, LinkedAccountError, type Consent, type LinkedAccount } from "./linked-accounts";
+import { consentFrom, hasConsentEnded, LinkedAccountError, type Consent, type LinkedAccount, type LinkedAccountId } from "./linked-accounts";
 import { openBankingAdapter, type InstitutionAccount, type InstitutionAccountKey } from "./open-banking";
 
 // Linking, renewing, unlinking and syncing Linked accounts. Link, renew and unlink are customer changes, so they work
@@ -103,7 +103,7 @@ export function syncLinkedAccounts(deps: Deps & { systemData: SystemData }): voi
  * a Decision log entry, in one transaction. Throws LinkedAccountError, saving nothing, if it isn't theirs or its
  * Consent hasn't ended.
  */
-export function renewConsent(deps: Deps, customer: Customer, linkedAccountId: number): LinkedAccount {
+export function renewConsent(deps: Deps, customer: Customer, linkedAccountId: LinkedAccountId): LinkedAccount {
   const { clock, customerData } = deps;
   return customerData.inOneTransaction(() => {
     const today = localDateOf(clock.now());
@@ -121,7 +121,7 @@ export function renewConsent(deps: Deps, customer: Customer, linkedAccountId: nu
  * Decision log entry and an access log entry, in one transaction. Throws LinkedAccountError, saving nothing, if it
  * isn't theirs. They can link it again later with a new Consent.
  */
-export function unlinkAccount({ customerData }: Deps, customer: Customer, linkedAccountId: number): LinkedAccount {
+export function unlinkAccount({ customerData }: Deps, customer: Customer, linkedAccountId: LinkedAccountId): LinkedAccount {
   return customerData.inOneTransaction(() => {
     const unlinked = customerData.deleteLinkedAccount(customer, linkedAccountId);
     const name = institutionAccountName(unlinked);

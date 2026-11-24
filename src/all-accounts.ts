@@ -1,6 +1,6 @@
 import type { LocalDate } from "./calendar";
 import type { Account, Customer, CustomerData } from "./customer-data";
-import { hasConsentEnded, type LinkedAccount } from "./linked-accounts";
+import { hasConsentEnded, type LinkedAccount, type LinkedAccountId } from "./linked-accounts";
 import { cents, type Cents } from "./money";
 import type { LinkedAccountType } from "./open-banking";
 
@@ -14,7 +14,7 @@ export interface NetWorthFigures {
 
 /** A Linked account on All accounts. Once its Consent has ended it counts in none of the figures. */
 export interface LinkedAccountOnPage {
-  id: number;
+  id: LinkedAccountId;
   institution: string;
   type: LinkedAccountType;
   balance: Cents;

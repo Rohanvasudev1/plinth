@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { localDate } from "./calendar";
-import { openBankingAdapter } from "./open-banking";
+import { OpenBankingError, openBankingAdapter } from "./open-banking";
 
 const sam = { id: 1, name: "Sam Calloway" };
 const priya = { id: 2, name: "Priya Natarajan" };
@@ -20,6 +20,16 @@ describe("the open banking adapter", () => {
       { institution: "Harbor Credit Union", type: "checking" },
       { institution: "Lakeside Bank", type: "savings" },
     ]);
+  });
+
+  it("decides who holds an account by customer id, so another customer named Sam Calloway holds only the two", () => {
+    const anotherSam = { id: 99, name: "Sam Calloway" };
+
+    expect(openBankingAdapter.listAccounts(anotherSam).map((account) => account.institution)).toEqual([
+      "Harbor Credit Union",
+      "Lakeside Bank",
+    ]);
+    expect(() => openBankingAdapter.balanceOn(anotherSam, "summit-card", localDate("2026-11-19"))).toThrow(OpenBankingError);
   });
 
   it("lists only the two accounts every customer holds for Priya", () => {

@@ -1,4 +1,4 @@
-import { formatLocalDate, type LocalDate } from "./calendar";
+import { formatLocalDateWithYear, type LocalDate } from "./calendar";
 import type { Consent, LinkedAccount } from "./linked-accounts";
 import type { InstitutionAccount, LinkedAccountType } from "./open-banking";
 
@@ -16,20 +16,13 @@ export function institutionAccountName(account: Pick<InstitutionAccount, "instit
   return `${account.institution} ${LINKED_ACCOUNT_TYPE_TEXT[account.type]}`;
 }
 
-const longDateFormat = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
-
-/** A Consent date with its year, such as "23 May 2027". A LocalDate is already in the bank's time zone. */
-export function formatConsentDate(date: LocalDate): string {
-  return longDateFormat.format(new Date(`${date}T12:00:00Z`));
-}
-
 /** What the customer agrees to when they link an account, on the Link another bank page. */
 export function seeOnlyText(consentEnd: LocalDate): string {
-  return `See only: Plinth will see this account's balance until ${formatConsentDate(consentEnd)}`;
+  return `See only: Plinth will see this account's balance until ${formatLocalDateWithYear(consentEnd)}`;
 }
 
 function consentText(consent: Consent): string {
-  return `${formatConsentDate(consent.start)} to ${formatConsentDate(consent.end)}`;
+  return `${formatLocalDateWithYear(consent.start)} to ${formatLocalDateWithYear(consent.end)}`;
 }
 
 /** The Decision log entry's text for the customer linking an account. */
