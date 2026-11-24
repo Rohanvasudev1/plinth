@@ -5,40 +5,38 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getAppBank } from "./app-bank";
 import { SIMULATION_START } from "./app-clock";
 import { POST } from "./app/e2e/reset/route";
-import { restoreSeed } from "./e2e-reset";
+import { deleteAppDatabase } from "./db/app-database";
 import { formatDollars } from "./money";
 import { signInByName } from "./test-bank";
 
 // The app's database is a file shared by every request, so these tests point it at a temporary file.
 let dir: string;
-const savedPath = process.env.PLINTH_DB_PATH;
 
 beforeEach(() => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), "plinth-e2e-reset-"));
-  process.env.PLINTH_DB_PATH = path.join(dir, "plinth.db");
+  vi.stubEnv("PLINTH_DB_PATH", path.join(dir, "plinth.db"));
 });
 
 afterEach(() => {
+  deleteAppDatabase();
   vi.unstubAllEnvs();
-  restoreSeed();
-  if (savedPath === undefined) delete process.env.PLINTH_DB_PATH;
-  else process.env.PLINTH_DB_PATH = savedPath;
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
 function samsBalances(): string[] {
   const bank = getAppBank();
   const home = bank.readHome(signInByName(bank, "Sam Calloway"));
-  return [home.checking, ...home.savings].map((account) => `${account?.name} ${formatDollars(account!.balance)}`);
+  const accounts = home.checking ? [home.checking, ...home.savings] : home.savings;
+  return accounts.map((account) => `${account.name} ${formatDollars(account.balance)}`);
 }
 
-describe("restoring the seed for end-to-end tests", () => {
+describe("replacing the app database restores the seed", () => {
   it("puts back the seeded balances, an empty Decision log and the simulation start time", () => {
     const before = getAppBank();
     before.advanceClock();
     expect(samsBalances()).toEqual(["Checking $3,127.00", "House fund $12,740.00"]);
 
-    restoreSeed();
+    deleteAppDatabase();
 
     const after = getAppBank();
     expect(after.clock.now()).toEqual(SIMULATION_START);
@@ -48,7 +46,7 @@ describe("restoring the seed for end-to-end tests", () => {
 
   it("leaves a working agent, so the next paycheck sweeps again", () => {
     getAppBank().advanceClock();
-    restoreSeed();
+    deleteAppDatabase();
 
     const bank = getAppBank();
     bank.advanceClock();

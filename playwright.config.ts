@@ -7,7 +7,8 @@ const port = 3100;
 
 export default defineConfig({
   testDir: "./e2e",
-  // Every test shares one server, database and simulated clock, so tests run one at a time.
+  // Every test shares one server, database and simulated clock, so tests run one at a time. The reset route
+  // replaces the database, which would break a request another worker had in flight.
   workers: 1,
   fullyParallel: false,
   use: { baseURL: `http://localhost:${port}` },
