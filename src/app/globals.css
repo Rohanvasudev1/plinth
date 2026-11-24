@@ -194,3 +194,43 @@ h3 { margin: 0; font-size: 0.95rem; font-weight: 600; }
 }
 .switch[aria-checked="true"] { background: var(--good); border-color: var(--good); color: var(--paper); }
 .switch:disabled { opacity: 0.6; cursor: progress; }
+
+/* Setup survey */
+.survey { display: flex; flex-direction: column; gap: 14px; }
+.survey h2 { font-size: 1.25rem; font-weight: 800; }
+.survey fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+.survey-progress { display: flex; gap: 4px; }
+.survey-progress i { flex: 1; height: 4px; border-radius: 2px; background: var(--soft); }
+.survey-progress i.on { background: var(--good); }
+.eyebrow { margin: 0; font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.sub-q { font-weight: 600; margin-bottom: 8px; padding: 0; }
+.opts { display: grid; gap: 8px; }
+.opt {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+.opt:has(input:checked) { border-color: var(--good); background: var(--soft); }
+.opt input { margin-top: 4px; accent-color: var(--good); }
+.opt small { display: block; color: var(--muted); font-size: 0.8rem; }
+.opt .order { color: var(--good); font-weight: 600; }
+.summary { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
+.survey-foot { display: flex; justify-content: space-between; gap: 8px; align-items: center; flex-wrap: wrap; }
+.button.secondary { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+a.button { display: inline-block; text-decoration: none; }
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Goals on Agent & limits */
+.goal { border-top: 1px solid var(--soft); padding-top: 12px; display: flex; flex-direction: column; gap: 6px; }
+.goal h3 { margin: 0; font-size: 1rem; }

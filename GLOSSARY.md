@@ -29,8 +29,12 @@ A system-owned account that funds the seeded starting balances, so that seeding 
 _Avoid_: Equity account, suspense account
 
 **Goal**:
-A target amount attached to one of the customer's savings accounts, such as the House fund.
-_Avoid_: Target, pot
+What one of the customer's savings accounts is for, such as Buy a home for the House fund, with an optional target amount the customer sets. Without a target, Home shows only the balance.
+_Avoid_: Pot
+
+**Goal account**:
+The one savings account a customer has for one savings goal (Buy a home, Emergency cushion or Travel), opened by the Setup survey. Running setup again reuses it, and dropping its goal keeps its money.
+_Avoid_: Goal pot, sub-account
 
 **Safe to spend**:
 The checking balance minus the Buffer minus Scheduled bills due before the next payday.
@@ -77,6 +81,10 @@ _Avoid_: Minimum balance, floor
 **Sweep**:
 A move of money above the Buffer from checking to savings, made by the agent after a paycheck posts.
 _Avoid_: Auto-save, transfer
+
+**Sweep target**:
+The Goal account a buffer Rule sweeps to: the first savings goal in the customer's goal preferences. A buffer Rule can have none, as after Skip, and then keeps the Buffer and sweeps nothing.
+_Avoid_: Destination, savings target
 
 **Payment limit**:
 The largest amount the agent may move alone under "handle small things", held in a payment limit Rule.

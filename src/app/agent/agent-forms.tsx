@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 import type { RuleKind } from "@/rules";
-import { setBuffer, setPaymentLimit, switchRule, type AgentFormResult } from "./actions";
+import { setBuffer, setGoalTarget, setPaymentLimit, switchRule, type AgentFormResult } from "./actions";
 
 function Result({ result }: { result: AgentFormResult | null }) {
   if (!result) return null;
@@ -41,6 +41,25 @@ export function RuleAmountForm(props: {
   return (
     <form action={action} className="stack">
       <input type="hidden" name="ruleId" value={props.ruleId} />
+      <label className="field">
+        <span>{props.label}</span>
+        <input name="amount" inputMode="numeric" autoComplete="off" required defaultValue={props.dollars} />
+        <small className="muted">{props.hint}</small>
+      </label>
+      <button type="submit" className="button" disabled={pending}>
+        Save
+      </button>
+      <Result result={result} />
+    </form>
+  );
+}
+
+/** A form that sets the target of the Goal on one savings account. */
+export function GoalTargetForm(props: { accountId: number; label: string; hint: string; dollars: string }) {
+  const [result, action, pending] = useActionState(setGoalTarget, null);
+  return (
+    <form action={action} className="stack">
+      <input type="hidden" name="accountId" value={props.accountId} />
       <label className="field">
         <span>{props.label}</span>
         <input name="amount" inputMode="numeric" autoComplete="off" required defaultValue={props.dollars} />

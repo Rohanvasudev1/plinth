@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getAppBank } from "@/app-bank";
 import { RuleNotFoundError, type Customer } from "@/customer-data";
 import { formatDollarRange, formatDollarsBriefly, parseDollars, type Cents, type CentsRange } from "@/money";
+import { GOAL_TARGET_RANGE, GoalError } from "@/goals";
 import { BUFFER_RANGE, PAYMENT_LIMIT_RANGE, RuleParametersError } from "@/rules";
 import { requireCustomer } from "@/session";
 
@@ -40,6 +41,25 @@ export async function setPaymentLimit(_previous: AgentFormResult | null, form: F
   return setAmount(form, "Payment limit", PAYMENT_LIMIT_RANGE, (customer, ruleId, amount) =>
     getAppBank().setPaymentLimit(customer, ruleId, amount),
   );
+}
+
+/** Sets the target of the Goal on one of the signed-in customer's savings accounts. */
+export async function setGoalTarget(_previous: AgentFormResult | null, form: FormData): Promise<AgentFormResult> {
+  const customer = await requireCustomer();
+  let target: Cents;
+  try {
+    target = parseDollars(String(form.get("amount") ?? ""));
+  } catch {
+    return { ok: false, message: `A target must be a whole-dollar amount from ${formatDollarRange(GOAL_TARGET_RANGE)}. Nothing was saved.` };
+  }
+  try {
+    getAppBank().setGoalTarget(customer, Number(form.get("accountId")), target);
+  } catch (error) {
+    if (error instanceof GoalError) return { ok: false, message: `${error.message}. Nothing was saved.` };
+    throw error;
+  }
+  revalidatePath("/", "layout");
+  return { ok: true, message: `Target set to ${formatDollarsBriefly(target)}.` };
 }
 
 async function setAmount(

@@ -8,7 +8,7 @@ describe("Sign in as", () => {
   it("lists the seeded customers", () => {
     const bank = openTestBank();
 
-    expect(bank.listCustomers().map((customer) => customer.name)).toEqual(["Sam Calloway", "Priya Natarajan"]);
+    expect(bank.listCustomers().map((customer) => customer.name)).toEqual(["Sam Calloway", "Priya Natarajan", "Alex Okafor"]);
   });
 
   it("refuses a customer that doesn't exist", () => {
@@ -53,7 +53,7 @@ describe("seed", () => {
     const reopened = createBank({ db, clock });
     const sam = signInByName(reopened, "Sam Calloway");
 
-    expect(reopened.listCustomers()).toHaveLength(2);
+    expect(reopened.listCustomers()).toHaveLength(3);
     expect(reopened.customerData.listAccounts(sam).map((account) => account.balance)).toEqual([227_00, 12_400_00]);
   });
 

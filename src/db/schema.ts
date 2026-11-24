@@ -28,6 +28,8 @@ export const accountsTable = sqliteTable(
     systemKey: text("system_key").unique(),
     /** The Goal's target amount, only on savings accounts that have one. */
     goalCents: integer("goal_cents"),
+    /** The savings goal this Goal account is for, such as `buy_home`. At most one account per goal per customer. */
+    goal: text("goal", { enum: ["buy_home", "emergency_cushion", "travel"] }),
   },
   (table) => [
     index("accounts_customer_id").on(table.customerId),
@@ -36,6 +38,8 @@ export const accountsTable = sqliteTable(
       sql`(${table.kind} = 'system') = (${table.customerId} IS NULL AND ${table.systemKey} IS NOT NULL)`,
     ),
     check("accounts_goal_on_savings", sql`${table.goalCents} IS NULL OR (${table.kind} = 'savings' AND ${table.goalCents} > 0)`),
+    check("accounts_savings_goal_on_savings", sql`${table.goal} IS NULL OR ${table.kind} = 'savings'`),
+    uniqueIndex("accounts_customer_goal").on(table.customerId, table.goal),
   ],
 );
 

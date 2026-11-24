@@ -1,15 +1,7 @@
 import type { Customer, CustomerData } from "./customer-data";
 import { customerChangeDecision, type WhyRow } from "./decisions";
-import {
-  SettingsError,
-  type AdviceSetting,
-  type AutonomyLevel,
-  type GoalPreference,
-  type MarketDropAnswer,
-  type Settings,
-  type SettingsChoices,
-  type TimeHorizonAnswer,
-} from "./settings";
+import { SettingsError, type Settings, type SettingsChoices } from "./settings";
+import { settingsRows } from "./settings-text";
 
 /** A change to some of a settings record's choices. Whatever is left out stays as it is. */
 export type SettingsChange = Partial<SettingsChoices>;
@@ -50,65 +42,9 @@ export function changeSettings(customerData: CustomerData, customer: Customer, c
 
 /** One Why row per choice that differs, labelled with the choice and valued "before → after". */
 function describeDifferences(before: SettingsChoices, after: SettingsChoices): WhyRow[] {
-  const rows: [label: string, before: string, after: string][] = [
-    ["Autonomy level", AUTONOMY_LEVEL_TEXT[before.autonomyLevel], AUTONOMY_LEVEL_TEXT[after.autonomyLevel]],
-    ["Advice setting", ADVICE_SETTING_TEXT[before.adviceSetting], ADVICE_SETTING_TEXT[after.adviceSetting]],
-    [
-      "If investments fell 20% in a month",
-      MARKET_DROP_TEXT[before.riskAnswers.marketDrop],
-      MARKET_DROP_TEXT[after.riskAnswers.marketDrop],
-    ],
-    [
-      "When you'll need invested money",
-      TIME_HORIZON_TEXT[before.riskAnswers.timeHorizon],
-      TIME_HORIZON_TEXT[after.riskAnswers.timeHorizon],
-    ],
-    ["Train models on my data", onOff(before.dataChoices.trainModels), onOff(after.dataChoices.trainModels)],
-    ["Share my data with partners", onOff(before.dataChoices.shareWithPartners), onOff(after.dataChoices.shareWithPartners)],
-    ["Keep chat history", onOff(before.dataChoices.keepChatHistory), onOff(after.dataChoices.keepChatHistory)],
-    ["Goals, in order", goalsText(before.goalPreferences), goalsText(after.goalPreferences)],
-  ];
-  return rows.filter(([, from, to]) => from !== to).map(([label, from, to]) => ({ label, value: `${from} → ${to}` }));
-}
-
-const AUTONOMY_LEVEL_TEXT: Record<AutonomyLevel, string> = {
-  ask_first: "Ask me before everything",
-  small_things: "Handle small things, ask about big ones",
-  within_rules: "Act on anything within my rules",
-};
-
-const ADVICE_SETTING_TEXT: Record<AdviceSetting, string> = {
-  never: "Facts and options only",
-  on_request: "Facts and options, and the agent's view only if I ask",
-  always: "Facts, options and what the agent would pick",
-};
-
-const MARKET_DROP_TEXT: Record<MarketDropAnswer, string> = {
-  sell: "Sell to stop losing more",
-  wait: "Wait it out",
-  buy_more: "Buy more while prices are low",
-  ask_me: "Show me what's going on, then I'll decide",
-};
-
-const TIME_HORIZON_TEXT: Record<TimeHorizonAnswer, string> = {
-  under_3_years: "Within 3 years",
-  "3_to_10_years": "In 3 to 10 years",
-  over_10_years: "More than 10 years",
-};
-
-const GOAL_PREFERENCE_TEXT: Record<GoalPreference, string> = {
-  buy_home: "Buy a home",
-  emergency_cushion: "Emergency cushion",
-  clear_debt: "Clear debt",
-  invest_long_term: "Invest for the long term",
-  travel: "Travel",
-  spend_less: "Spend less",
-};
-
-function onOff(on: boolean): string {
-  return on ? "On" : "Off";
-}
-
-function goalsText(goals: GoalPreference[]): string {
-  return goals.length === 0 ? "None" : goals.map((goal) => GOAL_PREFERENCE_TEXT[goal]).join(", ");
+  const afterRows = settingsRows(after);
+  return settingsRows(before).flatMap((row, index) => {
+    const to = afterRows[index]?.value;
+    return to === undefined || to === row.value ? [] : [{ label: row.label, value: `${row.value} → ${to}` }];
+  });
 }

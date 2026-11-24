@@ -104,13 +104,19 @@ function switchedText(on: boolean): string {
 }
 
 /**
+/** Where a buffer Rule moves the rest, such as "move the rest to House fund". */
+export function sweepTargetText(savingsAccountId: number | null, accountName: (accountId: number) => string): string {
+  return savingsAccountId === null ? "with no savings goal to move the rest to" : `move the rest to ${accountName(savingsAccountId)}`;
+}
+
+/**
  * One version of a Rule in words, such as "Buffer Rule v1: keep $1,500 in Checking, move the rest to House fund".
  * `accountName` names the customer's accounts.
  */
 export function describeRule(rule: Rule, accountName: (accountId: number) => string): string {
   switch (rule.kind) {
     case "buffer":
-      return `Buffer Rule v${rule.version}: keep ${formatDollarsBriefly(rule.parameters.buffer)} in ${accountName(rule.parameters.checkingAccountId)}, move the rest to ${accountName(rule.parameters.savingsAccountId)}`;
+      return `Buffer Rule v${rule.version}: keep ${formatDollarsBriefly(rule.parameters.buffer)} in ${accountName(rule.parameters.checkingAccountId)}, ${sweepTargetText(rule.parameters.savingsAccountId, accountName)}`;
     case "payment_limit":
       return `Payment limit Rule v${rule.version}: move up to ${formatDollarsBriefly(rule.parameters.paymentLimit)} alone`;
   }

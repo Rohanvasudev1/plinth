@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { getAppBank } from "@/app-bank";
 import { BUFFER_RANGE, PAYMENT_LIMIT_RANGE, type Rule } from "@/rules";
+import { GOAL_TARGET_RANGE } from "@/goals";
 import { formatDollarRange, formatDollarsBriefly, formatDollarsForInput } from "@/money";
+import { isSavingsGoal } from "@/settings";
 import { requireCustomer } from "@/session";
-import { RuleAmountForm, RuleSwitch } from "./agent-forms";
+import { GoalTargetForm, RuleAmountForm, RuleSwitch } from "./agent-forms";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +15,10 @@ function ruleText(rule: Rule, accountName: (accountId: number) => string): { tit
     case "buffer":
       return {
         title: `Keep a ${formatDollarsBriefly(rule.parameters.buffer)} buffer in ${accountName(rule.parameters.checkingAccountId)}`,
-        detail: `After bills before payday, move anything above it to ${accountName(rule.parameters.savingsAccountId)}`,
+        detail:
+          rule.parameters.savingsAccountId === null
+            ? "No savings goal to move anything above it to. Run setup again to pick one"
+            : `After bills before payday, move anything above it to ${accountName(rule.parameters.savingsAccountId)}`,
       };
     case "payment_limit":
       return {
@@ -34,6 +39,8 @@ export default async function AgentAndLimitsPage() {
   const rules = bank.customerData.listRules(customer);
   const bufferRules = rules.filter((rule) => rule.kind === "buffer");
   const paymentLimitRule = rules.find((rule) => rule.kind === "payment_limit");
+  const sweepOrder = (bank.readSettings(customer)?.goalPreferences ?? []).filter(isSavingsGoal);
+  const savings = accounts.filter((account) => account.kind === "savings");
 
   return (
     <main className="page">
@@ -97,6 +104,41 @@ export default async function AgentAndLimitsPage() {
           />
         </section>
       )}
+
+      {savings.length > 0 && (
+        <section className="card stack" aria-labelledby="goals">
+          <h2 id="goals">Goals</h2>
+          <p className="muted">Set a target to see your progress on Home.</p>
+          {savings.map((account) => {
+            const position = account.goal === null ? -1 : sweepOrder.indexOf(account.goal);
+            return (
+              <section key={account.id} className="goal" aria-labelledby={`goal-${account.id}`}>
+                <h3 id={`goal-${account.id}`}>{account.name}</h3>
+                <p className="muted">
+                  {formatDollarsBriefly(account.balance)} saved ·{" "}
+                  {position >= 0 ? `#${position + 1} in the sweep order` : "Not in the sweep order"}
+                </p>
+                <GoalTargetForm
+                  accountId={account.id}
+                  label="Target, in dollars"
+                  hint={`A whole-dollar amount from ${formatDollarRange(GOAL_TARGET_RANGE)}`}
+                  dollars={account.goalTarget === null ? "" : formatDollarsForInput(account.goalTarget)}
+                />
+              </section>
+            );
+          })}
+        </section>
+      )}
+
+      <section className="card" aria-labelledby="run-setup-again">
+        <h2 id="run-setup-again">Setup</h2>
+        <p className="muted">Answer the Setup survey again to redo your goals, Rules and settings in one go.</p>
+        <p>
+          <Link href="/setup" className="button">
+            Run setup again
+          </Link>
+        </p>
+      </section>
 
       <section className="card" aria-labelledby="decision-log-link">
         <h2 id="decision-log-link">Decision log</h2>

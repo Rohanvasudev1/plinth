@@ -25,6 +25,14 @@ export const GOAL_PREFERENCES = [
 ] as const;
 export type GoalPreference = (typeof GOAL_PREFERENCES)[number];
 
+/** The goal preferences that get a Goal account each. The others, such as Clear debt, hold no money. */
+export const SAVINGS_GOALS = ["buy_home", "emergency_cushion", "travel"] as const satisfies readonly GoalPreference[];
+export type SavingsGoal = (typeof SAVINGS_GOALS)[number];
+
+export function isSavingsGoal(goal: string): goal is SavingsGoal {
+  return (SAVINGS_GOALS as readonly string[]).includes(goal);
+}
+
 export interface RiskAnswers {
   marketDrop: MarketDropAnswer;
   timeHorizon: TimeHorizonAnswer;

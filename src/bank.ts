@@ -17,6 +17,8 @@ import { createRuleChanges, type RuleChanges } from "./rule-changes";
 import { seedDemoData } from "./seed";
 import type { Settings } from "./settings";
 import { changeSettings, type SettingsChange } from "./settings-changes";
+import { applySetup, readSetupAnswers } from "./setup";
+import { STANDARD_SETUP, type SetupAnswers } from "./setup-answers";
 import { createSimulator, type Simulator } from "./simulator";
 import { createSystemData, type SystemData } from "./system-data";
 import { undoAgentAction, type UndoOutcome } from "./undo";
@@ -84,6 +86,18 @@ export interface Bank extends Simulator, RuleChanges {
    * Throws SettingsError, saving nothing, if they have no settings record or the change doesn't fit its schema.
    */
   changeSettings(customer: Customer, change: SettingsChange): Settings;
+  /**
+   * Applies the Setup survey's answers in one database transaction: settings, Rules, Goal accounts and Decision log
+   * entries. Running it again reuses Goal accounts, and a dropped goal keeps its account and money. If anything
+   * fails, nothing is written.
+   */
+  finishSetup(customer: Customer, answers: SetupAnswers): Settings;
+  /** The customer's current survey answers, for running setup again, or undefined if they haven't finished setup. */
+  readSetupAnswers(customer: Customer): SetupAnswers | undefined;
+  /** Applies the standard Rules and settings, with no goals and so no sweep target, as `finishSetup` does. */
+  skipSetup(customer: Customer): Settings;
+  /** Sets the Goal's target on one of the customer's savings accounts, or throws GoalError, saving nothing. */
+  setGoalTarget(customer: Customer, accountId: number, target: Cents): Account;
   /** Marks agent actions as shown to the customer, so the toast shows them only once. */
   markAgentActionsSeen(customer: Customer, decisionIds: number[]): void;
 }
@@ -122,6 +136,10 @@ export function createBank(deps: { db: Database; clock: SettableClock }): Bank {
     billsBeforePayday,
     readSettings: (customer) => customerData.getSettings(customer),
     changeSettings: (customer, change) => changeSettings(customerData, customer, change),
+    finishSetup: (customer, answers) => applySetup(customerData, customer, answers, "survey"),
+    setGoalTarget: (customer, accountId, target) => customerData.setGoalTarget(customer, accountId, target),
+    readSetupAnswers: (customer) => readSetupAnswers(customerData, customer),
+    skipSetup: (customer) => applySetup(customerData, customer, STANDARD_SETUP, "skip"),
     readDecisionLog: (customer) => customerData.listDecisions(customer),
     undo: (customer, decisionId) => undoAgentAction(customerData, customer, decisionId),
     markAgentActionsSeen: (customer, decisionIds) => customerData.markAgentActionsSeen(customer, decisionIds),
