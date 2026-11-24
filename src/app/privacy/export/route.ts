@@ -8,9 +8,8 @@ import { requireCustomer } from "@/session";
  */
 export async function POST(): Promise<Response> {
   const customer = await requireCustomer();
-  const bank = getAppBank();
-  const file = bank.buildExport(customer);
-  const filename = `plinth-export-${localDateOf(bank.clock.now())}.json`;
+  const file = getAppBank().buildExport(customer);
+  const filename = `plinth-export-${localDateOf(new Date(file.exportedAt))}.json`;
   return new Response(`${JSON.stringify(file, null, 2)}\n`, {
     headers: {
       "Content-Type": "application/json; charset=utf-8",

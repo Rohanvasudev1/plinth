@@ -260,7 +260,7 @@ _Avoid_: Audit trail, Read list, access history
 
 **Export**:
 One JSON file of everything Plinth holds about the customer, downloaded from Privacy. Each Export writes an access log entry with the customer as reader, and the file includes it.
-_Avoid_: Download, data dump, backup
+_Avoid_: Data dump, backup
 
 **Closed customer**:
 A customer who used Close and delete. Plinth has paid out their balances, deleted their working data, and kept the Ledger, Decision log and Access log as records. They can no longer sign in.
