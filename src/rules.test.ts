@@ -4,6 +4,7 @@ import { createBank, type Bank } from "./bank";
 import { fixedClock } from "./clock";
 import { openTestDatabase } from "./db/database";
 import { RuleNotFoundError, type Customer } from "./customer-data";
+import { customerChangeDecision } from "./decisions";
 import { RuleParametersError, type PaymentLimitRule } from "./rules";
 import { openTestBank, signInByName } from "./test-bank";
 
@@ -33,6 +34,8 @@ describe("buffer Rule", () => {
     for (const parameters of [
       { ...valid, buffer: 12.5 },
       { ...valid, buffer: -1 },
+      { ...valid, buffer: 1_500_50 },
+      { ...valid, buffer: 100_001_00 },
       { ...valid, savingsAccountId: "House fund" },
       { checkingAccountId: checking?.id, buffer: 1_500_00 },
       { ...valid, extra: true },
@@ -51,7 +54,7 @@ describe("buffer Rule", () => {
     const [rule] = bank.customerData.listRules(sam);
     if (!rule) throw new Error("Sam's buffer Rule is missing");
 
-    const switched = bank.customerData.switchRule(sam, rule.id, false);
+    const switched = bank.switchRule(sam, rule.id, false);
 
     expect(switched).toMatchObject({ id: rule.id, version: 2, on: false, parameters: rule.parameters });
     expect(bank.customerData.listRules(sam)[0]).toEqual(switched);
@@ -64,7 +67,7 @@ describe("buffer Rule", () => {
     const [checking, houseFund] = bank.customerData.listAccounts(sam);
     const [seeded] = bank.customerData.listRules(sam);
     if (!checking || !houseFund || !seeded) throw new Error("Sam's seed data is missing");
-    bank.customerData.switchRule(sam, seeded.id, false);
+    bank.switchRule(sam, seeded.id, false);
     bank.customerData.createRule(sam, {
       kind: "buffer",
       parameters: { checkingAccountId: checking.id, savingsAccountId: houseFund.id, buffer: cents(200_00) },
@@ -83,7 +86,7 @@ describe("buffer Rule", () => {
 
     expect(bank.customerData.listRules(priya).map((rule) => rule.id)).not.toContain(samsRule.id);
     expect(bank.customerData.getRule(priya, samsRule.id)).toBeUndefined();
-    expect(() => bank.customerData.switchRule(priya, samsRule.id, false)).toThrow();
+    expect(() => bank.switchRule(priya, samsRule.id, false)).toThrow();
     expect(bank.customerData.getRule(sam, samsRule.id)?.on).toBe(true);
   });
 
@@ -144,7 +147,9 @@ describe("customer changes to the buffer Rule", () => {
     if (!buffer) throw new Error("Sam's buffer Rule is missing");
 
     for (const amount of [cents(100_000_01), cents(100_001_00), cents(-1_00), cents(1_500_50)]) {
-      expect(() => bank.setBuffer(sam, buffer.id, amount)).toThrow(RuleParametersError);
+      expect(() => bank.setBuffer(sam, buffer.id, amount)).toThrow(
+        new RuleParametersError("Must be a whole-dollar amount from $0 to $100,000"),
+      );
     }
     expect(bank.setBuffer(sam, buffer.id, cents(100_000_00)).version).toBe(2);
     expect(bank.setBuffer(sam, buffer.id, cents(0)).version).toBe(3);
@@ -200,6 +205,26 @@ describe("customer changes to the buffer Rule", () => {
   });
 });
 
+describe("Rule changes in the data-access layer", () => {
+  it("won't write a Rule version unless its Decision log entry names that version", () => {
+    const bank = openTestBank();
+    const sam = signInByName(bank, "Sam Calloway");
+    const limit = paymentLimitRuleOf(bank, sam);
+
+    expect(() =>
+      bank.customerData.reviseRule(
+        sam,
+        limit.id,
+        () => ({ on: false }),
+        (before) => customerChangeDecision({ trigger: "Test", rule: { id: before.id, version: before.version }, action: "Test", why: [] }),
+      ),
+    ).toThrow(RuleNotFoundError);
+
+    expect(bank.customerData.getRule(sam, limit.id)).toEqual(limit);
+    expect(bank.readDecisionLog(sam)).toEqual([]);
+  });
+});
+
 describe("payment limit Rule", () => {
   it("is seeded for Sam and Priya at $500, switched on", () => {
     const bank = openTestBank();
@@ -245,7 +270,9 @@ describe("payment limit Rule", () => {
     const limit = paymentLimitRuleOf(bank, sam);
 
     for (const amount of [cents(10_000_01), cents(10_001_00), cents(-1_00), cents(500_50)]) {
-      expect(() => bank.setPaymentLimit(sam, limit.id, amount)).toThrow(RuleParametersError);
+      expect(() => bank.setPaymentLimit(sam, limit.id, amount)).toThrow(
+        new RuleParametersError("Must be a whole-dollar amount from $0 to $10,000"),
+      );
     }
 
     expect(bank.customerData.getRule(sam, limit.id)).toEqual(limit);

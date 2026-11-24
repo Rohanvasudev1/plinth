@@ -141,16 +141,17 @@ export interface CustomerData {
   /** The customer's Rule at `version`, or its latest version when `version` is left out. */
   getRule(customer: Customer, ruleId: number, version?: number): Rule | undefined;
   /**
-   * Switches the customer's Rule on or off by writing its next version. Throws if the Rule isn't theirs. Writes no
-   * Decision log entry: a customer's own switch goes through the bank's `switchRule`, which writes one.
+   * The only way to change a Rule (ADR 0007): writes its next version with the change applied and, in the same
+   * database transaction, the Decision log entry `describe` builds from the versions before and after.
+   * Throws RuleNotFoundError if the Rule isn't theirs, and RuleParametersError if new parameters don't match the
+   * kind's schema. Either way nothing is written. `describe` may throw to refuse the change, also writing nothing.
    */
-  switchRule(customer: Customer, ruleId: number, on: boolean): Rule;
-  /**
-   * Writes the next version of the customer's Rule with the change applied. Throws RuleNotFoundError if the Rule
-   * isn't theirs, and RuleParametersError, writing nothing, if new parameters don't match the kind's schema.
-   * Writes no Decision log entry.
-   */
-  reviseRule(customer: Customer, ruleId: number, change: RuleRevision): Rule;
+  reviseRule(
+    customer: Customer,
+    ruleId: number,
+    change: (current: Rule) => RuleRevision,
+    describe: (before: Rule, after: Rule) => NewDecision,
+  ): Rule;
   /** The customer's settings record at `version`, or its latest version, or undefined if they have none. */
   getSettings(customer: Customer, version?: number): Settings | undefined;
   /**
@@ -449,28 +450,36 @@ export function createCustomerData(deps: {
     return created;
   }
 
-  function reviseRule(customer: Customer, ruleId: number, change: RuleRevision): Rule {
-    db.transaction(
-      (tx) => {
-        const current = getRule(customer, ruleId);
-        if (!current) throw new RuleNotFoundError(`No Rule ${ruleId} for this customer`);
-        const { parameters } =
-          change.parameters === undefined ? current : parseRuleContent(current.kind, change.parameters);
-        tx.insert(ruleVersionsTable)
-          .values({
-            ruleId,
-            version: current.version + 1,
-            parameters,
-            on: change.on ?? current.on,
-            createdAtMs: clock.now().getTime(),
-          })
-          .run();
-      },
-      { behavior: "immediate" },
-    );
-    const revised = getRule(customer, ruleId);
-    if (!revised) throw new Error(`Rule ${ruleId} vanished after it was revised`);
-    return revised;
+  function reviseRule(
+    customer: Customer,
+    ruleId: number,
+    change: (current: Rule) => RuleRevision,
+    describe: (before: Rule, after: Rule) => NewDecision,
+  ): Rule {
+    return inOneTransaction(() => {
+      const current = getRule(customer, ruleId);
+      if (!current) throw new RuleNotFoundError(`No Rule ${ruleId} for this customer`);
+      const revision = change(current);
+      const { parameters } =
+        revision.parameters === undefined ? current : parseRuleContent(current.kind, revision.parameters);
+      db.insert(ruleVersionsTable)
+        .values({
+          ruleId,
+          version: current.version + 1,
+          parameters,
+          on: revision.on ?? current.on,
+          createdAtMs: clock.now().getTime(),
+        })
+        .run();
+      const revised = getRule(customer, ruleId);
+      if (!revised) throw new Error(`Rule ${ruleId} vanished after it was revised`);
+      const decision = describe(current, revised);
+      if (decision.rule?.id !== revised.id || decision.rule.version !== revised.version) {
+        throw new RuleNotFoundError("A Rule change's Decision log entry must name the version it wrote");
+      }
+      recordDecision(customer, decision);
+      return revised;
+    });
   }
 
   function getSettings(customer: Customer, version?: number): Settings | undefined {
@@ -639,7 +648,6 @@ export function createCustomerData(deps: {
     createRule,
     listRules: (customer) => selectRules(customer),
     getRule,
-    switchRule: (customer, ruleId, on) => reviseRule(customer, ruleId, { on }),
     reviseRule,
     getSettings,
     saveSettings,

@@ -1,16 +1,17 @@
 import { expect, test, type Page } from "@playwright/test";
+import { restoreSeed } from "./restore-seed";
 
 test.use({ viewport: { width: 390, height: 844 } });
 
-/** Sets one Agent & limits amount form and waits for its message. */
+/** Fills in one Agent & limits amount form and presses Save. */
 async function saveAmount(page: Page, form: string, amount: string): Promise<void> {
   const section = page.getByRole("region", { name: form });
   await section.getByRole("textbox").fill(amount);
   await section.getByRole("button", { name: "Save" }).click();
 }
 
-// Uses Priya and puts her Rules back as they were, because every end-to-end test shares one database.
 test("Priya edits her Rules on Agent & limits at phone width, and each change is in the Decision log", async ({ page }) => {
+  await restoreSeed(page);
   await page.goto("/sign-in");
   await page.getByRole("button", { name: "Priya Natarajan" }).click();
   await page.getByRole("link", { name: "Agent & limits" }).click();
@@ -57,13 +58,4 @@ test("Priya edits her Rules on Agent & limits at phone width, and each change is
   await expect(entries.nth(1)).toContainText("Changed the Buffer to $800");
   await expect(entries.nth(2)).toContainText("Changed the Payment limit to $750");
   await expect(entries.nth(0)).toContainText("You");
-
-  // Put Priya's Rules back.
-  await page.goto("/agent");
-  await saveAmount(page, "Payment limit", "500");
-  await expect(rules).toContainText("Move up to $500 without asking");
-  await saveAmount(page, "Buffer for Checking", "500");
-  await expect(rules).toContainText("Keep a $500 buffer in Checking");
-  await rules.getByRole("switch", { name: "Payment limit Rule" }).click();
-  await expect(rules.getByRole("switch", { name: "Payment limit Rule" })).toHaveAttribute("aria-checked", "true");
 });

@@ -16,7 +16,7 @@ function bankAt(at: Date): Bank {
 
 function withoutSweeps(bank: Bank): Bank {
   for (const customer of bank.listCustomers()) {
-    for (const rule of bank.customerData.listRules(customer)) bank.customerData.switchRule(customer, rule.id, false);
+    for (const rule of bank.customerData.listRules(customer)) bank.switchRule(customer, rule.id, false);
   }
   return bank;
 }

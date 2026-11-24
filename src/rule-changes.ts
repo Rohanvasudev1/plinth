@@ -1,7 +1,7 @@
 import { RuleNotFoundError, type Customer, type CustomerData } from "./customer-data";
 import { customerChangeDecision, type WhyRow } from "./decisions";
 import { formatDollarsBriefly, type Cents } from "./money";
-import { BUFFER_RANGE, checkWholeDollars, type Rule } from "./rules";
+import type { Rule } from "./rules";
 
 /**
  * The customer's own changes to their Rules, made on Agent & limits. Each writes the Rule's next version and a
@@ -35,27 +35,20 @@ export function createRuleChanges(customerData: CustomerData): RuleChanges {
     revise: (current: Rule) => { on?: boolean; parameters?: unknown },
     describeChange: (revised: Rule) => { action: string; trigger: string },
   ): Rule {
-    return customerData.inOneTransaction(() => {
-      const current = customerData.getRule(customer, ruleId);
-      if (!current) throw new RuleNotFoundError(`No Rule ${ruleId} for this customer`);
-      const revised = customerData.reviseRule(customer, ruleId, revise(current));
-      const { action, trigger } = describeChange(revised);
-      const name = (accountId: number) => accountName(customer, accountId);
+    const name = (accountId: number) => accountName(customer, accountId);
+    return customerData.reviseRule(customer, ruleId, revise, (before, after) => {
+      const { action, trigger } = describeChange(after);
       const why: WhyRow[] = [
         { label: "Trigger", value: trigger },
-        { label: "Before", value: `${describeRule(current, name)}, ${switchedText(current.on)}` },
-        { label: "After", value: `${describeRule(revised, name)}, ${switchedText(revised.on)}` },
+        { label: "Before", value: `${describeRule(before, name)}, ${switchedText(before.on)}` },
+        { label: "After", value: `${describeRule(after, name)}, ${switchedText(after.on)}` },
       ];
-      customerData.recordDecision(
-        customer,
-        customerChangeDecision({
-          trigger: "You changed a Rule",
-          rule: { id: revised.id, version: revised.version },
-          action,
-          why,
-        }),
-      );
-      return revised;
+      return customerChangeDecision({
+        trigger: "You changed a Rule",
+        rule: { id: after.id, version: after.version },
+        action,
+        why,
+      });
     });
   }
 
@@ -72,7 +65,6 @@ export function createRuleChanges(customerData: CustomerData): RuleChanges {
       );
     },
     setBuffer(customer, ruleId, buffer) {
-      checkWholeDollars(buffer, BUFFER_RANGE);
       return change(
         customer,
         ruleId,

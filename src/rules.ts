@@ -1,4 +1,4 @@
-import { cents, type Cents, type CentsRange } from "./money";
+import { cents, formatDollarRange, type Cents, type CentsRange } from "./money";
 
 /** The buffer Rule: keep `buffer` in the checking account after bills before payday, and sweep the rest to savings. */
 export interface BufferRuleParameters {
@@ -12,11 +12,7 @@ export interface PaymentLimitRuleParameters {
   paymentLimit: Cents;
 }
 
-/**
- * The amounts a customer may set, inclusive, each a whole number of dollars. The payment limit schema enforces
- * its range. The buffer schema takes any amount of cents from zero, and the range applies when the customer
- * sets the Buffer.
- */
+/** The amounts each Rule kind's schema takes, inclusive, each a whole number of dollars. */
 export const BUFFER_RANGE: CentsRange = { min: cents(0), max: cents(100_000_00) };
 export const PAYMENT_LIMIT_RANGE: CentsRange = { min: cents(0), max: cents(10_000_00) };
 
@@ -77,10 +73,10 @@ export function parseRuleContent(kind: RuleKind, parameters: unknown): RuleConte
       ]);
       if (!isId(checkingAccountId)) throw new RuleParametersError("checkingAccountId must be an account id");
       if (!isId(savingsAccountId)) throw new RuleParametersError("savingsAccountId must be an account id");
-      if (typeof buffer !== "number" || !Number.isSafeInteger(buffer) || buffer < 0) {
-        throw new RuleParametersError("buffer must be a whole number of cents, zero or more");
-      }
-      return { kind, parameters: { checkingAccountId, savingsAccountId, buffer: cents(buffer) } };
+      return {
+        kind,
+        parameters: { checkingAccountId, savingsAccountId, buffer: checkWholeDollars(buffer, BUFFER_RANGE) },
+      };
     }
     case "payment_limit": {
       const { paymentLimit } = fieldsOf("payment limit", parameters, ["paymentLimit"]);
@@ -112,7 +108,7 @@ export function checkWholeDollars(value: unknown, range: CentsRange): Cents {
     value < range.min ||
     value > range.max
   ) {
-    throw new RuleParametersError(`Must be a whole number of dollars from ${range.min} to ${range.max} cents`);
+    throw new RuleParametersError(`Must be a whole-dollar amount from ${formatDollarRange(range)}`);
   }
   return cents(value);
 }
