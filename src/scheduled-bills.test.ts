@@ -114,7 +114,7 @@ describe("Safe to spend on Home", () => {
     const sam = signInByName(bank, "Sam Calloway");
     // With the buffer Rule off, the agent leaves the $340 in checking. The Buffer stays $1,500.
     const [rule] = bank.customerData.listRules(sam);
-    if (rule) bank.customerData.switchRule(sam, rule.id, false);
+    if (rule) bank.switchRule(sam, rule.id, false);
     bank.postPaycheck();
 
     const home = bank.readHome(sam);

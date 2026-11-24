@@ -29,8 +29,19 @@ function DecisionEntry({ decision }: { decision: Decision }) {
         </div>
         <p className="muted">
           <time dateTime={decision.at.toISOString()}>{timeFormat.format(decision.at)}</time> ·{" "}
-          {decision.actor === "agent" ? "Your agent" : "You"} · Rule #{decision.rule.id} v{decision.rule.version} ·{" "}
-          <span className="num">{formatDollars(decision.amount)}</span>
+          {decision.actor === "agent" ? "Your agent" : "You"}
+          {decision.rule && (
+            <>
+              {" "}
+              · Rule #{decision.rule.id} v{decision.rule.version}
+            </>
+          )}
+          {decision.amount > 0 && (
+            <>
+              {" "}
+              · <span className="num">{formatDollars(decision.amount)}</span>
+            </>
+          )}
           {decision.reversedByDecisionId !== null && <> · Reversed by you</>}
         </p>
         <WhyPanel rows={decision.why} />
@@ -47,7 +58,7 @@ export default async function DecisionLogPage() {
       <header className="top">
         <div>
           <h1>Decision log</h1>
-          <p className="muted">Every action your agent took or tried to take, every Undo, the Rule behind each, and what happened.</p>
+          <p className="muted">Every action your agent took or tried to take, every change you made to it, the Rule behind each, and what happened.</p>
         </div>
         <p className="muted signed-in">
           {customer.name} · <Link href="/">Home</Link>

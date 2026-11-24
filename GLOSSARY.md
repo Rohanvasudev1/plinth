@@ -86,6 +86,18 @@ _Avoid_: Cap, threshold
 The customer's choice of how much the agent does alone: ask before everything, handle small things, or act on anything within the Rules.
 _Avoid_: Automation mode, permission level
 
+**Settings record**:
+The one versioned record per customer of every choice that isn't a Rule: the Autonomy level, the Advice setting, the risk answers, the Data choices and the ordered goal preferences. A customer without one hasn't finished setup.
+_Avoid_: Preferences, profile, config
+
+**Goal preference**:
+One entry in the customer's ordered list of what spare money should go toward, such as Buy a home or Clear debt. Savings goals among them get a savings account with a Goal; others, like Clear debt, don't.
+_Avoid_: Priority, objective
+
+**Data choice**:
+One of the customer's on/off choices about their data: training models on it, sharing it with partners, and keeping chat history. Each is off unless the customer turns it on.
+_Avoid_: Consent, privacy setting
+
 **Pause**:
 A customer switch that stops every automatic agent action until the customer turns it back on.
 _Avoid_: Freeze, kill switch

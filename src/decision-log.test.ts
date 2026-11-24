@@ -3,7 +3,7 @@ import { createBank, type Bank } from "./bank";
 import { fixedClock } from "./clock";
 import { openTestDatabase } from "./db/database";
 import { cents } from "./money";
-import { entriesMoving, openTestBank, signInByName } from "./test-bank";
+import { agentEntriesIn, entriesMoving, openTestBank, signInByName } from "./test-bank";
 
 function bankAt(at: string): Bank {
   return createBank({ db: openTestDatabase(), clock: fixedClock(new Date(at)) });
@@ -60,13 +60,13 @@ describe("Decision log", () => {
     const sam = signInByName(bank, "Sam Calloway");
     const [rule] = bank.customerData.listRules(sam);
     if (!rule) throw new Error("Sam's buffer Rule is missing");
-    bank.customerData.switchRule(sam, rule.id, false);
-    bank.customerData.switchRule(sam, rule.id, true);
+    bank.switchRule(sam, rule.id, false);
+    bank.switchRule(sam, rule.id, true);
 
     bank.postPaycheck();
-    bank.customerData.switchRule(sam, rule.id, false);
+    bank.switchRule(sam, rule.id, false);
 
-    expect(bank.readDecisionLog(sam).map((entry) => entry.rule)).toEqual([{ id: rule.id, version: 3 }]);
+    expect(agentEntriesIn(bank, sam).map((entry) => entry.rule)).toEqual([{ id: rule.id, version: 3 }]);
   });
 
   it("lists entries newest first", () => {
@@ -88,7 +88,7 @@ describe("Decision log", () => {
     const [priyasChecking] = bank.customerData.listAccounts(priya);
     const [seeded] = bank.customerData.listRules(priya);
     if (!samsHouseFund || !priyasChecking || !seeded) throw new Error("Seed data is missing");
-    bank.customerData.switchRule(priya, seeded.id, false);
+    bank.switchRule(priya, seeded.id, false);
     const misdirected = bank.customerData.createRule(priya, {
       kind: "buffer",
       parameters: { ...seeded.parameters, savingsAccountId: samsHouseFund.id },
@@ -97,7 +97,7 @@ describe("Decision log", () => {
 
     bank.postPaycheck();
 
-    expect(bank.readDecisionLog(priya)).toEqual([
+    expect(agentEntriesIn(bank, priya)).toEqual([
       expect.objectContaining({
         rule: { id: misdirected.id, version: 1 },
         action: "Move $2,569 to savings",
@@ -123,8 +123,8 @@ describe("Decision log", () => {
     const priya = signInByName(bank, "Priya Natarajan");
     const [checking, travelFund] = bank.customerData.listAccounts(priya);
     const [seeded] = bank.customerData.listRules(priya);
-    if (!checking || !travelFund || !seeded) throw new Error("Seed data is missing");
-    bank.customerData.switchRule(priya, seeded.id, false);
+    if (!checking || !travelFund || seeded?.kind !== "buffer") throw new Error("Seed data is missing");
+    bank.switchRule(priya, seeded.id, false);
     const swapped = bank.customerData.createRule(priya, {
       kind: "buffer",
       parameters: { checkingAccountId: travelFund.id, savingsAccountId: checking.id, buffer: seeded.parameters.buffer },
@@ -137,7 +137,7 @@ describe("Decision log", () => {
       entries: entriesMoving(1_000_00, bank.systemData.ensureSystemAccount("acmePayroll"), travelFund.id),
     });
 
-    expect(bank.readDecisionLog(priya)).toEqual([
+    expect(agentEntriesIn(bank, priya)).toEqual([
       expect.objectContaining({
         rule: { id: swapped.id, version: 1 },
         result: "Refused",

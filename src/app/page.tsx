@@ -144,7 +144,8 @@ export default async function HomePage() {
           <p className="muted">{dateFormat.format(home.today)}</p>
         </div>
         <p className="muted signed-in">
-          {home.customerName} · <Link href="/sign-in">Switch</Link> · <Link href="/decision-log">Decision log</Link> ·{" "}
+          {home.customerName} · <Link href="/sign-in">Switch</Link> · <Link href="/agent">Agent &amp; limits</Link> ·{" "}
+          <Link href="/decision-log">Decision log</Link> ·{" "}
           <Link href="/simulator">Simulator</Link>
         </p>
       </header>

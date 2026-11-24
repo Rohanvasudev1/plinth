@@ -13,11 +13,13 @@ import {
   rulesTable,
   ruleVersionsTable,
   scheduledBillsTable,
+  settingsVersionsTable,
 } from "./db/schema";
 import { isGuardrail, type Decision, type NewDecision, type WhyRow } from "./decisions";
 import type { LedgerEvent, LedgerEventDispatcher } from "./ledger-events";
 import { cents, type Cents } from "./money";
-import { isRuleKind, parseRuleParameters, type NewRule, type Rule } from "./rules";
+import { isRuleKind, parseRuleContent, type NewRule, type Rule } from "./rules";
+import { parseSettingsChoices, SettingsError, type Settings, type SettingsChoices } from "./settings";
 import { isEmployer, type Employer } from "./system-data";
 
 /** A seeded customer. Every customer-scoped read and write takes one as its first argument. */
@@ -138,8 +140,25 @@ export interface CustomerData {
   listRules(customer: Customer): Rule[];
   /** The customer's Rule at `version`, or its latest version when `version` is left out. */
   getRule(customer: Customer, ruleId: number, version?: number): Rule | undefined;
-  /** Switches the customer's Rule on or off by writing its next version. Throws if the Rule isn't theirs. */
-  switchRule(customer: Customer, ruleId: number, on: boolean): Rule;
+  /**
+   * The only way to change a Rule (ADR 0007): writes its next version with the change applied and, in the same
+   * database transaction, the Decision log entry `describe` builds from the versions before and after.
+   * Throws RuleNotFoundError if the Rule isn't theirs, and RuleParametersError if new parameters don't match the
+   * kind's schema. Either way nothing is written. `describe` may throw to refuse the change, also writing nothing.
+   */
+  reviseRule(
+    customer: Customer,
+    ruleId: number,
+    change: (current: Rule) => RuleRevision,
+    describe: (before: Rule, after: Rule) => NewDecision,
+  ): Rule;
+  /** The customer's settings record at `version`, or its latest version, or undefined if they have none. */
+  getSettings(customer: Customer, version?: number): Settings | undefined;
+  /**
+   * Writes the next version of the customer's settings record, or version 1 if they have none. Throws
+   * SettingsError if the choices don't match the settings record's schema. Writes no Decision log entry.
+   */
+  saveSettings(customer: Customer, choices: SettingsChoices): Settings;
   /**
    * Writes a Decision log entry, timed by the clock. A Reversed entry must name an agent action of the
    * customer's that no other entry reverses yet.
@@ -153,6 +172,13 @@ export interface CustomerData {
   listUnseenAgentActions(customer: Customer): Decision[];
   /** Marks these agent actions of the customer's as seen now. Ids that aren't theirs are ignored. */
   markAgentActionsSeen(customer: Customer, decisionIds: number[]): void;
+}
+
+/** A change to a Rule: its switch, its parameters, or both. Whatever is left out stays as it is. */
+export interface RuleRevision {
+  on?: boolean;
+  /** Checked against the Rule kind's schema. */
+  parameters?: unknown;
 }
 
 export class LedgerError extends Error {
@@ -393,11 +419,10 @@ export function createCustomerData(deps: {
     return rows.map((row) => {
       if (!isRuleKind(row.kind)) throw new Error(`Rule ${row.id} has an unknown kind ${row.kind}`);
       return {
+        ...parseRuleContent(row.kind, row.parameters),
         id: row.id,
-        kind: row.kind,
         version: row.version,
         on: row.on,
-        parameters: parseRuleParameters(row.kind, row.parameters),
         createdAt: new Date(row.createdAtMs),
       };
     });
@@ -408,7 +433,7 @@ export function createCustomerData(deps: {
   }
 
   function createRule(customer: Customer, rule: NewRule): Rule {
-    const parameters = parseRuleParameters(rule.kind, rule.parameters);
+    const { parameters } = parseRuleContent(rule.kind, rule.parameters);
     const ruleId = db.transaction((tx) => {
       const inserted = tx
         .insert(rulesTable)
@@ -425,26 +450,93 @@ export function createCustomerData(deps: {
     return created;
   }
 
-  function switchRule(customer: Customer, ruleId: number, on: boolean): Rule {
-    db.transaction(
+  function reviseRule(
+    customer: Customer,
+    ruleId: number,
+    change: (current: Rule) => RuleRevision,
+    describe: (before: Rule, after: Rule) => NewDecision,
+  ): Rule {
+    return inOneTransaction(() => {
+      const current = getRule(customer, ruleId);
+      if (!current) throw new RuleNotFoundError(`No Rule ${ruleId} for this customer`);
+      const revision = change(current);
+      const { parameters } =
+        revision.parameters === undefined ? current : parseRuleContent(current.kind, revision.parameters);
+      db.insert(ruleVersionsTable)
+        .values({
+          ruleId,
+          version: current.version + 1,
+          parameters,
+          on: revision.on ?? current.on,
+          createdAtMs: clock.now().getTime(),
+        })
+        .run();
+      const revised = getRule(customer, ruleId);
+      if (!revised) throw new Error(`Rule ${ruleId} vanished after it was revised`);
+      const decision = describe(current, revised);
+      if (decision.rule?.id !== revised.id || decision.rule.version !== revised.version) {
+        throw new RuleNotFoundError("A Rule change's Decision log entry must name the version it wrote");
+      }
+      recordDecision(customer, decision);
+      return revised;
+    });
+  }
+
+  function getSettings(customer: Customer, version?: number): Settings | undefined {
+    const row = db
+      .select()
+      .from(settingsVersionsTable)
+      .where(
+        and(
+          eq(settingsVersionsTable.customerId, customer.id),
+          version === undefined ? undefined : eq(settingsVersionsTable.version, version),
+        ),
+      )
+      .orderBy(desc(settingsVersionsTable.version))
+      .limit(1)
+      .get();
+    if (!row) return undefined;
+    const choices = parseSettingsChoices({
+      autonomyLevel: row.autonomyLevel,
+      adviceSetting: row.adviceSetting,
+      riskAnswers: { marketDrop: row.riskMarketDrop, timeHorizon: row.riskTimeHorizon },
+      dataChoices: {
+        trainModels: row.trainModels,
+        shareWithPartners: row.shareWithPartners,
+        keepChatHistory: row.keepChatHistory,
+      },
+      goalPreferences: row.goalPreferences,
+    });
+    return { version: row.version, ...choices, createdAt: new Date(row.createdAtMs) };
+  }
+
+  function saveSettings(customer: Customer, choices: SettingsChoices): Settings {
+    const parsed = parseSettingsChoices(choices);
+    const version = db.transaction(
       (tx) => {
-        const current = getRule(customer, ruleId);
-        if (!current) throw new RuleNotFoundError(`No Rule ${ruleId} for this customer`);
-        tx.insert(ruleVersionsTable)
+        const next = (getSettings(customer)?.version ?? 0) + 1;
+        tx.insert(settingsVersionsTable)
           .values({
-            ruleId,
-            version: current.version + 1,
-            parameters: current.parameters,
-            on,
+            customerId: customer.id,
+            version: next,
+            autonomyLevel: parsed.autonomyLevel,
+            adviceSetting: parsed.adviceSetting,
+            riskMarketDrop: parsed.riskAnswers.marketDrop,
+            riskTimeHorizon: parsed.riskAnswers.timeHorizon,
+            trainModels: parsed.dataChoices.trainModels,
+            shareWithPartners: parsed.dataChoices.shareWithPartners,
+            keepChatHistory: parsed.dataChoices.keepChatHistory,
+            goalPreferences: parsed.goalPreferences,
             createdAtMs: clock.now().getTime(),
           })
           .run();
+        return next;
       },
       { behavior: "immediate" },
     );
-    const switched = getRule(customer, ruleId);
-    if (!switched) throw new Error(`Rule ${ruleId} vanished after it was switched`);
-    return switched;
+    const saved = getSettings(customer, version);
+    if (!saved) throw new SettingsError(`Settings version ${version} vanished after it was saved`);
+    return saved;
   }
 
   const reversals = alias(decisionsTable, "reversals");
@@ -472,7 +564,7 @@ export function createCustomerData(deps: {
           at: new Date(row.createdAtMs),
           actor: row.actor,
           trigger: { ledgerEventId: row.triggerLedgerEventId, description: row.triggerDescription },
-          rule: { id: row.ruleId, version: row.ruleVersion },
+          rule: row.ruleId === null || row.ruleVersion === null ? null : { id: row.ruleId, version: row.ruleVersion },
           action: row.action,
           fromAccountId: row.fromAccountId,
           toAccountId: row.toAccountId,
@@ -488,7 +580,9 @@ export function createCustomerData(deps: {
   }
 
   function recordDecision(customer: Customer, decision: NewDecision): Decision {
-    if (!getRule(customer, decision.rule.id, decision.rule.version)) {
+    if (decision.rule === null) {
+      if (decision.actor === "agent") throw new RuleNotFoundError("Every agent action uses one of the customer's Rules");
+    } else if (!getRule(customer, decision.rule.id, decision.rule.version)) {
       throw new RuleNotFoundError(`No Rule ${decision.rule.id} version ${decision.rule.version} for this customer`);
     }
     for (const accountId of [decision.fromAccountId, decision.toAccountId]) {
@@ -510,8 +604,8 @@ export function createCustomerData(deps: {
         actor: decision.actor,
         triggerLedgerEventId: decision.trigger.ledgerEventId,
         triggerDescription: decision.trigger.description,
-        ruleId: decision.rule.id,
-        ruleVersion: decision.rule.version,
+        ruleId: decision.rule?.id ?? null,
+        ruleVersion: decision.rule?.version ?? null,
         action: decision.action,
         fromAccountId: decision.fromAccountId,
         toAccountId: decision.toAccountId,
@@ -554,7 +648,9 @@ export function createCustomerData(deps: {
     createRule,
     listRules: (customer) => selectRules(customer),
     getRule,
-    switchRule,
+    reviseRule,
+    getSettings,
+    saveSettings,
     recordDecision,
     listDecisions: (customer) => selectDecisions(customer),
     getDecision: (customer, decisionId) => selectDecisions(customer, { id: decisionId })[0],

@@ -1,6 +1,7 @@
 import { localDate } from "./calendar";
 import type { Customer, CustomerData, NewAccount, NewPayroll, NewScheduledBill } from "./customer-data";
 import { cents, type Cents } from "./money";
+import type { GoalPreference, SettingsChoices } from "./settings";
 import type { SystemData } from "./system-data";
 
 interface SeedCustomer {
@@ -12,7 +13,26 @@ interface SeedCustomer {
   bills: Omit<NewScheduledBill, "accountId">[];
   /** The Buffer of the customer's buffer Rule, which sweeps checking to their first savings account. */
   buffer: Cents;
+  /** The goal their savings account is for. */
+  goal: GoalPreference;
 }
+
+/**
+ * The standard choices, except that seeded customers let the agent act on anything within their Rules, so the
+ * Sweep behaves as it did before the Autonomy level existed.
+ */
+function seedSettings(goal: GoalPreference): SettingsChoices {
+  return {
+    autonomyLevel: "within_rules",
+    adviceSetting: "on_request",
+    riskAnswers: { marketDrop: "wait", timeHorizon: "over_10_years" },
+    dataChoices: { trainModels: false, shareWithPartners: false, keepChatHistory: false },
+    goalPreferences: [goal],
+  };
+}
+
+/** The Payment limit every seeded customer starts with. */
+const SEED_PAYMENT_LIMIT = cents(500_00);
 
 /** Fictional customers. Sam's numbers make the 20 Nov 2026 paycheck sweep exactly $340. */
 const SEED_CUSTOMERS: SeedCustomer[] = [
@@ -30,6 +50,7 @@ const SEED_CUSTOMERS: SeedCustomer[] = [
       { payee: "Power", amount: cents(70_00), dayOfMonth: 3 },
     ],
     buffer: cents(1_500_00),
+    goal: "buy_home",
   },
   {
     name: "Priya Natarajan",
@@ -44,12 +65,13 @@ const SEED_CUSTOMERS: SeedCustomer[] = [
       { payee: "Gym", amount: cents(29_00), dayOfMonth: 6 },
     ],
     buffer: cents(500_00),
+    goal: "travel",
   },
 ];
 
 /**
- * Seeds the demo customers, their accounts, balances, payrolls, Scheduled bills and buffer Rules, and the
- * clearing accounts, once per database.
+ * Seeds the demo customers, their accounts, balances, payrolls, Scheduled bills, buffer and payment limit Rules
+ * and settings records, and the clearing accounts, once per database.
  */
 export function seedDemoData(system: SystemData, data: CustomerData): void {
   system.ensureSystemAccount("acmePayroll");
@@ -82,5 +104,7 @@ export function seedDemoData(system: SystemData, data: CustomerData): void {
       parameters: { checkingAccountId: accountIds.checking, savingsAccountId: accountIds.savings, buffer: seed.buffer },
       on: true,
     });
+    data.createRule(customer, { kind: "payment_limit", parameters: { paymentLimit: SEED_PAYMENT_LIMIT }, on: true });
+    data.saveSettings(customer, seedSettings(seed.goal));
   }
 }

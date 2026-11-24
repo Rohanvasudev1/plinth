@@ -32,7 +32,7 @@ describe("What your agent did, on Home", () => {
     const [, samsHouseFund] = bank.customerData.listAccounts(sam);
     const [seeded] = bank.customerData.listRules(priya);
     if (!samsHouseFund || !seeded) throw new Error("Seed data is missing");
-    bank.customerData.switchRule(priya, seeded.id, false);
+    bank.switchRule(priya, seeded.id, false);
     bank.customerData.createRule(priya, {
       kind: "buffer",
       parameters: { ...seeded.parameters, savingsAccountId: samsHouseFund.id },

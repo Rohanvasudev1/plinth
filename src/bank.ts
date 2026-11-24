@@ -13,7 +13,10 @@ import {
   type SafeToSpend,
 } from "./safe-to-spend";
 import { bufferRuleFor } from "./rules";
+import { createRuleChanges, type RuleChanges } from "./rule-changes";
 import { seedDemoData } from "./seed";
+import type { Settings } from "./settings";
+import { changeSettings, type SettingsChange } from "./settings-changes";
 import { createSimulator, type Simulator } from "./simulator";
 import { createSystemData, type SystemData } from "./system-data";
 import { undoAgentAction, type UndoOutcome } from "./undo";
@@ -58,7 +61,7 @@ export class UnknownCustomerError extends Error {
 }
 
 /** The server-side domain API the pages call. */
-export interface Bank extends Simulator {
+export interface Bank extends Simulator, RuleChanges {
   clock: SettableClock;
   customerData: CustomerData;
   systemData: SystemData;
@@ -74,6 +77,13 @@ export interface Bank extends Simulator {
   readDecisionLog(customer: Customer): Decision[];
   /** Undoes one of the customer's agent actions by posting a reversing ledger transaction (ADR 0002). */
   undo(customer: Customer, decisionId: number): UndoOutcome;
+  /** The latest version of the customer's settings record, or undefined if they haven't finished setup. */
+  readSettings(customer: Customer): Settings | undefined;
+  /**
+   * Writes the next version of the customer's settings record and a Decision log entry with them as actor.
+   * Throws SettingsError, saving nothing, if they have no settings record or the change doesn't fit its schema.
+   */
+  changeSettings(customer: Customer, change: SettingsChange): Settings;
   /** Marks agent actions as shown to the customer, so the toast shows them only once. */
   markAgentActionsSeen(customer: Customer, decisionIds: number[]): void;
 }
@@ -97,6 +107,7 @@ export function createBank(deps: { db: Database; clock: SettableClock }): Bank {
 
   return {
     ...simulator,
+    ...createRuleChanges(customerData),
     clock,
     customerData,
     systemData,
@@ -109,6 +120,8 @@ export function createBank(deps: { db: Database; clock: SettableClock }): Bank {
       return customer;
     },
     billsBeforePayday,
+    readSettings: (customer) => customerData.getSettings(customer),
+    changeSettings: (customer, change) => changeSettings(customerData, customer, change),
     readDecisionLog: (customer) => customerData.listDecisions(customer),
     undo: (customer, decisionId) => undoAgentAction(customerData, customer, decisionId),
     markAgentActionsSeen: (customer, decisionIds) => customerData.markAgentActionsSeen(customer, decisionIds),
