@@ -13,6 +13,10 @@ import type { Finding, FindingOptionKey, StandingSearch } from "./findings";
 import { setGoalTarget } from "./goal-changes";
 import { readForecast, type Forecast } from "./forecast";
 import { createLedgerEventDispatcher, type LedgerEventDispatcher } from "./ledger-events";
+import { createFakeMissionModel } from "./fake-mission-model";
+import type { MissionModel } from "./mission-model";
+import { startMission, type StartedMission } from "./mission-runner";
+import type { Mission } from "./missions";
 import { cents, type Cents } from "./money";
 import {
   billsBeforePayday as billsBeforePaydayOf,
@@ -42,6 +46,8 @@ export type { Projection, ProjectionLine, ProjectionLines } from "./projection";
 export type { Forecast } from "./forecast";
 export type { ChooseOptionOutcome } from "./finding-choices";
 export type { AgentsViewOnPage, DiscoveriesPage, FindingOnPage } from "./discoveries-page";
+export type { StartedMission } from "./mission-runner";
+export type { Mission } from "./missions";
 
 export interface GoalProgress {
   target: Cents;
@@ -170,14 +176,28 @@ export interface Bank extends Simulator, RuleChanges {
   chooseOption(customer: Customer, findingId: number, option: FindingOptionKey): ChooseOptionOutcome;
   /** Marks agent actions as shown to the customer, so the toast shows them only once. */
   markAgentActionsSeen(customer: Customer, decisionIds: number[]): void;
+  /**
+   * Starts a Mission for the customer's question and returns it with a promise that settles once it ends, reported
+   * with one Finding or failed keeping nothing. Pages don't await it: the Mission runs on after the response. Throws
+   * MissionError, starting nothing, for a blank or overlong question.
+   */
+  startMission(customer: Customer, question: string): StartedMission;
+  /** The customer's Mission with this id, or undefined if it doesn't exist or isn't theirs. */
+  readMission(customer: Customer, missionId: number): Mission | undefined;
 }
 
 /**
  * Wires the bank to a migrated database and a clock, seeds the demo customers if there are none, and starts
  * the customers' agents.
  */
-export function createBank(deps: { db: Database; clock: SettableClock }): Bank {
+export function createBank(deps: {
+  db: Database;
+  clock: SettableClock;
+  /** The language model Missions run on. The scripted fake when left out. */
+  missionModel?: MissionModel;
+}): Bank {
   const { db, clock } = deps;
+  const missionModel = deps.missionModel ?? createFakeMissionModel({ clock });
   const ledgerEvents = createLedgerEventDispatcher();
   const customerData = createCustomerData({ db, clock, ledgerEvents });
   const systemData = createSystemData(db);
@@ -248,6 +268,9 @@ export function createBank(deps: { db: Database; clock: SettableClock }): Bank {
     chooseOption: (customer, findingId, option) => chooseOption({ clock, customerData }, customer, findingId, option),
     undo: (customer, decisionId) => undoAgentAction(customerData, customer, decisionId),
     markAgentActionsSeen: (customer, decisionIds) => customerData.markAgentActionsSeen(customer, decisionIds),
+    startMission: (customer, question) =>
+      startMission({ clock, customerData, merchantClearingAccountId, model: missionModel }, customer, question),
+    readMission: (customer, missionId) => customerData.getMission(customer, missionId),
     readHome(customer) {
       const accounts = customerData.listAccounts(customer);
       const checking = accounts.find((account) => account.kind === "checking");

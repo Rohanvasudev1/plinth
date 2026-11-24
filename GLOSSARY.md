@@ -130,6 +130,18 @@ _Avoid_: Lean, recommendation, advice
 A question the customer sends the agent to look into, which reads only that customer's data and reports back with one Finding.
 _Avoid_: Job, task, query
 
+**Mission tool**:
+One read-only way a Mission's language model reads the asking customer's data, such as their transactions over a period or their Goals. No Mission tool moves money or changes anything.
+_Avoid_: Function, plugin, API
+
+**Read list**:
+The record a Mission keeps of each piece of data it read: the Mission tool and the period or item.
+_Avoid_: Access history, audit
+
+**Progress label**:
+The fixed line a running Mission shows for what it is doing now, such as "Reading your transactions".
+_Avoid_: Status, step
+
 **Standing search**:
 A check the agent runs by itself as new data arrives, which only reports Findings and which the customer can switch off.
 _Avoid_: Alert, monitor, watch
@@ -151,7 +163,7 @@ A check that runs before any agent action and refuses it if it breaks a Rule or 
 _Avoid_: Validation, safety check
 
 **Decision log**:
-The customer-visible record of every agent action, with its trigger, the Rule it used, and its result, plus each change the customer makes to the agent: Undo, a picked Option, a Rule or setting edit, a Goal's target, and Pause.
+The customer-visible record of every agent action, with its trigger, the Rule it used, and its result, plus each change the customer makes to the agent: Undo, a picked Option, a Rule or setting edit, a Goal's target, and Pause. A Mission's entry names no Rule, because the customer asked for it, and its result is Reported, with a link to its Finding, or Failed.
 _Avoid_: Audit trail, history
 
 **Why**:

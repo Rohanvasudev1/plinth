@@ -133,6 +133,8 @@ export function recordSweep(
     amount,
     why: [...entry.why, checkedByRow(check)],
     reversesDecisionId: null,
+    missionId: null,
+    findingId: null,
   };
   // Passing the ownership guardrail means both accounts are the customer's; the extra checks narrow the types.
   if (refusal || !checking || !savings) {

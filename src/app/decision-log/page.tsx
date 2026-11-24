@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { DISPLAY_TIME_ZONE } from "@/app-clock";
 import { getAppBank } from "@/app-bank";
 import type { Decision } from "@/decisions";
@@ -44,6 +45,11 @@ function DecisionEntry({ decision }: { decision: Decision }) {
           )}
           {decision.reversedByDecisionId !== null && <> · Reversed by you</>}
         </p>
+        {decision.findingId !== null && (
+          <p>
+            <Link href={`/discoveries#finding-${decision.findingId}`}>See the Finding</Link>
+          </p>
+        )}
         <WhyPanel rows={decision.why} />
       </article>
     </li>

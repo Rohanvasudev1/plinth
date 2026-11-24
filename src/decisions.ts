@@ -1,6 +1,11 @@
 import { cents, type Cents } from "./money";
 
-export type DecisionResult = "Done" | "Refused" | "Reversed";
+/**
+ * What came of a Decision log entry's action: Done, Refused or Reversed for an action under a Rule or a customer
+ * change; Reported or Failed for a Mission, which reports back with a Finding or ends keeping nothing.
+ */
+export const DECISION_RESULTS = ["Done", "Refused", "Reversed", "Reported", "Failed"] as const;
+export type DecisionResult = (typeof DECISION_RESULTS)[number];
 
 /**
  * The guardrails checked before an agent action that moves money, in the order they run. Pause comes first, so a
@@ -60,6 +65,10 @@ export interface Decision {
   reversesDecisionId: number | null;
   /** On an agent action the customer undid, their Reversed entry. Null otherwise. */
   reversedByDecisionId: number | null;
+  /** The Mission the entry reports on, which the customer asked for, so it names no Rule. Null otherwise. */
+  missionId: number | null;
+  /** The Finding a Reported entry links to. Null otherwise. */
+  findingId: number | null;
 }
 
 export type NewDecision = Omit<Decision, "id" | "at" | "reversedByDecisionId">;
@@ -87,6 +96,8 @@ export function customerChangeDecision(change: {
     why: change.why,
     ledgerTransactionId: null,
     reversesDecisionId: null,
+    missionId: null,
+    findingId: null,
   };
 }
 

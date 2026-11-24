@@ -67,6 +67,8 @@ export function undoAgentAction(customerData: CustomerData, customer: Customer, 
       why,
       ledgerTransactionId: posted.ledgerTransactionId,
       reversesDecisionId: original.id,
+      missionId: null,
+      findingId: null,
     });
     return { ok: true, reversal };
   });

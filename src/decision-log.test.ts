@@ -51,6 +51,8 @@ describe("Decision log", () => {
         ledgerTransactionId: sweep?.id,
         reversesDecisionId: null,
         reversedByDecisionId: null,
+        missionId: null,
+        findingId: null,
       },
     ]);
   });
@@ -173,6 +175,8 @@ describe("Decision log", () => {
         why: [],
         ledgerTransactionId: null,
         reversesDecisionId: null,
+        missionId: null,
+        findingId: null,
       }),
     ).toThrow(/own accounts/);
     expect(bank.readDecisionLog(priya)).toEqual([]);
