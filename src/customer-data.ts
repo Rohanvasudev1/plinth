@@ -163,8 +163,7 @@ export interface CustomerData {
   setGoalTarget(customer: Customer, accountId: number, target: Cents): Account;
   /**
    * Posts a pair of entries that sum to zero, plus a ledger event, in one database transaction, then hands
-   * the event to subscribers. A payout from several accounts at once, as Close and delete makes, posts several pairs,
-   * each summing to zero. Each entry must be on the customer's own account or a system account.
+   * the event to subscribers. Each entry must be on the customer's own account or a system account.
    * Idempotency keys are unique per customer: reusing one of the customer's keys returns the existing
    * ledger transaction and changes nothing, while another customer may use the same key.
    */
@@ -174,6 +173,11 @@ export interface CustomerData {
    * ledger transactions posted inside go to subscribers only after the whole block commits.
    */
   inOneTransaction<T>(work: () => T): T;
+  /**
+   * Runs `effect` once the outermost `inOneTransaction` block commits, or at once outside one. If the block throws,
+   * `effect` never runs. For in-memory effects that must match what the database kept.
+   */
+  afterCommit(effect: () => void): void;
   /** The customer's ledger transaction posted under this idempotency key, if there is one. */
   findLedgerTransaction(customer: Customer, idempotencyKey: string): LedgerTransaction | undefined;
   /** Sets up a payroll into one of the customer's own accounts. */
@@ -334,6 +338,13 @@ export function createCustomerData(deps: {
 
   /** Events posted inside an open `inOneTransaction` block, waiting for it to commit. Null outside one. */
   let heldEvents: LedgerEvent[] | null = null;
+  /** Effects from `afterCommit` inside an open `inOneTransaction` block, waiting for it to commit. */
+  let heldEffects: (() => void)[] = [];
+
+  function afterCommit(effect: () => void): void {
+    if (heldEvents) heldEffects.push(effect);
+    else effect();
+  }
 
   function dispatchAfterCommit(event: LedgerEvent): void {
     if (heldEvents) heldEvents.push(event);
@@ -343,14 +354,19 @@ export function createCustomerData(deps: {
   function inOneTransaction<T>(work: () => T): T {
     if (heldEvents) return work();
     heldEvents = [];
+    heldEffects = [];
     let result: T;
     let events: LedgerEvent[];
+    let effects: (() => void)[];
     try {
       result = db.transaction(() => work(), { behavior: "immediate" });
     } finally {
       events = heldEvents;
+      effects = heldEffects;
       heldEvents = null;
+      heldEffects = [];
     }
+    for (const effect of effects) effect();
     for (const event of events) ledgerEvents.dispatch(event);
     return result;
   }
@@ -398,18 +414,14 @@ export function createCustomerData(deps: {
   function validate(customer: Customer, transaction: LedgerTransactionInput): void {
     const { idempotencyKey, entries } = transaction;
     if (idempotencyKey.trim() === "") throw new LedgerError("A ledger transaction needs an idempotency key");
-    if (entries.length === 0 || entries.length % 2 !== 0) {
-      throw new LedgerError("A ledger transaction is a pair of entries, or several pairs");
+    if (entries.length !== 2) throw new LedgerError("A ledger transaction is a pair of entries");
+    let sum = 0;
+    for (const entry of entries) {
+      cents(entry.amount);
+      if (entry.amount === 0) throw new LedgerError("A ledger entry can't be zero");
+      sum += entry.amount;
     }
-    for (let index = 0; index < entries.length; index += 2) {
-      let sum = 0;
-      for (const entry of entries.slice(index, index + 2)) {
-        cents(entry.amount);
-        if (entry.amount === 0) throw new LedgerError("A ledger entry can't be zero");
-        sum += entry.amount;
-      }
-      if (sum !== 0) throw new LedgerError(`Each pair of ledger entries must sum to zero, got ${sum} cents`);
-    }
+    if (sum !== 0) throw new LedgerError(`Ledger entries must sum to zero, got ${sum} cents`);
 
     const accountIds = [...new Set(entries.map((entry) => entry.accountId))];
     const allowed = db
@@ -1109,6 +1121,7 @@ export function createCustomerData(deps: {
     },
     postLedgerTransaction,
     inOneTransaction,
+    afterCommit,
     findLedgerTransaction(customer, idempotencyKey) {
       return selectLedgerTransactions(customer, { idempotencyKey })[0];
     },

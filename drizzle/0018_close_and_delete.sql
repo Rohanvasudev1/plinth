@@ -34,7 +34,7 @@ CREATE TABLE `__new_decisions` (
 	FOREIGN KEY (`finding_id`) REFERENCES `findings`(`id`) ON UPDATE no action ON DELETE no action,
 	CONSTRAINT "decisions_refused_by" CHECK(("__new_decisions"."result" = 'Refused') = ("__new_decisions"."refused_by" IS NOT NULL)),
 	CONSTRAINT "decisions_rule_version" CHECK(("__new_decisions"."rule_id" IS NULL) = ("__new_decisions"."rule_version" IS NULL)),
-	CONSTRAINT "decisions_agent_uses_rule" CHECK("__new_decisions"."actor" = 'customer' OR "__new_decisions"."rule_id" IS NOT NULL OR "__new_decisions"."mission_id" IS NOT NULL OR "__new_decisions"."result" IN ('Reported', 'Stopped', 'Failed'))
+	CONSTRAINT "decisions_agent_uses_rule" CHECK("__new_decisions"."actor" = 'customer' OR "__new_decisions"."rule_id" IS NOT NULL OR "__new_decisions"."mission_id" IS NOT NULL OR ("__new_decisions"."result" IN ('Reported', 'Stopped', 'Failed') AND "__new_decisions"."ledger_transaction_id" IS NULL))
 );
 --> statement-breakpoint
 INSERT INTO `__new_decisions`("id", "customer_id", "created_at_ms", "actor", "trigger_ledger_event_id", "trigger_description", "rule_id", "rule_version", "action", "from_account_id", "to_account_id", "amount_cents", "result", "refused_by", "why", "ledger_transaction_id", "reverses_decision_id", "seen_at_ms", "mission_id", "finding_id") SELECT "id", "customer_id", "created_at_ms", "actor", "trigger_ledger_event_id", "trigger_description", "rule_id", "rule_version", "action", "from_account_id", "to_account_id", "amount_cents", "result", "refused_by", "why", "ledger_transaction_id", "reverses_decision_id", "seen_at_ms", "mission_id", "finding_id" FROM `decisions`;--> statement-breakpoint

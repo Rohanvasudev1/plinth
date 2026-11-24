@@ -260,7 +260,8 @@ export interface Bank extends Simulator, RuleChanges {
   readClosureSummary(customer: Customer): ClosureSummary;
   /**
    * Close and delete, in one transaction: stops a running Mission, expires open and snoozed Findings, pays out every
-   * Plinth balance under `closure:<customer id>`, unlinks every Linked account, deletes Missions, Findings, settings and
+   * Plinth balance, one ledger transaction per account under `closure:<customer id>:<account id>`, writes an access
+   * log entry for reading the balances, unlinks every Linked account, deletes Missions, Findings, settings and
    * Goal targets, keeps the Ledger, Decision log and access log, writes "Closed your Plinth account", and marks the
    * customer Closed. Works while the agent is paused. Throws ClosureError, changing nothing, if already Closed.
    */

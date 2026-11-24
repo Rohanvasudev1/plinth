@@ -267,5 +267,5 @@ A customer who used Close and delete. Plinth has paid out their balances, delete
 _Avoid_: Deleted customer, deactivated account
 
 **Account-closure clearing account**:
-The Clearing account that takes a Closed customer's Plinth balances when Close and delete pays them out, as one ledger transaction under `closure:<customer id>` with one pair of entries per account.
+The Clearing account that takes a Closed customer's Plinth balances when Close and delete pays them out, one ledger transaction per account under `closure:<customer id>:<account id>`.
 _Avoid_: Closure account, exit account

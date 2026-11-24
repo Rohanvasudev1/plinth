@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { ClosedCustomerError, type Bank } from "./bank";
+import { SIMULATION_START } from "./app-clock";
+import { ClosedCustomerError, createBank, type Bank } from "./bank";
+import { fixedClock } from "./clock";
+import { openTestDatabase } from "./db/database";
+import { LinkedAccountError } from "./linked-accounts";
+import type { MissionModel } from "./mission-model";
 import type { Customer } from "./customer-data";
 import { FAKE_TEST_QUESTIONS } from "./fake-mission-model";
-import { ClosureError } from "./closure";
+import { closeAndDelete, ClosureError } from "./closure";
 import { MissionError } from "./missions";
 import { cents } from "./money";
 import { CardDeclinedError } from "./simulator";
@@ -23,31 +28,57 @@ async function samWithEverything(bank: Bank): Promise<Customer> {
   return sam;
 }
 
+/** A model that waits until the test lets it go, so its Mission stays running. */
+function heldModel(): { model: MissionModel; release: () => void } {
+  let release: () => void = () => {};
+  const held = new Promise<void>((resolve) => (release = resolve));
+  return {
+    release: () => release(),
+    model: {
+      async runMission(request) {
+        const usual = await request.callTool("read_usual_month", {});
+        await held;
+        return {
+          title: "Your Usual month",
+          facts: [{ label: "Usual month", value: "$7,020.00 in", toolCallId: usual.toolCallId }],
+          options: [{ key: "not_now" }],
+          agentsView: null,
+          cantKnow: null,
+          report: null,
+        };
+      },
+    },
+  };
+}
+
 /** The sum of every Plinth account balance the customer holds. */
 function plinthTotal(bank: Bank, customer: Customer): number {
   return bank.customerData.listAccounts(customer).reduce((sum, account) => sum + account.balance, 0);
 }
 
 describe("Close and delete", () => {
-  it("pays out Sam's Plinth balances as one ledger transaction under closure:<id> that sums to zero, leaving every balance at zero", () => {
+  it("pays out each of Sam's Plinth accounts as one pair under closure:<id>:<account id>, leaving every balance at zero", () => {
     const bank = openTestBank();
     const sam = signInByName(bank, "Sam Calloway");
+    const [checking, houseFund] = bank.customerData.listAccounts(sam);
+    if (!checking || !houseFund) throw new Error("Sam's seeded accounts are missing");
     expect(bank.readClosureSummary(sam).payout).toBe(12_627_00);
 
     const closed = bank.closeAndDelete(sam);
 
     expect(closed.payout).toBe(12_627_00);
     for (const account of bank.customerData.listAccounts(sam)) expect(account.balance).toBe(0);
-    const payout = bank.customerData.findLedgerTransaction(sam, `closure:${sam.id}`);
-    expect(payout?.entries.reduce((sum, entry) => sum + entry.amount, 0)).toBe(0);
-    expect(payout?.entries.filter((entry) => entry.amount < 0)).toEqual([
-      expect.objectContaining({ amount: -227_00 }),
-      expect.objectContaining({ amount: -12_400_00 }),
-    ]);
     const clearing = bank.systemData.ensureSystemAccount("accountClosure");
-    expect(payout?.entries.filter((entry) => entry.accountId === clearing).map((entry) => entry.amount)).toEqual([
-      227_00, 12_400_00,
-    ]);
+    for (const [account, balance] of [
+      [checking, 227_00],
+      [houseFund, 12_400_00],
+    ] as const) {
+      const payout = bank.customerData.findLedgerTransaction(sam, `closure:${sam.id}:${account.id}`);
+      expect(payout?.entries).toEqual([
+        { accountId: account.id, amount: -balance },
+        { accountId: clearing, amount: balance },
+      ]);
+    }
     expect(plinthTotal(bank, sam)).toBe(0);
   });
 
@@ -83,7 +114,7 @@ describe("Close and delete", () => {
     bank.closeAndDelete(sam);
 
     expect(bank.customerData.listLedgerTransactions(sam).slice(0, ledgerBefore.length)).toEqual(ledgerBefore);
-    expect(bank.customerData.listLedgerTransactions(sam)).toHaveLength(ledgerBefore.length + 1);
+    expect(bank.customerData.listLedgerTransactions(sam)).toHaveLength(ledgerBefore.length + 2);
     const logAfter = bank.readDecisionLog(sam);
     for (const entry of logBefore) {
       expect(logAfter.find((after) => after.id === entry.id)).toEqual({ ...entry, missionId: null, findingId: null });
@@ -91,12 +122,11 @@ describe("Close and delete", () => {
     expect(bank.customerData.listRules(sam)).toEqual(rulesBefore);
     const accessAfter = bank.readPrivacy(sam).accessLog;
     expect(accessAfter.slice(-accessBefore.length)).toEqual(accessBefore);
-    // One for the stopped Mission and one for each of the three Linked accounts unlinked.
+    // One for the stopped Mission, one for reading the balances to pay them out, and one for each of the three Linked
+    // accounts unlinked.
     const added = accessAfter.slice(0, accessAfter.length - accessBefore.length);
-    expect(added.map((entry) => entry.who).sort()).toEqual(["agent", "plinth", "plinth", "plinth"]);
-    expect(added.filter((entry) => entry.who === "plinth").map((entry) => entry.why)).toEqual(
-      Array(3).fill("You closed your Plinth account, so Plinth deleted its copy of that data"),
-    );
+    expect(added.map((entry) => entry.who).sort()).toEqual(["agent", "plinth", "plinth", "plinth", "plinth"]);
+    expect(added.filter((entry) => entry.who === "plinth" && entry.why.startsWith("You closed"))).toHaveLength(3);
   });
 
   it("writes \"Closed your Plinth account\" with the payout as the last Decision log entry, and refuses closing twice", () => {
@@ -136,7 +166,9 @@ describe("Close and delete", () => {
     expect(bank.closeAndDelete(alex).payout).toBe(400_00);
 
     expect(plinthTotal(bank, alex)).toBe(0);
-    expect(bank.readPrivacy(alex).accessLog).toEqual(accessBefore);
+    const accessAfter = bank.readPrivacy(alex).accessLog;
+    expect(accessAfter).toHaveLength(accessBefore.length + 1);
+    expect(accessAfter[0]).toMatchObject({ who: "plinth", what: "Your Plinth account balances" });
     expect(bank.readClosureSummary(alex).payout).toBe(0);
   });
 
@@ -230,5 +262,61 @@ describe("Close and delete", () => {
     // Priya's Sync still runs on the next advance.
     bank.advanceClock();
     expect(bank.readPrivacy(priya).accessLog.length).toBeGreaterThan(before.access.length);
+  });
+
+  it("keeps the Pause history: a paused agent stays paused, with its Decision log entry", () => {
+    const bank = openTestBank();
+    const sam = signInByName(bank, "Sam Calloway");
+    bank.setAgentPaused(sam, true);
+    const pauseEntry = bank.readDecisionLog(sam)[0];
+
+    bank.closeAndDelete(sam);
+
+    expect(bank.isAgentPaused(sam)).toBe(true);
+    expect(bank.readDecisionLog(sam)).toContainEqual(pauseEntry);
+  });
+
+  it("changes nothing when a step fails after the payout, and leaves the running Mission running to its end", async () => {
+    const { model, release } = heldModel();
+    const bank = createBank({ db: openTestDatabase(), clock: fixedClock(SIMULATION_START), missionModel: model });
+    const sam = signInByName(bank, "Sam Calloway");
+    const { mission, ended } = bank.startMission(sam, "What's my Usual month?");
+    const before = {
+      accounts: bank.customerData.listAccounts(sam),
+      ledger: bank.customerData.listLedgerTransactions(sam),
+      linked: bank.customerData.listLinkedAccounts(sam),
+      missions: bank.customerData.listMissions(sam),
+      findings: bank.readFindings(sam),
+      access: bank.readPrivacy(sam).accessLog,
+      log: bank.readDecisionLog(sam),
+    };
+    // Unlinking fails, after the Mission has stopped and the balances have been paid out in the same transaction.
+    const failingData = {
+      ...bank.customerData,
+      deleteLinkedAccount: () => {
+        throw new LinkedAccountError("Unlinking failed");
+      },
+    };
+
+    expect(() =>
+      closeAndDelete(
+        { clock: bank.clock, customerData: failingData, systemData: bank.systemData, stopMission: bank.stopMission },
+        sam,
+      ),
+    ).toThrow("Unlinking failed");
+
+    expect(bank.isClosed(sam)).toBe(false);
+    expect(bank.customerData.listAccounts(sam)).toEqual(before.accounts);
+    expect(bank.customerData.listLedgerTransactions(sam)).toEqual(before.ledger);
+    expect(bank.customerData.listLinkedAccounts(sam)).toEqual(before.linked);
+    expect(bank.customerData.listMissions(sam)).toEqual(before.missions);
+    expect(bank.readFindings(sam)).toEqual(before.findings);
+    expect(bank.readPrivacy(sam).accessLog).toEqual(before.access);
+    expect(bank.readDecisionLog(sam)).toEqual(before.log);
+    // The Mission's loop still runs: it reports, and then a new Mission can start.
+    release();
+    expect((await ended).state).toBe("reported");
+    expect(bank.readMission(sam, mission.id)?.state).toBe("reported");
+    expect(bank.startMission(sam, "What's my Usual month?").mission.state).toBe("running");
   });
 });

@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "268fed59-4641-409e-9ec1-5470f32e393e",
+  "id": "b36ced44-63e2-4474-ad3c-51cfa5677a34",
   "prevId": "bc238976-6dc2-42f3-aa6f-7a59da704bd4",
   "tables": {
     "access_log": {
@@ -525,7 +525,7 @@
         },
         "decisions_agent_uses_rule": {
           "name": "decisions_agent_uses_rule",
-          "value": "\"decisions\".\"actor\" = 'customer' OR \"decisions\".\"rule_id\" IS NOT NULL OR \"decisions\".\"mission_id\" IS NOT NULL OR \"decisions\".\"result\" IN ('Reported', 'Stopped', 'Failed')"
+          "value": "\"decisions\".\"actor\" = 'customer' OR \"decisions\".\"rule_id\" IS NOT NULL OR \"decisions\".\"mission_id\" IS NOT NULL OR (\"decisions\".\"result\" IN ('Reported', 'Stopped', 'Failed') AND \"decisions\".\"ledger_transaction_id\" IS NULL)"
         }
       }
     },

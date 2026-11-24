@@ -68,7 +68,7 @@ describe("ledger", () => {
     expect(bank.customerData.listLedgerTransactions(sam)).toHaveLength(before);
   });
 
-  it("refuses a ledger transaction that isn't made of pairs of entries", () => {
+  it("refuses a ledger transaction that isn't a pair of entries", () => {
     const bank = openTestBank();
     const { sam, checking, houseFund } = samAndAccounts(bank);
 
@@ -76,40 +76,9 @@ describe("ledger", () => {
       bank.customerData.postLedgerTransaction(sam, {
         idempotencyKey: "test:three-entries",
         description: "Three entries",
-        entries: [
-          { accountId: checking.id, amount: cents(-10_00) },
-          { accountId: houseFund.id, amount: cents(5_00) },
-          { accountId: houseFund.id, amount: cents(5_00) },
-        ],
+        entries: [...entriesMoving(10_00, checking.id, houseFund.id), ...entriesMoving(5_00, houseFund.id, checking.id)],
       }),
     ).toThrow(/pair/);
-  });
-
-  it("posts several pairs as one ledger transaction, but refuses pairs that only sum to zero together", () => {
-    const bank = openTestBank();
-    const { sam, checking, houseFund } = samAndAccounts(bank);
-
-    expect(() =>
-      bank.customerData.postLedgerTransaction(sam, {
-        idempotencyKey: "test:unbalanced-pairs",
-        description: "Pairs that sum to zero only together",
-        entries: [
-          { accountId: checking.id, amount: cents(-10_00) },
-          { accountId: houseFund.id, amount: cents(4_00) },
-          { accountId: houseFund.id, amount: cents(7_00) },
-          { accountId: checking.id, amount: cents(-1_00) },
-        ],
-      }),
-    ).toThrow(/sum to zero/);
-
-    bank.customerData.postLedgerTransaction(sam, {
-      idempotencyKey: "test:two-pairs",
-      description: "Two pairs",
-      entries: [...entriesMoving(10_00, checking.id, houseFund.id), ...entriesMoving(5_00, houseFund.id, checking.id)],
-    });
-
-    expect(balanceOf(bank, sam, checking.id)).toBe(222_00);
-    expect(balanceOf(bank, sam, houseFund.id)).toBe(12_405_00);
   });
 
   it("refuses amounts that aren't whole cents", () => {

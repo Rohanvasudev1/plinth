@@ -1,4 +1,4 @@
-import { and, asc, eq, isNotNull, isNull } from "drizzle-orm";
+import { and, asc, eq, isNull } from "drizzle-orm";
 import type { Customer } from "./customer-data";
 import type { Database } from "./db/database";
 import { accountsTable, customersTable } from "./db/schema";
@@ -55,39 +55,30 @@ export interface SystemData {
 const customerColumns = { id: customersTable.id, name: customersTable.name };
 
 export function createSystemData(db: Database): SystemData {
+  /** Customers in id order: one by id, only open ones, or both. */
+  function selectCustomers(only: { id?: number; open?: boolean }): Customer[] {
+    return db
+      .select(customerColumns)
+      .from(customersTable)
+      .where(
+        and(
+          only.id === undefined ? undefined : eq(customersTable.id, only.id),
+          only.open ? isNull(customersTable.closedAtMs) : undefined,
+        ),
+      )
+      .orderBy(asc(customersTable.id))
+      .all();
+  }
+
   return {
-    listCustomers() {
-      return db.select(customerColumns).from(customersTable).orderBy(asc(customersTable.id)).all();
-    },
-    listOpenCustomers() {
-      return db
-        .select(customerColumns)
-        .from(customersTable)
-        .where(isNull(customersTable.closedAtMs))
-        .orderBy(asc(customersTable.id))
-        .all();
-    },
-    findCustomer(customerId) {
-      return db.select(customerColumns).from(customersTable).where(eq(customersTable.id, customerId)).get();
-    },
-    findOpenCustomer(customerId) {
-      return db
-        .select(customerColumns)
-        .from(customersTable)
-        .where(and(eq(customersTable.id, customerId), isNull(customersTable.closedAtMs)))
-        .get();
-    },
+    listCustomers: () => selectCustomers({}),
+    listOpenCustomers: () => selectCustomers({ open: true }),
+    findCustomer: (customerId) => selectCustomers({ id: customerId })[0],
+    findOpenCustomer: (customerId) => selectCustomers({ id: customerId, open: true })[0],
     createCustomer(name) {
       return db.insert(customersTable).values({ name }).returning(customerColumns).get();
     },
-    isClosed(customer) {
-      const row = db
-        .select({ id: customersTable.id })
-        .from(customersTable)
-        .where(and(eq(customersTable.id, customer.id), isNotNull(customersTable.closedAtMs)))
-        .get();
-      return row !== undefined;
-    },
+    isClosed: (customer) => selectCustomers({ id: customer.id, open: true }).length === 0,
     markClosed(customer, at) {
       const changed = db
         .update(customersTable)

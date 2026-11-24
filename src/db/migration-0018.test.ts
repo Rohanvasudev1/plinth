@@ -30,7 +30,7 @@ afterEach(() => {
 });
 
 describe("migration 0018_close_and_delete", () => {
-  it("keeps every Decision log entry, its links and the customers, who start open", () => {
+  it("keeps every Decision log entry, its links to Rules, Missions, Findings and Undos, and the customers, who start open", () => {
     const sqlite = new BetterSqlite3(":memory:");
     sqlite.pragma("foreign_keys = ON");
     const db = drizzle(sqlite);
@@ -38,17 +38,29 @@ describe("migration 0018_close_and_delete", () => {
     sqlite.exec(`
       INSERT INTO customers (id, name) VALUES (1, 'Test Customer');
       INSERT INTO rules (id, customer_id, kind) VALUES (1, 1, 'buffer');
+      INSERT INTO ledger_transactions (id, customer_id, idempotency_key, description, posted_at_ms)
+        VALUES (1, 1, 'test:1', 'Test', 1000);
       INSERT INTO missions (id, customer_id, question, state, progress_label, read_list, started_at_ms, ended_at_ms)
         VALUES (1, 1, 'Where did my money go?', 'stopped', 'Reading transactions', '[]', 1000, 2000);
+      INSERT INTO missions (id, customer_id, question, state, progress_label, read_list, started_at_ms, ended_at_ms)
+        VALUES (2, 1, 'What is my Usual month?', 'reported', 'Writing up', '[]', 3000, 4000);
+      INSERT INTO findings (id, customer_id, kind, created_at_ms, title, facts, options, mission_id, report, state)
+        VALUES (1, 1, 'mission', 4000, 'Your Usual month', '[]', '[]', 2, 'Report', 'open');
       INSERT INTO decisions (id, customer_id, created_at_ms, actor, trigger_description, rule_id, rule_version, action,
-        amount_cents, result, why)
-        VALUES (1, 1, 1000, 'agent', 'Paycheck', 1, 1, 'Moved $340', 34000, 'Done', '[]');
+        amount_cents, result, why, ledger_transaction_id)
+        VALUES (1, 1, 1000, 'agent', 'Paycheck', 1, 1, 'Moved $340', 34000, 'Done', '[]', 1);
       INSERT INTO decisions (id, customer_id, created_at_ms, actor, trigger_description, action, amount_cents, result,
         why, reverses_decision_id)
         VALUES (2, 1, 1500, 'customer', 'You undid it', 'Undid', 34000, 'Reversed', '[]', 1);
       INSERT INTO decisions (id, customer_id, created_at_ms, actor, trigger_description, action, amount_cents, result,
         why, mission_id)
         VALUES (3, 1, 2000, 'agent', 'Mission', 'Stopped your Mission', 0, 'Stopped', '[{"label":"Trigger","value":"x"}]', 1);
+      INSERT INTO decisions (id, customer_id, created_at_ms, actor, trigger_description, action, amount_cents, result,
+        why, mission_id, finding_id)
+        VALUES (4, 1, 4000, 'agent', 'Mission', 'Reported: Your Usual month', 0, 'Reported', '[]', 2, 1);
+      INSERT INTO decisions (id, customer_id, created_at_ms, actor, trigger_description, rule_id, rule_version, action,
+        amount_cents, result, refused_by, why)
+        VALUES (5, 1, 5000, 'agent', 'Paycheck', 1, 1, 'Tried to move $340', 34000, 'Refused', 'Buffer kept', '[]');
     `);
     const before = sqlite.prepare("SELECT * FROM decisions ORDER BY id").all();
 
@@ -58,9 +70,15 @@ describe("migration 0018_close_and_delete", () => {
     expect(sqlite.prepare("SELECT id, name, closed_at_ms FROM customers").all()).toEqual([
       { id: 1, name: "Test Customer", closed_at_ms: null },
     ]);
-    // A Mission's entry may now lose its link; an agent action under a Rule still may not.
+    // A Mission's entry that moved no money may now lose its links, as Close and delete clears them.
     sqlite.exec("UPDATE decisions SET mission_id = NULL WHERE id = 3");
-    expect(() => sqlite.exec("UPDATE decisions SET rule_id = NULL, rule_version = NULL WHERE id = 1")).toThrow(/CHECK/);
+    sqlite.exec("UPDATE decisions SET mission_id = NULL, finding_id = NULL WHERE id = 4");
+    // An agent action under a Rule, Done or Refused, still may not lose its Rule, and no entry that moved money may
+    // name neither a Rule nor a Mission.
+    for (const id of [1, 5]) {
+      expect(() => sqlite.exec(`UPDATE decisions SET rule_id = NULL, rule_version = NULL WHERE id = ${id}`)).toThrow(/CHECK/);
+    }
+    expect(() => sqlite.exec("UPDATE decisions SET ledger_transaction_id = 1 WHERE id = 3")).toThrow(/CHECK/);
     expect(sqlite.pragma("foreign_key_check")).toEqual([]);
     const table = sqlite.prepare("SELECT sql FROM sqlite_master WHERE name = 'decisions'").get() as { sql: string };
     expect(table.sql).toMatch(/FOREIGN KEY \(`reverses_decision_id`\) REFERENCES `?"?decisions"?`?\(`id`\)/);

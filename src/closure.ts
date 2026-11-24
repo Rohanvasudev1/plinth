@@ -1,6 +1,7 @@
+import { closureAccess } from "./access-log-text";
 import { closedDecisionText, PAYOUT_DESCRIPTION } from "./closure-text";
 import type { Clock } from "./clock";
-import type { Customer, CustomerData, LedgerEntryInput } from "./customer-data";
+import type { Account, Customer, CustomerData, LedgerTransactionInput } from "./customer-data";
 import { customerChangeDecision } from "./decisions";
 import { unlinkAccount } from "./linked-account-changes";
 import type { Mission } from "./missions";
@@ -45,18 +46,22 @@ export function readClosureSummary({ customerData }: Pick<ClosureDeps, "customer
   return { payout: cents(accountsToPayOut(customerData, customer).reduce((sum, account) => sum + account.balance, 0)) };
 }
 
-/** One pair of entries per account, each paying its balance to the account-closure clearing account. */
-function payoutEntries({ customerData, systemData }: ClosureDeps, customer: Customer): LedgerEntryInput[] {
-  const clearing = systemData.ensureSystemAccount("accountClosure");
-  return accountsToPayOut(customerData, customer).flatMap((account) => [
-    { accountId: account.id, amount: cents(-account.balance) },
-    { accountId: clearing, amount: account.balance },
-  ]);
+/** One account's payout: its whole balance to the account-closure clearing account, under `closure:<customer id>:<account id>`. */
+function payoutTransaction(customer: Customer, account: Account, clearingAccountId: number): LedgerTransactionInput {
+  return {
+    idempotencyKey: `closure:${customer.id}:${account.id}`,
+    description: PAYOUT_DESCRIPTION,
+    entries: [
+      { accountId: account.id, amount: cents(-account.balance) },
+      { accountId: clearingAccountId, amount: account.balance },
+    ],
+  };
 }
 
 /**
  * Closes the customer's Plinth account in one transaction: stops a running Mission and expires open and snoozed
- * Findings; pays out every Plinth account above zero as one ledger transaction under `closure:<customer id>`; unlinks
+ * Findings; writes an access log entry for reading the balances, and pays out each Plinth account above zero as its
+ * own ledger transaction under `closure:<customer id>:<account id>`; unlinks
  * every Linked account, each with its Decision log and access log entries; deletes Missions, Findings, settings and
  * Goal targets; writes "Closed your Plinth account" with the payout; and marks the customer Closed. Throws
  * ClosureError, changing nothing, if they are already Closed.
@@ -71,16 +76,13 @@ export function closeAndDelete(deps: ClosureDeps, customer: Customer): ClosureOu
     }
     customerData.expireLiveFindings(customer);
 
+    // Plinth reads every balance to pay it out, whatever it finds.
+    customerData.recordAccess(customer, closureAccess());
     const { payout } = readClosureSummary(deps, customer);
-    const entries = payoutEntries(deps, customer);
-    const posted =
-      entries.length === 0
-        ? null
-        : customerData.postLedgerTransaction(customer, {
-            idempotencyKey: `closure:${customer.id}`,
-            description: PAYOUT_DESCRIPTION,
-            entries,
-          });
+    const clearing = systemData.ensureSystemAccount("accountClosure");
+    for (const account of accountsToPayOut(customerData, customer)) {
+      customerData.postLedgerTransaction(customer, payoutTransaction(customer, account, clearing));
+    }
 
     for (const linked of customerData.listLinkedAccounts(customer)) unlinkAccount(deps, customer, linked.id, "close");
 
@@ -88,7 +90,6 @@ export function closeAndDelete(deps: ClosureDeps, customer: Customer): ClosureOu
     customerData.recordDecision(customer, {
       ...customerChangeDecision({ ...closedDecisionText(payout), rule: null }),
       amount: payout,
-      ledgerTransactionId: posted?.ledgerTransactionId ?? null,
     });
     const closedAt = clock.now();
     systemData.markClosed(customer, closedAt);

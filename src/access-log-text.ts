@@ -60,6 +60,15 @@ const UNLINK_WHY_TEXT: Record<UnlinkReason, string> = {
   close: "You closed your Plinth account, so Plinth deleted its copy of that data",
 };
 
+/** Close and delete reading every Plinth account balance to pay it out. */
+export function closureAccess(): NewAccessLogEntry {
+  return {
+    who: "plinth",
+    what: "Your Plinth account balances",
+    why: "Close and delete: to pay out your balances before Plinth deleted your working data",
+  };
+}
+
 /** Unlinking one Linked account, which deletes Plinth's copy of it, because the customer unlinked it or closed. */
 export function unlinkAccess(account: string, reason: UnlinkReason): NewAccessLogEntry {
   return { who: "plinth", what: `Your ${account} balance and Consent`, why: UNLINK_WHY_TEXT[reason] };

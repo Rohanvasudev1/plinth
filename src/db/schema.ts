@@ -240,11 +240,11 @@ export const decisionsTable = sqliteTable(
     uniqueIndex("decisions_reverses_decision_id").on(table.reversesDecisionId),
     check("decisions_refused_by", sql`(${table.result} = 'Refused') = (${table.refusedBy} IS NOT NULL)`),
     check("decisions_rule_version", sql`(${table.ruleId} IS NULL) = (${table.ruleVersion} IS NULL)`),
-    // A Mission's entry (Reported, Stopped or Failed) loses its link when Close and delete deletes the Mission, so
-    // only an agent action under a Rule must still name one.
+    // A Mission's entry (Reported, Stopped or Failed, moving no money) loses its link when Close and delete deletes the
+    // Mission. Any agent entry that moved money still names its Rule or Mission.
     check(
       "decisions_agent_uses_rule",
-      sql`${table.actor} = 'customer' OR ${table.ruleId} IS NOT NULL OR ${table.missionId} IS NOT NULL OR ${table.result} IN ('Reported', 'Stopped', 'Failed')`,
+      sql`${table.actor} = 'customer' OR ${table.ruleId} IS NOT NULL OR ${table.missionId} IS NOT NULL OR (${table.result} IN ('Reported', 'Stopped', 'Failed') AND ${table.ledgerTransactionId} IS NULL)`,
     ),
   ],
 );

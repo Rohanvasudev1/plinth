@@ -211,9 +211,11 @@ export function createMissionRunner(deps: MissionDeps): MissionRunner {
         findingId: null,
       });
       customerData.recordAccess(customer, missionAccess(mission.question, ended.readList));
+      // The Mission's loop ends only once the stop is kept: if an enclosing transaction, such as Close and delete,
+      // rolls back, the Mission is still running in the database and its loop runs on.
+      customerData.afterCommit(() => settlers.get(missionId)?.(ended));
       return ended;
     });
-    settlers.get(missionId)?.(stopped);
     return stopped;
   }
 
