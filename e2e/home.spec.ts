@@ -1,8 +1,10 @@
 import { expect, test } from "@playwright/test";
+import { restoreSeed } from "./restore-seed";
 
 test.use({ viewport: { width: 390, height: 844 } });
 
 test("Sam signs in and sees Checking, the House fund and its Goal on Home at phone width", async ({ page }) => {
+  await restoreSeed(page);
   await page.goto("/");
 
   await expect(page.getByRole("heading", { name: "Sign in as" })).toBeVisible();
@@ -27,6 +29,7 @@ test("Sam signs in and sees Checking, the House fund and its Goal on Home at pho
 });
 
 test("Signing in as Priya shows her balances, not Sam's", async ({ page }) => {
+  await restoreSeed(page);
   await page.goto("/sign-in");
   await page.getByRole("button", { name: "Priya Natarajan" }).click();
 

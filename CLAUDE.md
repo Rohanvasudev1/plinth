@@ -18,7 +18,7 @@ Plinth is a consumer bank web app built around one agent per customer. The agent
 - Dev server: `pnpm dev`, then open http://localhost:3000. The app's database is `data/plinth.db`, or the file named by `PLINTH_DB_PATH`.
 - Typecheck: `pnpm typecheck`
 - Unit tests: `pnpm test` (Vitest, `src/**/*.test.ts`). Run one file with `pnpm test src/money.test.ts`.
-- End-to-end tests: `pnpm test:e2e` (Playwright, `e2e/`). It starts its own dev server on port 3100 with a fresh database.
+- End-to-end tests: `pnpm test:e2e` (Playwright, `e2e/`). It starts its own dev server on port 3100 with a fresh database and `PLINTH_E2E=1`. Every test calls `restoreSeed(page)` from `e2e/restore-seed.ts` first, which posts to the test-only `/e2e/reset` route to restore the seed and the simulated clock, so tests pass in any order. Without `PLINTH_E2E=1`, or in a production build, that route answers 404.
 - New migration after editing `src/db/schema.ts`: `pnpm db:generate --name <change>`. Migrations in `drizzle/` apply automatically whenever a database opens.
 
 Tests get a fresh, migrated in-memory database from `openTestDatabase()` and a pinned time from `fixedClock()`. The app reads time from the simulated clock stored in the database (`getAppClock()`).
