@@ -46,6 +46,7 @@ describe("Bills before payday", () => {
     bank.customerData.addScheduledBill(sam, {
       accountId: checking!.id,
       payee: "Streaming",
+      category: "Subscriptions",
       amount: cents(15_00),
       dayOfMonth: 4,
     });
@@ -69,6 +70,7 @@ describe("Bills before payday", () => {
     bank.customerData.addScheduledBill(sam, {
       accountId: checking!.id,
       payee: "Insurance",
+      category: "Health",
       amount: cents(80_00),
       dayOfMonth: 31,
     });

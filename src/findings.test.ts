@@ -149,7 +149,7 @@ describe("Picking an Option on a sweep Finding", () => {
     const { bank, sam, findingId } = samAskedAboutSweep();
     const [checking] = bank.customerData.listAccounts(sam);
     if (!checking) throw new Error("Sam's Checking is missing");
-    bank.cardPurchase(sam, { accountId: checking.id, amount: cents(100_00), idempotencyKey: "card:groceries" });
+    bank.cardPurchase(sam, { accountId: checking.id, merchant: "green-basket-market", amount: cents(100_00), idempotencyKey: "card:groceries" });
 
     const outcome = bank.chooseOption(sam, findingId, "move");
 

@@ -35,6 +35,9 @@ export function undoAgentAction(customerData: CustomerData, customer: Customer, 
     const posted = customerData.postLedgerTransaction(customer, {
       idempotencyKey: `undo:${original.id}`,
       description: `Undo: ${original.action}`,
+      counterparty: movedFrom.name,
+      // An agent action only moves money between the customer's own accounts, so its reversal is Savings too.
+      category: "Savings",
       entries: [
         { accountId: movedTo.id, amount: cents(-original.amount) },
         { accountId: movedFrom.id, amount: original.amount },

@@ -4,6 +4,7 @@ import { DISPLAY_TIME_ZONE } from "@/app-clock";
 import { getAppBank } from "@/app-bank";
 import { formatDollars } from "@/money";
 import { requireCustomer } from "@/session";
+import { MERCHANTS } from "@/simulator";
 import { CardPurchaseForm, ClockControls } from "./simulator-forms";
 
 export const dynamic = "force-dynamic";
@@ -50,9 +51,13 @@ export default async function SimulatorPage() {
 
       <section className="card simulator" aria-labelledby="card-purchase">
         <h2 id="card-purchase">Card purchase</h2>
-        <p className="muted">Spend from one of {customer.name}&rsquo;s accounts at a simulated merchant.</p>
+        <p className="muted">Spend from one of {customer.name}&rsquo;s accounts at a simulated Merchant.</p>
         <CardPurchaseForm
           purchaseId={randomUUID()}
+          merchants={Object.entries(MERCHANTS).map(([key, merchant]) => ({
+            key,
+            label: `${merchant.name} (${merchant.category})`,
+          }))}
           accounts={accounts.map((account) => ({
             id: account.id,
             label: `${account.name} (${formatDollars(account.balance)})`,

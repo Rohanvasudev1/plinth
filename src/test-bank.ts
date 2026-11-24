@@ -11,6 +11,14 @@ export function openTestBank(): Bank {
   return createBank({ db: openTestDatabase(), clock: fixedClock(SIMULATION_START) });
 }
 
+/** Switches every customer's Rules off, so the ledger holds only what the Simulator posted and no sweeps. */
+export function withoutSweeps(bank: Bank): Bank {
+  for (const customer of bank.listCustomers()) {
+    for (const rule of bank.customerData.listRules(customer)) bank.switchRule(customer, rule.id, false);
+  }
+  return bank;
+}
+
 export function signInByName(bank: Bank, name: string): Customer {
   const customer = bank.listCustomers().find((candidate) => candidate.name === name);
   if (!customer) throw new Error(`No seeded customer named ${name}`);

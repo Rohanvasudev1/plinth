@@ -1,6 +1,7 @@
 import { datesAfterThrough, localDateOf, sameTimeNextDay, type LocalDate } from "./calendar";
 import type { SettableClock } from "./clock";
 import type { Customer, CustomerData, Payroll, ScheduledBill } from "./customer-data";
+import type { Category } from "./categories";
 import { cents, type Cents } from "./money";
 import { isBillDue, isPayday } from "./schedules";
 import { EMPLOYERS, type SystemData } from "./system-data";
@@ -32,8 +33,31 @@ export interface PostedBill extends PostedMoney {
 
 export type PostedTransaction = PostedPaycheck | PostedBill;
 
+/**
+ * The simulated Merchants a customer can pay by Card purchase, each with one Category. Every purchase still
+ * settles through the single Merchant clearing account.
+ */
+export const MERCHANTS = {
+  "green-basket-market": { name: "Green Basket Market", category: "Groceries" },
+  "lantern-noodle-bar": { name: "Lantern Noodle Bar", category: "Eating out" },
+  "morning-crumb-cafe": { name: "Morning Crumb Cafe", category: "Eating out" },
+  "harbor-and-pine-goods": { name: "Harbor & Pine Goods", category: "Shopping" },
+  "cityline-transit": { name: "Cityline Transit", category: "Transport" },
+  "tunewell-streaming": { name: "Tunewell Streaming", category: "Subscriptions" },
+  "bright-reel-cinema": { name: "Bright Reel Cinema", category: "Entertainment" },
+  "willow-street-pharmacy": { name: "Willow Street Pharmacy", category: "Health" },
+} as const satisfies Record<string, { name: string; category: Category }>;
+
+/** A Merchant's key, such as `lantern-noodle-bar`. */
+export type MerchantKey = keyof typeof MERCHANTS;
+
+export function isMerchantKey(key: string): key is MerchantKey {
+  return Object.hasOwn(MERCHANTS, key);
+}
+
 export interface CardPurchase {
   accountId: number;
+  merchant: MerchantKey;
   amount: Cents;
   /** Unique per purchase attempt, so a resubmitted form changes nothing. */
   idempotencyKey: string;
@@ -71,7 +95,7 @@ export interface Simulator {
   advanceClock(): AdvancedClock;
   /**
    * Spends from one of the customer's accounts at a simulated merchant, through the Merchant clearing account.
-   * Throws CardDeclinedError if the account isn't the customer's, the amount isn't above zero, or the account
+   * Throws CardDeclinedError if the account isn't the customer's, the Merchant isn't one of MERCHANTS, the amount isn't above zero, or the account
    * holds less than the amount.
    */
   cardPurchase(customer: Customer, purchase: CardPurchase): PostedCardPurchase;
@@ -123,6 +147,8 @@ export function createSimulator(deps: {
     const posted = customerData.postLedgerTransaction(customer, {
       idempotencyKey: `payroll:${payroll.employer}:${date}`,
       description: `Paycheck from ${employer.name}`,
+      counterparty: employer.name,
+      category: "Income",
       entries: [
         { accountId: systemData.ensureSystemAccount(employer.clearingAccount), amount: cents(-payroll.amount) },
         { accountId: payroll.accountId, amount: payroll.amount },
@@ -144,6 +170,8 @@ export function createSimulator(deps: {
     const posted = customerData.postLedgerTransaction(customer, {
       idempotencyKey: `bill:${bill.id}:${date}`,
       description: `${bill.payee} bill`,
+      counterparty: bill.payee,
+      category: bill.category ?? undefined,
       entries: [
         { accountId: bill.accountId, amount: cents(-bill.amount) },
         { accountId: systemData.ensureSystemAccount("biller"), amount: bill.amount },
@@ -188,18 +216,22 @@ export function createSimulator(deps: {
         }
       });
     },
-    cardPurchase(customer, { accountId, amount, idempotencyKey }) {
+    cardPurchase(customer, { accountId, merchant: merchantKey, amount, idempotencyKey }) {
       const already = customerData.findLedgerTransaction(customer, idempotencyKey);
       if (already) return { ledgerTransactionId: already.id, created: false };
 
       const account = customerData.getAccount(customer, accountId);
       if (!account) throw new CardDeclinedError("That account isn't yours");
+      if (!isMerchantKey(merchantKey)) throw new CardDeclinedError("There is no such Merchant");
       if (amount <= 0) throw new CardDeclinedError("A purchase must be more than $0.00");
       if (account.balance < amount) throw new CardDeclinedError(`${account.name} doesn't hold enough`);
 
+      const merchant = MERCHANTS[merchantKey];
       const posted = customerData.postLedgerTransaction(customer, {
         idempotencyKey,
-        description: "Card purchase",
+        description: `Card purchase at ${merchant.name}`,
+        counterparty: merchant.name,
+        category: merchant.category,
         entries: [
           { accountId: account.id, amount: cents(-amount) },
           { accountId: systemData.ensureSystemAccount("merchant"), amount },

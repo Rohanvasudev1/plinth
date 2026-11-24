@@ -1,4 +1,5 @@
 import { sql } from "drizzle-orm";
+import { CATEGORIES } from "../categories";
 import { FINDING_KINDS, FINDING_STATES } from "../findings";
 import { SAVINGS_GOALS } from "../settings";
 import { check, index, integer, sqliteTable, text, uniqueIndex, type AnySQLiteColumn } from "drizzle-orm/sqlite-core";
@@ -56,6 +57,10 @@ export const ledgerTransactionsTable = sqliteTable(
     idempotencyKey: text("idempotency_key").notNull(),
     description: text("description").notNull(),
     postedAtMs: integer("posted_at_ms").notNull(),
+    /** Who the money moved to or from: a Merchant, payee or employer, or the customer's own account. Null on opening balances. */
+    counterparty: text("counterparty"),
+    /** The transaction's Category. Null on opening balances. */
+    category: text("category", { enum: CATEGORIES }),
   },
   (table) => [uniqueIndex("ledger_transactions_customer_key").on(table.customerId, table.idempotencyKey)],
 );
@@ -140,6 +145,8 @@ export const scheduledBillsTable = sqliteTable(
     payee: text("payee").notNull(),
     amountCents: integer("amount_cents").notNull(),
     dayOfMonth: integer("day_of_month").notNull(),
+    /** The Category each payment of the bill is posted under. */
+    category: text("category", { enum: CATEGORIES }),
   },
   (table) => [
     index("scheduled_bills_customer_id").on(table.customerId),
