@@ -73,6 +73,10 @@ describe("The Autonomy level and the sweep", () => {
       if (swept) {
         expect(balancesOf(bank, sam), `limit ${limit}`).toEqual({ checking: 3_127_00, savings: 12_740_00 });
         expect(bank.readFindings(sam), `limit ${limit}`).toEqual([]);
+        expect(agentEntriesIn(bank, sam)[0]?.why).toContainEqual({
+          label: "Checked by",
+          value: "Guardrails passed: Pause, ownership, positive amount, Rule on, Buffer kept, Payment limit",
+        });
       } else {
         expect(balancesOf(bank, sam), `limit ${limit}`).toEqual({ checking: 3_467_00, savings: 12_400_00 });
         const [finding] = bank.readFindings(sam);
@@ -280,5 +284,35 @@ describe("Sweep Findings over time", () => {
     expect(bank.readFindings(newcomer)).toEqual([]);
     expect(bank.readDecisionLog(newcomer)).toEqual([]);
     expect(balancesOf(bank, newcomer)).toEqual({ checking: 2_000_00, savings: 0 });
+  });
+
+  it("a Finding isn't a refusal: under ask_first its facts give the reason and name no guardrail", () => {
+    const { bank, sam } = samAskedAboutSweep();
+
+    const [finding] = bank.readFindings(sam);
+
+    expect(finding?.facts).toContainEqual({
+      label: "Why your agent is asking",
+      value: "You asked your agent to ask you before everything",
+    });
+    expect(JSON.stringify(finding?.facts)).not.toMatch(/guardrail/i);
+    expect(finding?.refusal).toBeNull();
+  });
+});
+
+describe("Picking Move while the agent is paused", () => {
+  it("moves the money, since Pause stops only automatic actions, and lists only the guardrails that ran", () => {
+    const { bank, sam, findingId } = samAskedAboutSweep();
+    bank.setAgentPaused(sam, true);
+
+    const outcome = bank.chooseOption(sam, findingId, "move");
+
+    expect(outcome).toMatchObject({ ok: true });
+    expect(balancesOf(bank, sam)).toEqual({ checking: 3_127_00, savings: 12_740_00 });
+    const [done] = agentEntriesIn(bank, sam);
+    expect(done?.why).toContainEqual({
+      label: "Checked by",
+      value: "Guardrails passed: ownership, positive amount, Rule on, Buffer kept",
+    });
   });
 });

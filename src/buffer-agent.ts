@@ -6,7 +6,7 @@ import { cents, formatDollars, type Cents } from "./money";
 import { bufferRuleFor, type BufferRule } from "./rules";
 import { billsBeforePayday, safeToSpend } from "./safe-to-spend";
 import type { AutonomyLevel } from "./settings";
-import { billsRow, bufferRuleRow, checkSweepGuardrails, recordSweep, type ProposedSweep } from "./sweep";
+import { billsRow, bufferRuleRow, checkSweepGuardrails, chooseSweepRoute, recordSweep, type ProposedSweep } from "./sweep";
 import { EMPLOYERS, type SystemData } from "./system-data";
 
 /** A paycheck deposit: money from an employer's payroll clearing account into one of the customer's accounts. */
@@ -60,6 +60,8 @@ export function startBufferAgent(deps: {
     const safe = checking ? safeToSpend(checking, rule.parameters.buffer, bills) : null;
     // Round down to whole dollars.
     const amount = cents(safe && safe.amount >= 100 ? safe.amount - (safe.amount % 100) : 0);
+    // The Autonomy level chooses the route before any guardrail runs. Asking makes a Finding, which isn't a refusal.
+    const route = chooseSweepRoute(autonomyLevel, customerData.listRules(customer), amount);
     const proposed: ProposedSweep = {
       customer,
       rule,
@@ -67,9 +69,10 @@ export function startBufferAgent(deps: {
       savings,
       amount,
       bills,
-      approval: { by: "agent", autonomyLevel },
+      approval: route.route === "act" ? route.approval : "agent",
     };
-    const refusal = checkSweepGuardrails(customerData, proposed);
+    const check = checkSweepGuardrails(customerData, proposed);
+    const { refusal } = check;
     // With nothing above the Buffer there is no action to take, so nothing is logged, paused or not. Any other
     // refusal is, including Pause, so the customer can see why a sweep didn't happen.
     if (amount <= 0 && refusal?.guardrail !== "ownership") return;
@@ -82,9 +85,9 @@ export function startBufferAgent(deps: {
         : "Not worked out: the Rule doesn't name a checking account of yours",
     };
 
-    // Only the Payment limit stopped it, so the agent asks instead of acting alone. Ownership passed, so both
-    // accounts are the customer's; the extra checks narrow the types.
-    if (refusal?.guardrail === "Payment limit" && checking && savings) {
+    // The guardrails passed but the agent may not act alone, so it asks. Ownership passed, so both accounts are
+    // the customer's; the extra checks narrow the types. A paused agent was refused above, so it makes no Finding.
+    if (route.route === "ask" && !refusal && checking && savings) {
       customerData.createFinding(customer, {
         kind: "sweep",
         ledgerEventId: event.id,
@@ -94,7 +97,7 @@ export function startBufferAgent(deps: {
           billsRow(bills),
           bufferRuleRow(rule, checking, savings),
           amountRow,
-          { label: "Why your agent is asking", value: capitalise(refusal.reason) },
+          { label: "Why your agent is asking", value: route.why },
         ],
         options: [
           { key: "move", amount, fromAccountId: checking.id, toAccountId: savings.id },
@@ -104,7 +107,7 @@ export function startBufferAgent(deps: {
       return;
     }
 
-    recordSweep(customerData, proposed, refusal, {
+    recordSweep(customerData, proposed, check, {
       idempotencyKey: `sweep:${event.id}`,
       trigger: { ledgerEventId: event.id, description: `Paycheck from ${deposit.employerName}` },
       why: [
@@ -132,8 +135,4 @@ export function startBufferAgent(deps: {
       if (rule?.on) sweep(customer, rule, settings.autonomyLevel, event, deposit);
     });
   });
-}
-
-function capitalise(text: string): string {
-  return text.charAt(0).toUpperCase() + text.slice(1);
 }

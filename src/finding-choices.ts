@@ -74,10 +74,10 @@ export function chooseOption(
       savings,
       amount: option.amount,
       bills: billsBeforePayday(customerData, customer, localDateOf(clock.now())),
-      approval: { by: "customer" },
+      approval: "customer",
     };
-    const refusal = checkSweepGuardrails(customerData, proposed);
-    const decision = recordSweep(customerData, proposed, refusal, {
+    const check = checkSweepGuardrails(customerData, proposed);
+    const decision = recordSweep(customerData, proposed, check, {
       idempotencyKey: `finding:${finding.id}`,
       trigger: { ledgerEventId: finding.ledgerEventId, description: "You chose this Option" },
       why: [
@@ -88,7 +88,7 @@ export function chooseOption(
     });
     if (!decision) return { ok: false, reason: ALREADY_CHOSEN, finding };
     if (decision.result === "Refused") {
-      const reason = refusal?.reason ?? "the Option must name your own checking and savings accounts";
+      const reason = check.refusal?.reason ?? "the Option must name your own checking and savings accounts";
       const refused = customerData.recordFindingRefusal(customer, finding.id, {
         guardrail: decision.refusedBy ?? "ownership",
         reason,
