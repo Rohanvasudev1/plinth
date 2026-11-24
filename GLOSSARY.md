@@ -29,8 +29,12 @@ A system-owned account that funds the seeded starting balances, so that seeding 
 _Avoid_: Equity account, suspense account
 
 **Goal**:
-A target amount attached to one of the customer's savings accounts, such as the House fund.
-_Avoid_: Target, pot
+What one of the customer's savings accounts is for, such as Buy a home for the House fund, with an optional target amount the customer sets. Without a target, Home shows only the balance.
+_Avoid_: Pot
+
+**Goal account**:
+The one savings account a customer has for one savings goal (Buy a home, Emergency cushion or Travel), opened by the Setup survey. Running setup again reuses it, and dropping its goal keeps its money.
+_Avoid_: Goal pot, sub-account
 
 **Safe to spend**:
 The checking balance minus the Buffer minus Scheduled bills due before the next payday.
@@ -78,6 +82,10 @@ _Avoid_: Minimum balance, floor
 A move of money above the Buffer from checking to savings, made by the agent after a paycheck posts.
 _Avoid_: Auto-save, transfer
 
+**Sweep target**:
+The Goal account a buffer Rule sweeps to: the first savings goal in the customer's goal preferences. A buffer Rule can have none, as after Skip, and then keeps the Buffer and sweeps nothing.
+_Avoid_: Destination, savings target
+
 **Payment limit**:
 The largest amount the agent may move alone under "handle small things", held in a payment limit Rule.
 _Avoid_: Cap, threshold
@@ -85,6 +93,18 @@ _Avoid_: Cap, threshold
 **Autonomy level**:
 The customer's choice of how much the agent does alone: ask before everything, handle small things, or act on anything within the Rules.
 _Avoid_: Automation mode, permission level
+
+**Settings record**:
+The one versioned record per customer of every choice that isn't a Rule: the Autonomy level, the Advice setting, the risk answers, the Data choices and the ordered goal preferences. A customer without one hasn't finished setup.
+_Avoid_: Preferences, profile, config
+
+**Goal preference**:
+One entry in the customer's ordered list of what spare money should go toward, such as Buy a home or Clear debt. Savings goals among them get a savings account with a Goal; others, like Clear debt, don't.
+_Avoid_: Priority, objective
+
+**Data choice**:
+One of the customer's on/off choices about their data: training models on it, sharing it with partners, and keeping chat history. Each is off unless the customer turns it on.
+_Avoid_: Consent, privacy setting
 
 **Pause**:
 A customer switch that stops every automatic agent action until the customer turns it back on.
@@ -107,11 +127,11 @@ The customer's choice of whether the agent's own view appears in a Finding: neve
 _Avoid_: Advice mode, tone
 
 **Guardrail**:
-A check that runs before any agent action and refuses it if it breaks a Rule or ownership limit.
+A check that runs before any agent action and refuses it if it breaks a Rule or ownership limit, or if the agent is paused.
 _Avoid_: Validation, safety check
 
 **Decision log**:
-The customer-visible record of every agent action, with its trigger, the Rule it used, and its result, plus each change the customer makes to the agent: Undo, a picked Option, a Rule or setting edit, and Pause.
+The customer-visible record of every agent action, with its trigger, the Rule it used, and its result, plus each change the customer makes to the agent: Undo, a picked Option, a Rule or setting edit, a Goal's target, and Pause.
 _Avoid_: Audit trail, history
 
 **Why**:

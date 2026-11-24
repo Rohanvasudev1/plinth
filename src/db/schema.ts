@@ -1,4 +1,6 @@
 import { sql } from "drizzle-orm";
+import { FINDING_KINDS, FINDING_STATES } from "../findings";
+import { SAVINGS_GOALS } from "../settings";
 import { check, index, integer, sqliteTable, text, uniqueIndex, type AnySQLiteColumn } from "drizzle-orm/sqlite-core";
 
 /** The app's simulated time. It holds at most one row, with id 1. */
@@ -28,6 +30,8 @@ export const accountsTable = sqliteTable(
     systemKey: text("system_key").unique(),
     /** The Goal's target amount, only on savings accounts that have one. */
     goalCents: integer("goal_cents"),
+    /** The savings goal this Goal account is for, such as `buy_home`. At most one account per goal per customer. */
+    goal: text("goal", { enum: SAVINGS_GOALS }),
   },
   (table) => [
     index("accounts_customer_id").on(table.customerId),
@@ -36,6 +40,8 @@ export const accountsTable = sqliteTable(
       sql`(${table.kind} = 'system') = (${table.customerId} IS NULL AND ${table.systemKey} IS NOT NULL)`,
     ),
     check("accounts_goal_on_savings", sql`${table.goalCents} IS NULL OR (${table.kind} = 'savings' AND ${table.goalCents} > 0)`),
+    check("accounts_savings_goal_on_savings", sql`${table.goal} IS NULL OR ${table.kind} = 'savings'`),
+    uniqueIndex("accounts_customer_goal").on(table.customerId, table.goal),
   ],
 );
 
@@ -179,7 +185,8 @@ export const ruleVersionsTable = sqliteTable(
 
 /**
  * The Decision log: one row per agent action, with what triggered it, the Rule version it used, and its result,
- * plus one Reversed row, written by the customer, for each agent action they undo.
+ * plus one row, written by the customer, for each agent action they undo and each change they make to a Rule or
+ * their settings record. A customer change that isn't to a Rule, such as a settings or Goal target change, has no Rule.
  * `why` is a JSON array of label and value pairs.
  */
 export const decisionsTable = sqliteTable(
@@ -193,10 +200,8 @@ export const decisionsTable = sqliteTable(
     actor: text("actor", { enum: ["agent", "customer"] }).notNull(),
     triggerLedgerEventId: integer("trigger_ledger_event_id").references(() => ledgerEventsTable.id),
     triggerDescription: text("trigger_description").notNull(),
-    ruleId: integer("rule_id")
-      .notNull()
-      .references(() => rulesTable.id),
-    ruleVersion: integer("rule_version").notNull(),
+    ruleId: integer("rule_id").references(() => rulesTable.id),
+    ruleVersion: integer("rule_version"),
     action: text("action").notNull(),
     /** Only ever one of the customer's own accounts, or null. */
     fromAccountId: integer("from_account_id").references(() => accountsTable.id),
@@ -218,5 +223,94 @@ export const decisionsTable = sqliteTable(
     index("decisions_trigger_ledger_event_id").on(table.triggerLedgerEventId),
     uniqueIndex("decisions_reverses_decision_id").on(table.reversesDecisionId),
     check("decisions_refused_by", sql`(${table.result} = 'Refused') = (${table.refusedBy} IS NOT NULL)`),
+    check("decisions_rule_version", sql`(${table.ruleId} IS NULL) = (${table.ruleVersion} IS NULL)`),
+    check("decisions_agent_uses_rule", sql`${table.actor} = 'customer' OR ${table.ruleId} IS NOT NULL`),
+  ],
+);
+
+/**
+ * One version of a customer's settings record (ADR 0007): the Autonomy level, the Advice setting, the raw risk
+ * answers, the data choices and the ordered goal preferences. Rows are never updated: a change writes the next
+ * version. A customer with no row has not finished setup.
+ */
+export const settingsVersionsTable = sqliteTable(
+  "settings_versions",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    customerId: integer("customer_id")
+      .notNull()
+      .references(() => customersTable.id),
+    version: integer("version").notNull(),
+    autonomyLevel: text("autonomy_level", { enum: ["ask_first", "small_things", "within_rules"] }).notNull(),
+    adviceSetting: text("advice_setting", { enum: ["never", "on_request", "always"] }).notNull(),
+    riskMarketDrop: text("risk_market_drop", { enum: ["sell", "wait", "buy_more", "ask_me"] }).notNull(),
+    riskTimeHorizon: text("risk_time_horizon", { enum: ["under_3_years", "3_to_10_years", "over_10_years"] }).notNull(),
+    trainModels: integer("train_models", { mode: "boolean" }).notNull(),
+    shareWithPartners: integer("share_with_partners", { mode: "boolean" }).notNull(),
+    keepChatHistory: integer("keep_chat_history", { mode: "boolean" }).notNull(),
+    /** A JSON array of goal keys, most important first. */
+    goalPreferences: text("goal_preferences", { mode: "json" }).notNull(),
+    createdAtMs: integer("created_at_ms").notNull(),
+  },
+  (table) => [
+    uniqueIndex("settings_versions_customer_version").on(table.customerId, table.version),
+    check("settings_versions_version_positive", sql`${table.version} > 0`),
+  ],
+);
+
+/**
+ * Each time a customer pauses or unpauses their agent. Rows are never updated: the latest row is the current
+ * state, and a customer with no row has never paused.
+ */
+export const pauseChangesTable = sqliteTable(
+  "pause_changes",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    customerId: integer("customer_id")
+      .notNull()
+      .references(() => customersTable.id),
+    paused: integer("paused", { mode: "boolean" }).notNull(),
+    createdAtMs: integer("created_at_ms").notNull(),
+  },
+  (table) => [index("pause_changes_customer_id").on(table.customerId)],
+);
+
+/**
+ * A Finding: facts the agent reports to a customer with Options, where nothing happens until the customer picks
+ * one. `facts` is a JSON array of label and value pairs, and `options` a JSON array of typed Options whose amounts
+ * are fixed when the Finding is made. `state` moves from open to chosen or expired, never back. A refused pick
+ * leaves it open and records the guardrail and reason, so the customer can see why nothing moved.
+ */
+export const findingsTable = sqliteTable(
+  "findings",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    customerId: integer("customer_id")
+      .notNull()
+      .references(() => customersTable.id),
+    kind: text("kind", { enum: FINDING_KINDS }).notNull(),
+    createdAtMs: integer("created_at_ms").notNull(),
+    /** The ledger event that caused the Finding, such as the paycheck behind a sweep Finding. */
+    ledgerEventId: integer("ledger_event_id")
+      .notNull()
+      .references(() => ledgerEventsTable.id),
+    ruleId: integer("rule_id")
+      .notNull()
+      .references(() => rulesTable.id),
+    ruleVersion: integer("rule_version").notNull(),
+    facts: text("facts", { mode: "json" }).notNull(),
+    options: text("options", { mode: "json" }).notNull(),
+    state: text("state", { enum: FINDING_STATES }).notNull(),
+    /** The key of the Option the customer picked, once the Finding is chosen. */
+    chosenOption: text("chosen_option"),
+    /** The guardrail that refused the customer's last pick, while the Finding is still open. */
+    refusedBy: text("refused_by"),
+    refusalReason: text("refusal_reason"),
+  },
+  (table) => [
+    index("findings_customer_id").on(table.customerId),
+    uniqueIndex("findings_customer_event_kind").on(table.customerId, table.ledgerEventId, table.kind),
+    check("findings_chosen_option", sql`(${table.state} = 'chosen') = (${table.chosenOption} IS NOT NULL)`),
+    check("findings_refusal", sql`(${table.refusedBy} IS NULL) = (${table.refusalReason} IS NULL)`),
   ],
 );

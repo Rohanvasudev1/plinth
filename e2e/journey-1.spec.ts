@@ -1,8 +1,10 @@
 import { expect, test } from "@playwright/test";
+import { restoreSeed } from "./restore-seed";
 
 test.use({ viewport: { width: 390, height: 844 } });
 
 test("Journey 1: Sam's paycheck lands, the agent sweeps $340, Sam checks Why and undoes it", async ({ page }) => {
+  await restoreSeed(page);
   await page.goto("/sign-in");
   await page.getByRole("button", { name: "Sam Calloway" }).click();
   await expect(page.getByRole("heading", { name: "Home" })).toBeVisible();

@@ -1,11 +1,12 @@
-import { formatLocalDate, localDateOf } from "./calendar";
+import { localDateOf } from "./calendar";
 import type { Clock } from "./clock";
-import type { Account, Customer, CustomerData, LedgerTransaction } from "./customer-data";
-import { GUARDRAILS, type Guardrail, type WhyRow } from "./decisions";
+import type { Customer, CustomerData, LedgerTransaction } from "./customer-data";
 import type { LedgerEvent, LedgerEventDispatcher } from "./ledger-events";
-import { cents, formatDollars, formatDollarsBriefly, type Cents } from "./money";
-import { bufferRuleFor, type Rule } from "./rules";
-import { billsBeforePayday, safeToSpend, type BillsBeforePayday } from "./safe-to-spend";
+import { cents, formatDollars, type Cents } from "./money";
+import { bufferRuleFor, type BufferRule } from "./rules";
+import { billsBeforePayday, safeToSpend } from "./safe-to-spend";
+import type { AutonomyLevel } from "./settings";
+import { billsRow, bufferRuleRow, checkSweepGuardrails, chooseSweepRoute, recordSweep, type ProposedSweep } from "./sweep";
 import { EMPLOYERS, type SystemData } from "./system-data";
 
 /** A paycheck deposit: money from an employer's payroll clearing account into one of the customer's accounts. */
@@ -15,21 +16,13 @@ interface PayrollDeposit {
   employerName: string;
 }
 
-/** Everything the guardrails need to judge one Sweep. */
-interface ProposedSweep {
-  customer: Customer;
-  rule: Rule;
-  /** Undefined when the Rule's account isn't one of the customer's. */
-  checking: Account | undefined;
-  savings: Account | undefined;
-  amount: Cents;
-  bills: BillsBeforePayday;
-}
-
 /**
  * Runs each customer's agent on their buffer Rules: when a paycheck lands in a checking account with a
- * switched-on buffer Rule, sweeps the money above the Buffer and bills before payday to savings, rounded
- * down to whole dollars, and writes a Decision log entry. Returns a function that stops it.
+ * switched-on buffer Rule, works out the money above the Buffer and bills before payday, rounded down to whole
+ * dollars. If the Autonomy level lets the agent move it alone, sweeps it to savings and writes a Decision log
+ * entry; otherwise makes a sweep Finding for the customer to pick from. Each paycheck first expires the
+ * customer's open sweep Finding, whose numbers it makes stale. A customer with no settings record hasn't finished
+ * setup, so their agent takes no action. Returns a function that stops it.
  */
 export function startBufferAgent(deps: {
   clock: Clock;
@@ -53,103 +46,77 @@ export function startBufferAgent(deps: {
     return undefined;
   }
 
-  /** The first guardrail the Sweep fails, with the reason, or null if it passes them all. */
-  function checkGuardrails(sweep: ProposedSweep): { guardrail: Guardrail; reason: string } | null {
-    const { customer, rule, checking, savings, amount, bills } = sweep;
-    const checks: Record<Guardrail, () => string | null> = {
-      ownership: () =>
-        checking?.kind === "checking" && savings?.kind === "savings"
-          ? null
-          : "the Rule must name your own checking and savings accounts",
-      "positive amount": () => (amount > 0 ? null : "the amount must be more than $0"),
-      "Rule on": () => (customerData.getRule(customer, rule.id)?.on ? null : "the buffer Rule is switched off"),
-      "Buffer kept": () =>
-        checking && checking.balance - amount >= rule.parameters.buffer + bills.total
-          ? null
-          : `checking would fall below the ${formatDollars(rule.parameters.buffer)} Buffer plus ${formatDollars(bills.total)} of bills`,
+  function sweep(
+    customer: Customer,
+    rule: BufferRule,
+    autonomyLevel: AutonomyLevel,
+    event: LedgerEvent,
+    deposit: PayrollDeposit,
+  ): void {
+    // Only the customer's own accounts come back, so an account that isn't theirs reads as missing.
+    const checking = customerData.getAccount(customer, rule.parameters.checkingAccountId);
+    const { savingsAccountId } = rule.parameters;
+    const savings = savingsAccountId === null ? undefined : customerData.getAccount(customer, savingsAccountId);
+    const bills = billsBeforePayday(customerData, customer, localDateOf(clock.now()));
+    const safe = checking ? safeToSpend(checking, rule.parameters.buffer, bills) : null;
+    // Round down to whole dollars.
+    const amount = cents(safe && safe.amount >= 100 ? safe.amount - (safe.amount % 100) : 0);
+    // The Autonomy level chooses the route before any guardrail runs. Asking makes a Finding, which isn't a refusal.
+    const route = chooseSweepRoute(autonomyLevel, customerData.listRules(customer), amount);
+    const proposed: ProposedSweep = {
+      customer,
+      rule,
+      checking,
+      savings,
+      amount,
+      bills,
+      approval: route.route === "act" ? route.approval : "agent",
     };
-    for (const guardrail of GUARDRAILS) {
-      const reason = checks[guardrail]();
-      if (reason !== null) return { guardrail, reason };
-    }
-    return null;
-  }
+    const check = checkSweepGuardrails(customerData, proposed);
+    const { refusal } = check;
+    // With nothing above the Buffer there is no action to take, so nothing is logged, paused or not. Any other
+    // refusal is, including Pause, so the customer can see why a sweep didn't happen.
+    if (amount <= 0 && refusal?.guardrail !== "ownership") return;
 
-  function sweep(customer: Customer, rule: Rule, event: LedgerEvent, deposit: PayrollDeposit): void {
-    customerData.inOneTransaction(() => {
-      // Only the customer's own accounts come back, so an account that isn't theirs reads as missing.
-      const checking = customerData.getAccount(customer, rule.parameters.checkingAccountId);
-      const savings = customerData.getAccount(customer, rule.parameters.savingsAccountId);
-      const bills = billsBeforePayday(customerData, customer, localDateOf(clock.now()));
-      const safe = checking ? safeToSpend(checking, rule.parameters.buffer, bills) : null;
-      // Round down to whole dollars.
-      const amount = cents(safe && safe.amount >= 100 ? safe.amount - (safe.amount % 100) : 0);
-      const proposed: ProposedSweep = { customer, rule, checking, savings, amount, bills };
-      const refusal = checkGuardrails(proposed);
-      // With nothing above the Buffer there is no action to take, so nothing is logged. Any other refusal is.
-      if (amount <= 0 && refusal?.guardrail !== "ownership") return;
+    const paycheck = `${formatDollars(deposit.amount)} from ${deposit.employerName}`;
+    const amountRow = {
+      label: "Amount",
+      value: safe
+        ? `${formatDollars(safe.checking)} in ${checking?.name ?? "checking"}, less ${formatDollars(safe.buffer)} Buffer and ${formatDollars(safe.billsBeforePayday)} of bills, rounded down to ${formatDollars(amount)}`
+        : "Not worked out: the Rule doesn't name a checking account of yours",
+    };
 
-      const checkingName = checking?.name ?? "checking";
-      const savingsName = savings?.name ?? "savings";
-      const why: WhyRow[] = [
-        { label: "Trigger", value: `Paycheck of ${formatDollars(deposit.amount)} from ${deposit.employerName} posted` },
-        { label: "Bills before payday", value: describeBills(bills) },
-        {
-          label: "Rule",
-          value: `Buffer Rule v${rule.version}: keep ${formatDollarsBriefly(rule.parameters.buffer)} in ${checkingName}, move the rest to ${savingsName}`,
-        },
-        {
-          label: "Amount",
-          value: safe
-            ? `${formatDollars(safe.checking)} in ${checkingName}, less ${formatDollars(safe.buffer)} Buffer and ${formatDollars(safe.billsBeforePayday)} of bills, rounded down to ${formatDollars(amount)}`
-            : "Not worked out: the Rule doesn't name a checking account of yours",
-        },
-        {
-          label: "Checked by",
-          value: refusal
-            ? `Refused by the ${refusal.guardrail} guardrail: ${refusal.reason}`
-            : `Guardrails passed: ${GUARDRAILS.join(", ")}`,
-        },
-      ];
-      const decision = {
-        actor: "agent" as const,
-        trigger: { ledgerEventId: event.id, description: `Paycheck from ${deposit.employerName}` },
+    // The guardrails passed but the agent may not act alone, so it asks. Ownership passed, so both accounts are
+    // the customer's; the extra checks narrow the types. A paused agent was refused above, so it makes no Finding.
+    if (route.route === "ask" && !refusal && checking && savings) {
+      customerData.createFinding(customer, {
+        kind: "sweep",
+        ledgerEventId: event.id,
         rule: { id: rule.id, version: rule.version },
-        fromAccountId: checking?.id ?? null,
-        toAccountId: savings?.id ?? null,
-        amount,
-        why,
-        reversesDecisionId: null,
-      };
-
-      // Passing the ownership guardrail means both accounts are the customer's; the extra checks narrow the types.
-      if (refusal || !checking || !savings) {
-        customerData.recordDecision(customer, {
-          ...decision,
-          action: `Move ${formatDollarsBriefly(amount)} to ${savingsName}`,
-          result: "Refused",
-          refusedBy: refusal?.guardrail ?? "ownership",
-          ledgerTransactionId: null,
-        });
-        return;
-      }
-
-      const posted = customerData.postLedgerTransaction(customer, {
-        idempotencyKey: `sweep:${event.id}`,
-        description: `Sweep to ${savings.name}`,
-        entries: [
-          { accountId: checking.id, amount: cents(-amount) },
-          { accountId: savings.id, amount },
+        facts: [
+          { label: "Paycheck", value: paycheck },
+          billsRow(bills),
+          bufferRuleRow(rule, checking, savings),
+          amountRow,
+          { label: "Why your agent is asking", value: route.why },
+        ],
+        options: [
+          { key: "move", amount, fromAccountId: checking.id, toAccountId: savings.id },
+          { key: "leave", accountId: checking.id },
         ],
       });
-      if (!posted.created) return;
-      customerData.recordDecision(customer, {
-        ...decision,
-        action: `Moved ${formatDollarsBriefly(amount)} to ${savings.name}`,
-        result: "Done",
-        refusedBy: null,
-        ledgerTransactionId: posted.ledgerTransactionId,
-      });
+      return;
+    }
+
+    recordSweep(customerData, proposed, check, {
+      idempotencyKey: `sweep:${event.id}`,
+      trigger: { ledgerEventId: event.id, description: `Paycheck from ${deposit.employerName}` },
+      why: [
+        { label: "Trigger", value: `Paycheck of ${paycheck} posted` },
+        billsRow(bills),
+        bufferRuleRow(rule, checking, savings),
+        amountRow,
+      ],
     });
   }
 
@@ -159,16 +126,15 @@ export function startBufferAgent(deps: {
     const transaction = customerData.getLedgerTransaction(customer, event.ledgerTransactionId);
     const deposit = transaction && payrollDeposit(transaction);
     if (!deposit) return;
-    // One sweep per paycheck, under the key sweep:<ledger event id>.
-    const rule = bufferRuleFor(customerData.listRules(customer), deposit.accountId);
-    if (rule?.on) sweep(customer, rule, event, deposit);
+    customerData.inOneTransaction(() => {
+      // A new paycheck makes the numbers in an open sweep Finding stale, whatever happens next.
+      customerData.expireOpenFindings(customer, "sweep");
+      const settings = customerData.getSettings(customer);
+      if (!settings) return;
+      // One sweep per paycheck, under the key sweep:<ledger event id>. A buffer Rule with no sweep target, as after
+      // Skip, keeps the Buffer but has nowhere to sweep to, so no action is taken.
+      const rule = bufferRuleFor(customerData.listRules(customer), deposit.accountId);
+      if (rule?.on && rule.parameters.savingsAccountId !== null) sweep(customer, rule, settings.autonomyLevel, event, deposit);
+    });
   });
-}
-
-function describeBills(bills: BillsBeforePayday): string {
-  if (bills.nextPayday === null) return "No payday is scheduled, so no bills are counted";
-  const before = `before payday on ${formatLocalDate(bills.nextPayday)}`;
-  if (bills.bills.length === 0) return `None ${before}`;
-  const listed = bills.bills.map((bill) => `${bill.payee} ${formatDollarsBriefly(bill.amount)}`).join(", ");
-  return `${formatDollars(bills.total)} ${before}: ${listed}`;
 }

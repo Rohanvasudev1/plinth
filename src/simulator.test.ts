@@ -16,7 +16,7 @@ function bankAt(at: Date): Bank {
 
 function withoutSweeps(bank: Bank): Bank {
   for (const customer of bank.listCustomers()) {
-    for (const rule of bank.customerData.listRules(customer)) bank.customerData.switchRule(customer, rule.id, false);
+    for (const rule of bank.customerData.listRules(customer)) bank.switchRule(customer, rule.id, false);
   }
   return bank;
 }
@@ -66,7 +66,7 @@ describe("Post paycheck", () => {
   });
 
   it("posts nothing when today isn't a payday", () => {
-    for (const notPayday of ["2026-11-19T14:00:00Z", "2026-11-27T14:00:00Z", "2026-12-03T14:00:00Z"]) {
+    for (const notPayday of ["2026-11-19T14:00:00Z", "2026-11-26T14:00:00Z", "2026-12-03T14:00:00Z"]) {
       const bank = bankAt(new Date(notPayday));
 
       expect(bank.postPaycheck()).toEqual([]);

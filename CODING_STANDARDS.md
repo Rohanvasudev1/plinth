@@ -21,4 +21,4 @@ The reviewer applies these during `/code-review`. The hard rules in `CLAUDE.md` 
 ## Tests
 
 - Each end-to-end test sets up the state it needs and doesn't depend on another test running first.
-- An idempotency key names everything that makes the movement unique for that customer: `payroll:<employer>:<pay date>`, `bill:<bill id>:<due date>`, `sweep:<ledger event id>`, `undo:<decision id>`.
+- An idempotency key names everything that makes the movement unique for that customer: `payroll:<employer>:<pay date>`, `bill:<bill id>:<due date>`, `sweep:<ledger event id>`, `finding:<finding id>`, `undo:<decision id>`.

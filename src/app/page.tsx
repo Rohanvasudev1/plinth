@@ -5,9 +5,12 @@ import { getAppBank } from "@/app-bank";
 import type { AgentActionOnHome, BillsBeforePayday, HomeAccount, SafeToSpend } from "@/bank";
 import { formatLocalDate, type LocalDate } from "@/calendar";
 import { cents, formatDollars } from "@/money";
-import type { Decision } from "@/decisions";
+import { guardrailName, type Decision } from "@/decisions";
+import { describeOption, findingStateLabel, type Finding } from "@/findings";
 import { requireCustomer } from "@/session";
-import { AgentActionsToast, UndoButton } from "./agent-action-controls";
+import { STANDARD_SETUP } from "@/setup-answers";
+import { SetupSurvey } from "./setup/setup-survey";
+import { AgentActionsToast, FindingOptions, UndoButton } from "./agent-action-controls";
 import { WhyPanel } from "./why-panel";
 
 export const dynamic = "force-dynamic";
@@ -59,6 +62,55 @@ function AgentActionsCard({ actions }: { actions: AgentActionOnHome[] }) {
           ))}
         </ol>
       )}
+    </section>
+  );
+}
+
+/** A sweep Finding's heading: the fact it reports, how much is above the Buffer, without leaning to an Option. */
+function findingTitle(finding: Finding, accountName: (accountId: number) => string): string {
+  const move = finding.options.find((option) => option.key === "move");
+  if (!move) return "Your agent found something";
+  return `${formatDollars(move.amount)} above your Buffer in ${accountName(move.fromAccountId)}`;
+}
+
+function FindingCard({ finding, accountName }: { finding: Finding; accountName: (accountId: number) => string }) {
+  const headingId = `finding-${finding.id}`;
+  const chosen = finding.options.find((option) => option.key === finding.chosenOption);
+  return (
+    <section className="card finding" aria-labelledby={headingId}>
+      <div className="decision-head">
+        <span className="finding-tag">Your agent is asking</span>
+        <span className={`pill ${finding.state}`}>
+          {findingStateLabel(finding.state)}
+        </span>
+      </div>
+      <h2 id={headingId}>{findingTitle(finding, accountName)}</h2>
+      <p className="muted">
+        <time dateTime={finding.at.toISOString()}>{actionTimeFormat.format(finding.at)}</time>
+      </p>
+      <dl className="facts">
+        {finding.facts.map((fact) => (
+          <div key={fact.label}>
+            <dt>{fact.label}</dt>
+            <dd>{fact.value}</dd>
+          </div>
+        ))}
+      </dl>
+      {finding.state === "open" && (
+        <>
+          {finding.refusal && (
+            <p className="result refused">
+              Not moved. The {guardrailName(finding.refusal.guardrail)} guardrail refused it: {finding.refusal.reason}.
+            </p>
+          )}
+          <FindingOptions
+            findingId={finding.id}
+            options={finding.options.map((option) => ({ key: option.key, ...describeOption(option, accountName) }))}
+          />
+        </>
+      )}
+      {chosen && <p className="muted">You chose: {describeOption(chosen, accountName).label}</p>}
+      {finding.state === "expired" && <p className="muted">A newer paycheck changed the numbers, so this expired.</p>}
     </section>
   );
 }
@@ -135,7 +187,30 @@ function AccountCard({ account, children }: { account: HomeAccount; children?: R
 
 export default async function HomePage() {
   const customer = await requireCustomer();
-  const home = getAppBank().readHome(customer);
+  const bank = getAppBank();
+  if (!bank.readSettings(customer)) {
+    // A customer with no settings record hasn't finished setup, so the agent waits for the Setup survey.
+    return (
+      <main className="page narrow">
+        <header className="top">
+          <div>
+            <h1>Before your agent does anything, tell it how you want to be looked after</h1>
+            <p className="muted">
+              Six questions. Your answers become the rules your agent can&rsquo;t break. You can change any of them later in
+              Agent &amp; limits.
+            </p>
+          </div>
+          <p className="muted signed-in">
+            {customer.name} · <Link href="/sign-in">Switch</Link>
+          </p>
+        </header>
+        <SetupSurvey initial={STANDARD_SETUP} firstRun />
+      </main>
+    );
+  }
+  const home = bank.readHome(customer);
+  const accounts = [...(home.checking ? [home.checking] : []), ...home.savings];
+  const accountName = (accountId: number) => accounts.find((account) => account.id === accountId)?.name ?? "an account";
   return (
     <main className="page">
       <header className="top">
@@ -144,10 +219,24 @@ export default async function HomePage() {
           <p className="muted">{dateFormat.format(home.today)}</p>
         </div>
         <p className="muted signed-in">
-          {home.customerName} · <Link href="/sign-in">Switch</Link> · <Link href="/decision-log">Decision log</Link> ·{" "}
+          {home.customerName} · <Link href="/sign-in">Switch</Link> · <Link href="/agent">Agent &amp; limits</Link> ·{" "}
+          <Link href="/decision-log">Decision log</Link> ·{" "}
           <Link href="/simulator">Simulator</Link>
         </p>
       </header>
+
+      {home.agentPaused && (
+        <section className="card paused-banner" aria-labelledby="agent-paused">
+          <h2 id="agent-paused">Your agent is paused</h2>
+          <p className="muted">
+            It takes no automatic actions until you unpause it on <Link href="/agent">Agent &amp; limits</Link>.
+          </p>
+        </section>
+      )}
+
+      {home.findings.map((finding) => (
+        <FindingCard key={finding.id} finding={finding} accountName={accountName} />
+      ))}
 
       {home.checking && (
         <AccountCard account={home.checking}>

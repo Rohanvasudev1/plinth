@@ -6,6 +6,7 @@ import type { Database } from "./db/database";
 import {
   accountsTable,
   decisionsTable,
+  findingsTable,
   ledgerEntriesTable,
   ledgerEventsTable,
   ledgerTransactionsTable,
@@ -13,11 +14,24 @@ import {
   rulesTable,
   ruleVersionsTable,
   scheduledBillsTable,
+  pauseChangesTable,
+  settingsVersionsTable,
 } from "./db/schema";
 import { isGuardrail, type Decision, type NewDecision, type WhyRow } from "./decisions";
+import {
+  FindingError,
+  isFindingOptionKey,
+  type Finding,
+  type FindingKind,
+  type FindingOption,
+  type FindingOptionKey,
+  type NewFinding,
+} from "./findings";
 import type { LedgerEvent, LedgerEventDispatcher } from "./ledger-events";
+import { checkGoalTarget, GoalError } from "./goals";
 import { cents, type Cents } from "./money";
-import { isRuleKind, parseRuleParameters, type NewRule, type Rule } from "./rules";
+import { isRuleKind, parseRuleContent, type NewRule, type Rule } from "./rules";
+import { parseSettingsChoices, SettingsError, type SavingsGoal, type Settings, type SettingsChoices } from "./settings";
 import { isEmployer, type Employer } from "./system-data";
 
 /** A seeded customer. Every customer-scoped read and write takes one as its first argument. */
@@ -34,14 +48,18 @@ export interface Account {
   name: string;
   /** The sum of every ledger entry on the account. */
   balance: Cents;
-  /** The Goal's target amount, if this is a savings account with a Goal. */
+  /** The Goal's target amount, if this is a savings account with a Goal that has one. */
   goalTarget: Cents | null;
+  /** The savings goal this Goal account is for, or null for an account that isn't one. */
+  goal: SavingsGoal | null;
 }
 
 export interface NewAccount {
   kind: CustomerAccountKind;
   name: string;
   goalTarget?: Cents;
+  /** Only on a savings account. A customer has at most one account per savings goal. */
+  goal?: SavingsGoal;
 }
 
 export interface LedgerEntryInput {
@@ -104,6 +122,11 @@ export interface CustomerData {
   getAccount(customer: Customer, accountId: number): Account | undefined;
   openAccount(customer: Customer, account: NewAccount): Account;
   /**
+   * Sets the Goal's target on one of the customer's savings accounts. Throws GoalError, saving nothing, if the
+   * account isn't one of their savings accounts or the target is out of range. Writes no Decision log entry.
+   */
+  setGoalTarget(customer: Customer, accountId: number, target: Cents): Account;
+  /**
    * Posts a pair of entries that sum to zero, plus a ledger event, in one database transaction, then hands
    * the event to subscribers. Each entry must be on the customer's own account or a system account.
    * Idempotency keys are unique per customer: reusing one of the customer's keys returns the existing
@@ -138,8 +161,29 @@ export interface CustomerData {
   listRules(customer: Customer): Rule[];
   /** The customer's Rule at `version`, or its latest version when `version` is left out. */
   getRule(customer: Customer, ruleId: number, version?: number): Rule | undefined;
-  /** Switches the customer's Rule on or off by writing its next version. Throws if the Rule isn't theirs. */
-  switchRule(customer: Customer, ruleId: number, on: boolean): Rule;
+  /**
+   * The only way to change a Rule (ADR 0007): writes its next version with the change applied and, in the same
+   * database transaction, the Decision log entry `describe` builds from the versions before and after.
+   * Throws RuleNotFoundError if the Rule isn't theirs, and RuleParametersError if new parameters don't match the
+   * kind's schema. Either way nothing is written. `describe` may throw to refuse the change, also writing nothing.
+   */
+  reviseRule(
+    customer: Customer,
+    ruleId: number,
+    change: (current: Rule) => RuleRevision,
+    describe: (before: Rule, after: Rule) => NewDecision,
+  ): Rule;
+  /** The customer's settings record at `version`, or its latest version, or undefined if they have none. */
+  getSettings(customer: Customer, version?: number): Settings | undefined;
+  /**
+   * Writes the next version of the customer's settings record, or version 1 if they have none. Throws
+   * SettingsError if the choices don't match the settings record's schema. Writes no Decision log entry.
+   */
+  saveSettings(customer: Customer, choices: SettingsChoices): Settings;
+  /** Whether the customer's agent is paused. A customer who has never paused isn't. */
+  isAgentPaused(customer: Customer): boolean;
+  /** Records the customer pausing or unpausing their agent. Writes no Decision log entry. */
+  savePause(customer: Customer, paused: boolean): void;
   /**
    * Writes a Decision log entry, timed by the clock. A Reversed entry must name an agent action of the
    * customer's that no other entry reverses yet.
@@ -153,6 +197,31 @@ export interface CustomerData {
   listUnseenAgentActions(customer: Customer): Decision[];
   /** Marks these agent actions of the customer's as seen now. Ids that aren't theirs are ignored. */
   markAgentActionsSeen(customer: Customer, decisionIds: number[]): void;
+  /**
+   * Makes an open Finding, timed by the clock. Its Rule and the accounts its Options name must be the
+   * customer's. Throws FindingError if the customer already has a Finding of this kind for this ledger event.
+   */
+  createFinding(customer: Customer, finding: NewFinding): Finding;
+  /** The customer's Findings, open ones first, each group newest first. */
+  listFindings(customer: Customer): Finding[];
+  /** The customer's Finding with this id, or undefined if it doesn't exist or isn't theirs. */
+  getFinding(customer: Customer, findingId: number): Finding | undefined;
+  /** Expires every open Finding of this kind of the customer's. Returns how many it expired. */
+  expireOpenFindings(customer: Customer, kind: FindingKind): number;
+  /**
+   * Marks the customer's open Finding chosen with this Option, clearing any earlier refusal. Throws
+   * FindingError if it isn't theirs, isn't open, or has no such Option.
+   */
+  markFindingChosen(customer: Customer, findingId: number, option: FindingOptionKey): Finding;
+  /** Records why the customer's pick on their open Finding was refused. The Finding stays open. */
+  recordFindingRefusal(customer: Customer, findingId: number, refusal: NonNullable<Finding["refusal"]>): Finding;
+}
+
+/** A change to a Rule: its switch, its parameters, or both. Whatever is left out stays as it is. */
+export interface RuleRevision {
+  on?: boolean;
+  /** Checked against the Rule kind's schema. */
+  parameters?: unknown;
 }
 
 export class LedgerError extends Error {
@@ -202,6 +271,7 @@ export function createCustomerData(deps: {
         kind: accountsTable.kind,
         name: accountsTable.name,
         goalCents: accountsTable.goalCents,
+        goal: accountsTable.goal,
         balanceCents,
       })
       .from(accountsTable)
@@ -223,6 +293,7 @@ export function createCustomerData(deps: {
         name: row.name,
         balance: cents(row.balanceCents),
         goalTarget: row.goalCents === null ? null : cents(row.goalCents),
+        goal: row.goal,
       };
     });
   }
@@ -393,11 +464,10 @@ export function createCustomerData(deps: {
     return rows.map((row) => {
       if (!isRuleKind(row.kind)) throw new Error(`Rule ${row.id} has an unknown kind ${row.kind}`);
       return {
+        ...parseRuleContent(row.kind, row.parameters),
         id: row.id,
-        kind: row.kind,
         version: row.version,
         on: row.on,
-        parameters: parseRuleParameters(row.kind, row.parameters),
         createdAt: new Date(row.createdAtMs),
       };
     });
@@ -408,7 +478,7 @@ export function createCustomerData(deps: {
   }
 
   function createRule(customer: Customer, rule: NewRule): Rule {
-    const parameters = parseRuleParameters(rule.kind, rule.parameters);
+    const { parameters } = parseRuleContent(rule.kind, rule.parameters);
     const ruleId = db.transaction((tx) => {
       const inserted = tx
         .insert(rulesTable)
@@ -425,26 +495,192 @@ export function createCustomerData(deps: {
     return created;
   }
 
-  function switchRule(customer: Customer, ruleId: number, on: boolean): Rule {
-    db.transaction(
+  function reviseRule(
+    customer: Customer,
+    ruleId: number,
+    change: (current: Rule) => RuleRevision,
+    describe: (before: Rule, after: Rule) => NewDecision,
+  ): Rule {
+    return inOneTransaction(() => {
+      const current = getRule(customer, ruleId);
+      if (!current) throw new RuleNotFoundError(`No Rule ${ruleId} for this customer`);
+      const revision = change(current);
+      const { parameters } =
+        revision.parameters === undefined ? current : parseRuleContent(current.kind, revision.parameters);
+      db.insert(ruleVersionsTable)
+        .values({
+          ruleId,
+          version: current.version + 1,
+          parameters,
+          on: revision.on ?? current.on,
+          createdAtMs: clock.now().getTime(),
+        })
+        .run();
+      const revised = getRule(customer, ruleId);
+      if (!revised) throw new Error(`Rule ${ruleId} vanished after it was revised`);
+      const decision = describe(current, revised);
+      if (decision.rule?.id !== revised.id || decision.rule.version !== revised.version) {
+        throw new RuleNotFoundError("A Rule change's Decision log entry must name the version it wrote");
+      }
+      recordDecision(customer, decision);
+      return revised;
+    });
+  }
+
+  function getSettings(customer: Customer, version?: number): Settings | undefined {
+    const row = db
+      .select()
+      .from(settingsVersionsTable)
+      .where(
+        and(
+          eq(settingsVersionsTable.customerId, customer.id),
+          version === undefined ? undefined : eq(settingsVersionsTable.version, version),
+        ),
+      )
+      .orderBy(desc(settingsVersionsTable.version))
+      .limit(1)
+      .get();
+    if (!row) return undefined;
+    const choices = parseSettingsChoices({
+      autonomyLevel: row.autonomyLevel,
+      adviceSetting: row.adviceSetting,
+      riskAnswers: { marketDrop: row.riskMarketDrop, timeHorizon: row.riskTimeHorizon },
+      dataChoices: {
+        trainModels: row.trainModels,
+        shareWithPartners: row.shareWithPartners,
+        keepChatHistory: row.keepChatHistory,
+      },
+      goalPreferences: row.goalPreferences,
+    });
+    return { version: row.version, ...choices, createdAt: new Date(row.createdAtMs) };
+  }
+
+  function saveSettings(customer: Customer, choices: SettingsChoices): Settings {
+    const parsed = parseSettingsChoices(choices);
+    const version = db.transaction(
       (tx) => {
-        const current = getRule(customer, ruleId);
-        if (!current) throw new RuleNotFoundError(`No Rule ${ruleId} for this customer`);
-        tx.insert(ruleVersionsTable)
+        const next = (getSettings(customer)?.version ?? 0) + 1;
+        tx.insert(settingsVersionsTable)
           .values({
-            ruleId,
-            version: current.version + 1,
-            parameters: current.parameters,
-            on,
+            customerId: customer.id,
+            version: next,
+            autonomyLevel: parsed.autonomyLevel,
+            adviceSetting: parsed.adviceSetting,
+            riskMarketDrop: parsed.riskAnswers.marketDrop,
+            riskTimeHorizon: parsed.riskAnswers.timeHorizon,
+            trainModels: parsed.dataChoices.trainModels,
+            shareWithPartners: parsed.dataChoices.shareWithPartners,
+            keepChatHistory: parsed.dataChoices.keepChatHistory,
+            goalPreferences: parsed.goalPreferences,
             createdAtMs: clock.now().getTime(),
           })
           .run();
+        return next;
       },
       { behavior: "immediate" },
     );
-    const switched = getRule(customer, ruleId);
-    if (!switched) throw new Error(`Rule ${ruleId} vanished after it was switched`);
-    return switched;
+    const saved = getSettings(customer, version);
+    if (!saved) throw new SettingsError(`Settings version ${version} vanished after it was saved`);
+    return saved;
+  }
+
+  function selectFindings(customer: Customer, findingId?: number): Finding[] {
+    return db
+      .select()
+      .from(findingsTable)
+      .where(
+        and(
+          eq(findingsTable.customerId, customer.id),
+          findingId === undefined ? undefined : eq(findingsTable.id, findingId),
+        ),
+      )
+      .orderBy(
+        sql`case when ${findingsTable.state} = 'open' then 0 else 1 end`,
+        desc(findingsTable.createdAtMs),
+        desc(findingsTable.id),
+      )
+      .all()
+      .map((row) => {
+        if (row.refusedBy !== null && !isGuardrail(row.refusedBy)) {
+          throw new Error(`Finding ${row.id} names an unknown guardrail ${row.refusedBy}`);
+        }
+        if (row.chosenOption !== null && !isFindingOptionKey(row.chosenOption)) {
+          throw new Error(`Finding ${row.id} names an unknown Option ${row.chosenOption}`);
+        }
+        return {
+          id: row.id,
+          kind: row.kind,
+          at: new Date(row.createdAtMs),
+          state: row.state,
+          ledgerEventId: row.ledgerEventId,
+          rule: { id: row.ruleId, version: row.ruleVersion },
+          facts: row.facts as WhyRow[],
+          options: (row.options as FindingOption[]).map((option) =>
+            option.key === "move"
+              ? { ...option, amount: cents(option.amount) }
+              : option,
+          ),
+          chosenOption: row.chosenOption,
+          refusal:
+            row.refusedBy === null || row.refusalReason === null
+              ? null
+              : { guardrail: row.refusedBy, reason: row.refusalReason },
+        };
+      });
+  }
+
+  function getFinding(customer: Customer, findingId: number): Finding | undefined {
+    return selectFindings(customer, findingId)[0];
+  }
+
+  function openFinding(customer: Customer, findingId: number): Finding {
+    const finding = getFinding(customer, findingId);
+    if (!finding) throw new FindingError(`No Finding ${findingId} for this customer`);
+    if (finding.state !== "open") throw new FindingError(`Finding ${findingId} is ${finding.state}, not open`);
+    return finding;
+  }
+
+  function createFinding(customer: Customer, finding: NewFinding): Finding {
+    if (!getRule(customer, finding.rule.id, finding.rule.version)) {
+      throw new RuleNotFoundError(`No Rule ${finding.rule.id} version ${finding.rule.version} for this customer`);
+    }
+    for (const option of finding.options) {
+      const accountIds = option.key === "move" ? [option.fromAccountId, option.toAccountId] : [option.accountId];
+      if (option.key === "move") cents(option.amount);
+      if (accountIds.some((accountId) => !getAccount(customer, accountId))) {
+        throw new FindingError("A Finding's Options can only name the customer's own accounts");
+      }
+    }
+    const already = db
+      .select({ id: findingsTable.id })
+      .from(findingsTable)
+      .where(
+        and(
+          eq(findingsTable.customerId, customer.id),
+          eq(findingsTable.ledgerEventId, finding.ledgerEventId),
+          eq(findingsTable.kind, finding.kind),
+        ),
+      )
+      .get();
+    if (already) throw new FindingError(`This customer already has a ${finding.kind} Finding for that ledger event`);
+    const row = db
+      .insert(findingsTable)
+      .values({
+        customerId: customer.id,
+        kind: finding.kind,
+        createdAtMs: clock.now().getTime(),
+        ledgerEventId: finding.ledgerEventId,
+        ruleId: finding.rule.id,
+        ruleVersion: finding.rule.version,
+        facts: finding.facts,
+        options: finding.options,
+        state: "open",
+      })
+      .returning({ id: findingsTable.id })
+      .get();
+    const created = getFinding(customer, row.id);
+    if (!created) throw new Error(`Finding ${row.id} vanished after it was made`);
+    return created;
   }
 
   const reversals = alias(decisionsTable, "reversals");
@@ -472,7 +708,7 @@ export function createCustomerData(deps: {
           at: new Date(row.createdAtMs),
           actor: row.actor,
           trigger: { ledgerEventId: row.triggerLedgerEventId, description: row.triggerDescription },
-          rule: { id: row.ruleId, version: row.ruleVersion },
+          rule: row.ruleId === null || row.ruleVersion === null ? null : { id: row.ruleId, version: row.ruleVersion },
           action: row.action,
           fromAccountId: row.fromAccountId,
           toAccountId: row.toAccountId,
@@ -488,7 +724,9 @@ export function createCustomerData(deps: {
   }
 
   function recordDecision(customer: Customer, decision: NewDecision): Decision {
-    if (!getRule(customer, decision.rule.id, decision.rule.version)) {
+    if (decision.rule === null) {
+      if (decision.actor === "agent") throw new RuleNotFoundError("Every agent action uses one of the customer's Rules");
+    } else if (!getRule(customer, decision.rule.id, decision.rule.version)) {
       throw new RuleNotFoundError(`No Rule ${decision.rule.id} version ${decision.rule.version} for this customer`);
     }
     for (const accountId of [decision.fromAccountId, decision.toAccountId]) {
@@ -510,8 +748,8 @@ export function createCustomerData(deps: {
         actor: decision.actor,
         triggerLedgerEventId: decision.trigger.ledgerEventId,
         triggerDescription: decision.trigger.description,
-        ruleId: decision.rule.id,
-        ruleVersion: decision.rule.version,
+        ruleId: decision.rule?.id ?? null,
+        ruleVersion: decision.rule?.version ?? null,
         action: decision.action,
         fromAccountId: decision.fromAccountId,
         toAccountId: decision.toAccountId,
@@ -535,12 +773,31 @@ export function createCustomerData(deps: {
     openAccount(customer, account) {
       const row = db
         .insert(accountsTable)
-        .values({ customerId: customer.id, kind: account.kind, name: account.name, goalCents: account.goalTarget ?? null })
+        .values({
+          customerId: customer.id,
+          kind: account.kind,
+          name: account.name,
+          goalCents: account.goalTarget ?? null,
+          goal: account.goal ?? null,
+        })
         .returning({ id: accountsTable.id })
         .get();
       const opened = getAccount(customer, row.id);
       if (!opened) throw new Error(`Account ${row.id} vanished after it was opened`);
       return opened;
+    },
+    setGoalTarget(customer, accountId, target) {
+      const checked = checkGoalTarget(target);
+      if (getAccount(customer, accountId)?.kind !== "savings") {
+        throw new GoalError("A Goal's target can only be set on one of your own savings accounts");
+      }
+      db.update(accountsTable)
+        .set({ goalCents: checked })
+        .where(and(eq(accountsTable.id, accountId), eq(accountsTable.customerId, customer.id)))
+        .run();
+      const updated = getAccount(customer, accountId);
+      if (!updated) throw new Error(`Account ${accountId} vanished after its Goal target was set`);
+      return updated;
     },
     postLedgerTransaction,
     inOneTransaction,
@@ -554,7 +811,22 @@ export function createCustomerData(deps: {
     createRule,
     listRules: (customer) => selectRules(customer),
     getRule,
-    switchRule,
+    reviseRule,
+    getSettings,
+    saveSettings,
+    isAgentPaused(customer) {
+      const latest = db
+        .select({ paused: pauseChangesTable.paused })
+        .from(pauseChangesTable)
+        .where(eq(pauseChangesTable.customerId, customer.id))
+        .orderBy(desc(pauseChangesTable.id))
+        .limit(1)
+        .get();
+      return latest?.paused ?? false;
+    },
+    savePause(customer, paused) {
+      db.insert(pauseChangesTable).values({ customerId: customer.id, paused, createdAtMs: clock.now().getTime() }).run();
+    },
     recordDecision,
     listDecisions: (customer) => selectDecisions(customer),
     getDecision: (customer, decisionId) => selectDecisions(customer, { id: decisionId })[0],
@@ -572,6 +844,37 @@ export function createCustomerData(deps: {
           ),
         )
         .run();
+    },
+    createFinding,
+    listFindings: (customer) => selectFindings(customer),
+    getFinding,
+    expireOpenFindings(customer, kind) {
+      return db
+        .update(findingsTable)
+        .set({ state: "expired", refusedBy: null, refusalReason: null })
+        .where(
+          and(eq(findingsTable.customerId, customer.id), eq(findingsTable.kind, kind), eq(findingsTable.state, "open")),
+        )
+        .run().changes;
+    },
+    markFindingChosen(customer, findingId, option) {
+      const finding = openFinding(customer, findingId);
+      if (!finding.options.some((candidate) => candidate.key === option)) {
+        throw new FindingError(`Finding ${findingId} has no ${option} Option`);
+      }
+      db.update(findingsTable)
+        .set({ state: "chosen", chosenOption: option, refusedBy: null, refusalReason: null })
+        .where(and(eq(findingsTable.customerId, customer.id), eq(findingsTable.id, findingId)))
+        .run();
+      return getFinding(customer, findingId) ?? finding;
+    },
+    recordFindingRefusal(customer, findingId, refusal) {
+      const finding = openFinding(customer, findingId);
+      db.update(findingsTable)
+        .set({ refusedBy: refusal.guardrail, refusalReason: refusal.reason })
+        .where(and(eq(findingsTable.customerId, customer.id), eq(findingsTable.id, findingId)))
+        .run();
+      return getFinding(customer, findingId) ?? finding;
     },
     addPayroll(customer, payroll) {
       if (!getAccount(customer, payroll.accountId)) {

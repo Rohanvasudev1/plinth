@@ -4,6 +4,9 @@ import type { SettableClock } from "./clock";
 import { createCustomerData, type Account, type Customer, type CustomerData } from "./customer-data";
 import type { Database } from "./db/database";
 import type { Decision, DecisionResult } from "./decisions";
+import { chooseOption, type ChooseOptionOutcome } from "./finding-choices";
+import type { Finding, FindingOptionKey } from "./findings";
+import { setGoalTarget } from "./goal-changes";
 import { createLedgerEventDispatcher, type LedgerEventDispatcher } from "./ledger-events";
 import { cents, type Cents } from "./money";
 import {
@@ -13,13 +16,20 @@ import {
   type SafeToSpend,
 } from "./safe-to-spend";
 import { bufferRuleFor } from "./rules";
+import { createRuleChanges, type RuleChanges } from "./rule-changes";
+import { setAgentPaused } from "./pause";
 import { seedDemoData } from "./seed";
+import type { Settings } from "./settings";
+import { changeSettings, type SettingsChange } from "./settings-changes";
+import { applySetup, readSetupAnswers } from "./setup";
+import { STANDARD_SETUP, type SetupAnswers } from "./setup-answers";
 import { createSimulator, type Simulator } from "./simulator";
 import { createSystemData, type SystemData } from "./system-data";
 import { undoAgentAction, type UndoOutcome } from "./undo";
 
 export type { BillBeforePayday, BillsBeforePayday, SafeToSpend } from "./safe-to-spend";
 export type { UndoOutcome } from "./undo";
+export type { ChooseOptionOutcome } from "./finding-choices";
 
 export interface GoalProgress {
   target: Cents;
@@ -42,11 +52,15 @@ export interface AgentActionOnHome {
 export interface HomeView {
   customerName: string;
   today: Date;
+  /** True while the customer has paused their agent. */
+  agentPaused: boolean;
   checking: HomeAccount | null;
   savings: (HomeAccount & { goal: GoalProgress | null })[];
   billsBeforePayday: BillsBeforePayday;
   /** Null when the customer has no checking account. */
   safeToSpend: SafeToSpend | null;
+  /** The customer's open Findings, newest first, so they can pick an Option, then their latest closed one, if any. */
+  findings: Finding[];
   /** "What your agent did": every action the customer's agent took or tried to take, newest first. */
   agentActions: AgentActionOnHome[];
   /** Agent actions the customer hasn't been shown yet, newest first, for the toast. */
@@ -58,7 +72,7 @@ export class UnknownCustomerError extends Error {
 }
 
 /** The server-side domain API the pages call. */
-export interface Bank extends Simulator {
+export interface Bank extends Simulator, RuleChanges {
   clock: SettableClock;
   customerData: CustomerData;
   systemData: SystemData;
@@ -74,6 +88,42 @@ export interface Bank extends Simulator {
   readDecisionLog(customer: Customer): Decision[];
   /** Undoes one of the customer's agent actions by posting a reversing ledger transaction (ADR 0002). */
   undo(customer: Customer, decisionId: number): UndoOutcome;
+  /** The latest version of the customer's settings record, or undefined if they haven't finished setup. */
+  readSettings(customer: Customer): Settings | undefined;
+  /**
+   * Writes the next version of the customer's settings record and a Decision log entry with them as actor.
+   * Throws SettingsError, saving nothing, if they have no settings record or the change doesn't fit its schema.
+   */
+  changeSettings(customer: Customer, change: SettingsChange): Settings;
+  /**
+   * Applies the Setup survey's answers in one database transaction: settings, Rules, Goal accounts and Decision log
+   * entries. Running it again reuses Goal accounts, and a dropped goal keeps its account and money. If anything
+   * fails, nothing is written.
+   */
+  finishSetup(customer: Customer, answers: SetupAnswers): Settings;
+  /** The customer's current survey answers, for running setup again, or undefined if they haven't finished setup. */
+  readSetupAnswers(customer: Customer): SetupAnswers | undefined;
+  /** Applies the standard Rules and settings, with no goals and so no sweep target, as `finishSetup` does. */
+  skipSetup(customer: Customer): Settings;
+  /**
+   * Sets the Goal's target on one of the customer's savings accounts and writes a Decision log entry with them as
+   * actor, or throws GoalError, saving nothing.
+   */
+  setGoalTarget(customer: Customer, accountId: number, target: Cents): Account;
+  /** Whether the customer's agent is paused. */
+  isAgentPaused(customer: Customer): boolean;
+  /**
+   * Pauses or unpauses the customer's agent, writing a Decision log entry with them as actor. Asking for the
+   * state it is already in changes nothing. Returns whether the agent is now paused.
+   */
+  setAgentPaused(customer: Customer, paused: boolean): boolean;
+  /** The customer's Findings, open ones first, each group newest first. */
+  readFindings(customer: Customer): Finding[];
+  /**
+   * Carries out the Option the customer picked on one of their open Findings. "Move" re-runs the guardrails and
+   * moves money at most once; "Leave it" moves nothing. Either way it writes a Decision log entry.
+   */
+  chooseOption(customer: Customer, findingId: number, option: FindingOptionKey): ChooseOptionOutcome;
   /** Marks agent actions as shown to the customer, so the toast shows them only once. */
   markAgentActionsSeen(customer: Customer, decisionIds: number[]): void;
 }
@@ -97,6 +147,7 @@ export function createBank(deps: { db: Database; clock: SettableClock }): Bank {
 
   return {
     ...simulator,
+    ...createRuleChanges(customerData),
     clock,
     customerData,
     systemData,
@@ -109,7 +160,17 @@ export function createBank(deps: { db: Database; clock: SettableClock }): Bank {
       return customer;
     },
     billsBeforePayday,
+    readSettings: (customer) => customerData.getSettings(customer),
+    changeSettings: (customer, change) => changeSettings(customerData, customer, change),
+    finishSetup: (customer, answers) => applySetup(customerData, customer, answers, "survey"),
+    setGoalTarget: (customer, accountId, target) => setGoalTarget(customerData, customer, accountId, target),
+    readSetupAnswers: (customer) => readSetupAnswers(customerData, customer),
+    skipSetup: (customer) => applySetup(customerData, customer, STANDARD_SETUP, "skip"),
+    isAgentPaused: (customer) => customerData.isAgentPaused(customer),
+    setAgentPaused: (customer, paused) => setAgentPaused(customerData, customer, paused),
     readDecisionLog: (customer) => customerData.listDecisions(customer),
+    readFindings: (customer) => customerData.listFindings(customer),
+    chooseOption: (customer, findingId, option) => chooseOption({ clock, customerData }, customer, findingId, option),
     undo: (customer, decisionId) => undoAgentAction(customerData, customer, decisionId),
     markAgentActionsSeen: (customer, decisionIds) => customerData.markAgentActionsSeen(customer, decisionIds),
     readHome(customer) {
@@ -119,6 +180,7 @@ export function createBank(deps: { db: Database; clock: SettableClock }): Bank {
       return {
         customerName: customer.name,
         today: clock.now(),
+        agentPaused: customerData.isAgentPaused(customer),
         checking: checking ? homeAccount(checking) : null,
         savings: accounts
           .filter((account) => account.kind === "savings")
@@ -130,6 +192,7 @@ export function createBank(deps: { db: Database; clock: SettableClock }): Bank {
         safeToSpend: checking
           ? safeToSpend(checking, bufferRuleFor(customerData.listRules(customer), checking.id)?.parameters.buffer ?? cents(0), bills)
           : null,
+        findings: findingsOnHome(customerData.listFindings(customer)),
         agentActions: customerData
           .listDecisions(customer)
           .filter((decision) => decision.actor === "agent")
@@ -138,6 +201,13 @@ export function createBank(deps: { db: Database; clock: SettableClock }): Bank {
       };
     },
   };
+}
+
+/** Every open Finding, then only the newest chosen or expired one, so old Findings don't pile up on Home. */
+function findingsOnHome(findings: Finding[]): Finding[] {
+  const open = findings.filter((finding) => finding.state === "open");
+  const latestClosed = findings.find((finding) => finding.state !== "open");
+  return latestClosed ? [...open, latestClosed] : open;
 }
 
 function homeAccount(account: Account): HomeAccount {

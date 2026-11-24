@@ -4,7 +4,7 @@ import { fixedClock } from "./clock";
 import type { Customer } from "./customer-data";
 import { openTestDatabase } from "./db/database";
 import { cents } from "./money";
-import { entriesMoving, openTestBank, signInByName } from "./test-bank";
+import { agentEntriesIn, entriesMoving, openTestBank, signInByName } from "./test-bank";
 
 /** Friday 20 November 2026, 9am in New York: Acme Corp's first payday. */
 const FIRST_PAYDAY_9AM = new Date("2026-11-20T14:00:00Z");
@@ -79,17 +79,25 @@ describe("Sweep", () => {
   });
 
   it("moves nothing and logs nothing when nothing is above the Buffer", () => {
-    // After the paycheck, $3,467 less a $1,840 Buffer less $1,627 of bills leaves exactly $0,
-    // and with a $1,839.50 Buffer it leaves 50 cents, which rounds down to $0.
-    for (const buffer of [1_840_00, 1_839_50, 2_500_00]) {
+    // After the paycheck, $3,467 less a $1,840 Buffer less $1,627 of bills leaves exactly $0, and with a $1,839
+    // Buffer after a 50-cent card purchase it leaves 50 cents, which rounds down to $0.
+    for (const { buffer, spent } of [
+      { buffer: 1_840_00, spent: 0 },
+      { buffer: 1_839_00, spent: 50 },
+      { buffer: 2_500_00, spent: 0 },
+    ]) {
       const bank = bankAt(FIRST_PAYDAY_9AM);
       const sam = signInByName(bank, "Sam Calloway");
       replaceBufferRule(bank, sam, buffer);
+      const [checking] = bank.customerData.listAccounts(sam);
+      if (spent > 0 && checking) {
+        bank.cardPurchase(sam, { accountId: checking.id, amount: cents(spent), idempotencyKey: "card:coffee" });
+      }
 
       bank.postPaycheck();
 
-      expect(balancesOf(bank, sam)).toEqual({ checking: 3_467_00, savings: 12_400_00 });
-      expect(bank.readDecisionLog(sam)).toEqual([]);
+      expect(balancesOf(bank, sam)).toEqual({ checking: 3_467_00 - spent, savings: 12_400_00 });
+      expect(agentEntriesIn(bank, sam)).toEqual([]);
     }
   });
 
@@ -98,12 +106,12 @@ describe("Sweep", () => {
     const sam = signInByName(bank, "Sam Calloway");
     const [rule] = bank.customerData.listRules(sam);
     if (!rule) throw new Error("Sam's buffer Rule is missing");
-    bank.customerData.switchRule(sam, rule.id, false);
+    bank.switchRule(sam, rule.id, false);
 
     bank.postPaycheck();
 
     expect(balancesOf(bank, sam)).toEqual({ checking: 3_467_00, savings: 12_400_00 });
-    expect(bank.readDecisionLog(sam)).toEqual([]);
+    expect(agentEntriesIn(bank, sam)).toEqual([]);
   });
 
   it("doesn't sweep after money comes into checking from anywhere but an employer", () => {
@@ -118,7 +126,7 @@ describe("Sweep", () => {
       entries: entriesMoving(5_000_00, houseFund.id, checking.id),
     });
 
-    expect(bank.readDecisionLog(sam)).toEqual([]);
+    expect(agentEntriesIn(bank, sam)).toEqual([]);
     expect(balancesOf(bank, sam)).toEqual({ checking: 5_227_00, savings: 7_400_00 });
   });
 });
@@ -127,7 +135,7 @@ describe("Sweep", () => {
 function replaceBufferRule(bank: Bank, customer: Customer, buffer: number) {
   const [seeded] = bank.customerData.listRules(customer);
   if (!seeded) throw new Error("The seeded buffer Rule is missing");
-  bank.customerData.switchRule(customer, seeded.id, false);
+  bank.switchRule(customer, seeded.id, false);
   return bank.customerData.createRule(customer, {
     kind: "buffer",
     parameters: { ...seeded.parameters, buffer: cents(buffer) },
