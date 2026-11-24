@@ -1,16 +1,12 @@
-import type { Clock } from "./clock";
-import type { Customer, CustomerData } from "./customer-data";
+import type { Customer } from "./customer-data";
 import type { StandingSearch } from "./findings";
 import { SettingsError, type Settings } from "./settings";
 import { changeSettings } from "./settings-changes";
-import { searchExistingCharges } from "./subscription-price-rises";
-import type { SystemData } from "./system-data";
-
-type SearchDeps = { clock: Clock; customerData: CustomerData; systemData: SystemData };
+import { searchExistingPurchases, type SearchDeps } from "./subscription-price-rises";
 
 /** Runs each Standing search over the customer's existing data, as it does when the bank starts. */
 const SEARCH_EXISTING: Record<StandingSearch, (deps: SearchDeps, customer: Customer) => void> = {
-  subscription_price_rises: searchExistingCharges,
+  subscription_price_rises: searchExistingPurchases,
 };
 
 /**

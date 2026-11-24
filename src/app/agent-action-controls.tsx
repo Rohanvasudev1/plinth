@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useEffect, useState, type ReactNode } from "react";
 import { chooseOptionAction, markAgentActionsSeen, setStandingSearchAction, undoAction } from "./agent-actions";
 
 /** The Undo button on one agent action. A refusal shows its reason under the button. */
@@ -49,16 +49,24 @@ export function AgentActionsToast({ actions }: { actions: { id: number; text: st
   );
 }
 
-/** The on/off switch for one Standing search. Pressing it asks for the opposite of the state the page showed. */
-export function StandingSearchSwitch({ search, on, label }: { search: string; on: boolean; label: string }) {
+/** A form that switches one Standing search to `on`. A refusal shows its reason under the button. */
+function StandingSearchForm({
+  search,
+  on,
+  className,
+  children,
+}: {
+  search: string;
+  on: boolean;
+  className?: string;
+  children: (pending: boolean) => ReactNode;
+}) {
   const [result, formAction, pending] = useActionState(setStandingSearchAction, null);
   return (
-    <form action={formAction} className="rule-switch">
+    <form action={formAction} className={className}>
       <input type="hidden" name="search" value={search} />
-      <input type="hidden" name="on" value={String(!on)} />
-      <button type="submit" className="switch" role="switch" aria-checked={on} aria-label={label} disabled={pending}>
-        <span aria-hidden="true">{on ? "On" : "Off"}</span>
-      </button>
+      <input type="hidden" name="on" value={String(on)} />
+      {children(pending)}
       {result && !result.ok && (
         <p role="alert" className="result refused">
           {result.message}
@@ -68,22 +76,29 @@ export function StandingSearchSwitch({ search, on, label }: { search: string; on
   );
 }
 
+/** The on/off switch for one Standing search. Pressing it asks for the opposite of the state the page showed. */
+export function StandingSearchSwitch({ search, on, label }: { search: string; on: boolean; label: string }) {
+  return (
+    <StandingSearchForm search={search} on={!on} className="rule-switch">
+      {(pending) => (
+        <button type="submit" className="switch" role="switch" aria-checked={on} aria-label={label} disabled={pending}>
+          <span aria-hidden="true">{on ? "On" : "Off"}</span>
+        </button>
+      )}
+    </StandingSearchForm>
+  );
+}
+
 /** "Stop looking" on a Finding a Standing search made: switches that Standing search off. */
 export function StopLookingButton({ search, label }: { search: string; label: string }) {
-  const [result, formAction, pending] = useActionState(setStandingSearchAction, null);
   return (
-    <form action={formAction}>
-      <input type="hidden" name="search" value={search} />
-      <input type="hidden" name="on" value="false" />
-      <button type="submit" className="link-button" disabled={pending}>
-        {label}
-      </button>
-      {result && !result.ok && (
-        <p role="alert" className="result refused">
-          {result.message}
-        </p>
+    <StandingSearchForm search={search} on={false}>
+      {(pending) => (
+        <button type="submit" className="link-button" disabled={pending}>
+          {label}
+        </button>
       )}
-    </form>
+    </StandingSearchForm>
   );
 }
 
@@ -101,7 +116,14 @@ export function FindingOptions({
       <input type="hidden" name="findingId" value={findingId} />
       <div className="option-buttons">
         {options.map((option) => (
-          <button key={option.key} type="submit" name="option" value={option.key} className="option-button" disabled={pending}>
+          <button
+            key={option.key}
+            type="submit"
+            name="option"
+            value={option.key}
+            className="option-button"
+            disabled={pending}
+          >
             <b>{option.label}</b>
             <small>{option.detail}</small>
           </button>

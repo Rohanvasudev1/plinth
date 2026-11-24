@@ -134,6 +134,10 @@ _Avoid_: Job, task, query
 A check the agent runs by itself as new data arrives, which only reports Findings and which the customer can switch off.
 _Avoid_: Alert, monitor, watch
 
+**Subscription price rises**:
+The Standing search that reports a Card purchase at a Subscriptions Merchant costing more than the one before, or a Free-trial Merchant's first Card purchase. It reports each Merchant and price at most once.
+_Avoid_: Price alert, subscription monitor
+
 **Setup survey**:
 The questions a customer answers before the agent acts, whose answers become Rules, Goals and settings.
 _Avoid_: Onboarding, wizard
@@ -171,6 +175,10 @@ _Avoid_: Other party, recipient
 **Merchant**:
 A simulated business the customer pays by Card purchase, with a fixed Category.
 _Avoid_: Vendor, payee, shop
+
+**Free-trial Merchant**:
+A Subscriptions Merchant the Simulator marks as starting with a free trial, so its first Card purchase is the trial turning paid.
+_Avoid_: Trial vendor, freemium
 
 **Usual month**:
 The average income and spending, per Category and in total, over the last six full calendar months, or over fewer when the customer has fewer. Needs at least one.

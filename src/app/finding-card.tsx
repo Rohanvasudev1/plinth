@@ -2,7 +2,7 @@ import { DISPLAY_TIME_ZONE } from "@/app-clock";
 import type { FindingOnPage } from "@/bank";
 import { formatLocalDate } from "@/calendar";
 import { guardrailName } from "@/decisions";
-import { describeOption, findingStateLabel, type FindingKind } from "@/findings";
+import { describeOption, findingStateLabel, isLiveFinding, type FindingKind } from "@/findings";
 import { expiredReason } from "@/finding-text";
 import { STANDING_SEARCH_TEXT } from "@/settings-text";
 import { FindingOptions, StopLookingButton } from "./agent-action-controls";
@@ -82,7 +82,7 @@ export function FindingCard({
           />
         </>
       )}
-      {finding.standingSearch && (finding.state === "open" || finding.state === "snoozed") && (
+      {finding.standingSearch && isLiveFinding(finding) && (
         <StopLookingButton
           search={finding.standingSearch}
           label={STANDING_SEARCH_TEXT[finding.standingSearch].stopLooking}

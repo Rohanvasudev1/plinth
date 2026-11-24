@@ -2,8 +2,8 @@ import { localDateOf, sameDayNextMonth } from "./calendar";
 import type { Clock } from "./clock";
 import type { Customer, CustomerData, LedgerTransaction } from "./customer-data";
 import {
-  CARD_CHARGES_SOURCE,
-  chargeText,
+  CARD_PURCHASES_SOURCE,
+  purchaseText,
   PAY_NOT_USE,
   priceRiseTitle,
   trialTurnedPaidTitle,
@@ -14,14 +14,14 @@ import { cents, type Cents } from "./money";
 import { isFreeTrialMerchant } from "./simulator";
 import type { SystemData } from "./system-data";
 
-interface SearchDeps {
+export interface SearchDeps {
   clock: Clock;
   customerData: CustomerData;
   systemData: SystemData;
 }
 
 /** A Card purchase at a Merchant in the Subscriptions Category. */
-interface SubscriptionCharge {
+interface SubscriptionPurchase {
   transaction: LedgerTransaction;
   merchant: string;
   amount: Cents;
@@ -29,91 +29,91 @@ interface SubscriptionCharge {
 
 /**
  * Runs the Subscription price rises Standing search: plain code, no language model. When a Card purchase posts at a
- * Merchant in the Subscriptions Category, it compares the charge with that Merchant's previous charge to the same
- * customer, and makes a Finding when the price went up, or when a free-trial Merchant charged for the first time.
+ * Merchant in the Subscriptions Category, it compares the purchase with that Merchant's previous purchase to the same
+ * customer, and makes a Finding when the price went up, or when a Free-trial Merchant took its first Card purchase.
  * A customer has at most one Finding per Merchant and price, so posting the same price again finds nothing.
  *
  * The seed posts history without ledger events reaching any agent, so it also checks every customer's existing card
- * charges now. Returns a function that stops it.
+ * purchases now. Returns a function that stops it.
  */
 export function startSubscriptionPriceRises(deps: SearchDeps & { ledgerEvents: LedgerEventDispatcher }): () => void {
   const { customerData, systemData, ledgerEvents } = deps;
-  for (const customer of systemData.listCustomers()) searchExistingCharges(deps, customer);
+  for (const customer of systemData.listCustomers()) searchExistingPurchases(deps, customer);
   return ledgerEvents.subscribe((event) => {
     const customer = systemData.findCustomer(event.customerId);
     if (!customer) return;
     customerData.inOneTransaction(() => {
-      const charges = subscriptionCharges(deps, customer);
-      const index = charges.findIndex((charge) => charge.transaction.id === event.ledgerTransactionId);
-      const charge = charges[index];
-      if (charge) checkCharge(deps, customer, charge, charges.slice(0, index));
+      const purchases = subscriptionPurchases(deps, customer);
+      const index = purchases.findIndex((purchase) => purchase.transaction.id === event.ledgerTransactionId);
+      const purchase = purchases[index];
+      if (purchase) checkPurchase(deps, customer, purchase, purchases.slice(0, index));
     });
   });
 }
 
 /**
- * Checks each of the customer's existing card charges in the order they posted, making any Finding not already made.
+ * Checks each of the customer's existing card purchases in the order they posted, making any Finding not already made.
  * Safe to repeat. Does nothing while the customer's switch is off, or before they finish setup.
  */
-export function searchExistingCharges(deps: SearchDeps, customer: Customer): void {
+export function searchExistingPurchases(deps: SearchDeps, customer: Customer): void {
   deps.customerData.inOneTransaction(() => {
-    const charges = subscriptionCharges(deps, customer);
-    charges.forEach((charge, index) => checkCharge(deps, customer, charge, charges.slice(0, index)));
+    const purchases = subscriptionPurchases(deps, customer);
+    purchases.forEach((purchase, index) => checkPurchase(deps, customer, purchase, purchases.slice(0, index)));
   });
 }
 
-function checkCharge(deps: SearchDeps, customer: Customer, charge: SubscriptionCharge, earlier: SubscriptionCharge[]): void {
+function checkPurchase(deps: SearchDeps, customer: Customer, purchase: SubscriptionPurchase, earlier: SubscriptionPurchase[]): void {
   const { clock, customerData } = deps;
   if (!customerData.getSettings(customer)?.standingSearches.subscription_price_rises) return;
-  const previous = earlier.filter((candidate) => candidate.merchant === charge.merchant).at(-1);
+  const previous = earlier.filter((candidate) => candidate.merchant === purchase.merchant).at(-1);
   const found = previous
-    ? charge.amount > previous.amount && priceRise(previous, charge)
-    : isFreeTrialMerchant(charge.merchant) && trialTurnedPaid(charge);
+    ? purchase.amount > previous.amount && priceRise(previous, purchase)
+    : isFreeTrialMerchant(purchase.merchant) && trialTurnedPaid(purchase);
   if (!found) return;
   const already = customerData
     .listFindings(customer)
     .some(
       (finding) =>
-        finding.subscriptionPrice?.merchant === charge.merchant && finding.subscriptionPrice.price === charge.amount,
+        finding.subscriptionPrice?.merchant === purchase.merchant && finding.subscriptionPrice.price === purchase.amount,
     );
   if (already) return;
   customerData.createFinding(customer, {
     ...found,
     kind: "subscription_price_rise",
     standingSearch: "subscription_price_rises",
-    subscriptionPrice: { merchant: charge.merchant, price: charge.amount },
-    ledgerEventId: charge.transaction.ledgerEventId,
+    subscriptionPrice: { merchant: purchase.merchant, price: purchase.amount },
+    ledgerEventId: purchase.transaction.ledgerEventId,
     options: [{ key: "keep_paying" }, { key: "remind_me", date: sameDayNextMonth(localDateOf(clock.now())) }],
   });
 }
 
-function priceRise(previous: SubscriptionCharge, charge: SubscriptionCharge): Pick<NewFinding, "title" | "facts"> {
+function priceRise(previous: SubscriptionPurchase, purchase: SubscriptionPurchase): Pick<NewFinding, "title" | "facts"> {
   return {
-    title: priceRiseTitle(charge.merchant, previous.amount, charge.amount),
+    title: priceRiseTitle(purchase.merchant, previous.amount, purchase.amount),
     facts: [
-      fact("Before", chargeText(previous.amount, localDateOf(previous.transaction.postedAt))),
-      fact("Now", chargeText(charge.amount, localDateOf(charge.transaction.postedAt))),
+      fact("Before", purchaseText(previous.amount, localDateOf(previous.transaction.postedAt))),
+      fact("Now", purchaseText(purchase.amount, localDateOf(purchase.transaction.postedAt))),
       fact("What Plinth can see", PAY_NOT_USE),
     ],
   };
 }
 
-function trialTurnedPaid(charge: SubscriptionCharge): Pick<NewFinding, "title" | "facts"> {
+function trialTurnedPaid(purchase: SubscriptionPurchase): Pick<NewFinding, "title" | "facts"> {
   return {
-    title: trialTurnedPaidTitle(charge.merchant, charge.amount),
+    title: trialTurnedPaidTitle(purchase.merchant, purchase.amount),
     facts: [
-      fact("Free trial turned paid", chargeText(charge.amount, localDateOf(charge.transaction.postedAt))),
+      fact("Free trial turned paid", purchaseText(purchase.amount, localDateOf(purchase.transaction.postedAt))),
       fact("What Plinth can see", PAY_NOT_USE),
     ],
   };
 }
 
 function fact(label: string, value: string): FindingFact {
-  return { label, value, source: CARD_CHARGES_SOURCE };
+  return { label, value, source: CARD_PURCHASES_SOURCE };
 }
 
 /** The customer's Card purchases at Subscriptions Merchants, in the order they posted. */
-function subscriptionCharges(deps: SearchDeps, customer: Customer): SubscriptionCharge[] {
+function subscriptionPurchases(deps: SearchDeps, customer: Customer): SubscriptionPurchase[] {
   const merchantClearing = deps.systemData.ensureSystemAccount("merchant");
   return deps.customerData.listLedgerTransactions(customer).flatMap((transaction) => {
     const paid = transaction.entries.find((entry) => entry.accountId === merchantClearing && entry.amount > 0);

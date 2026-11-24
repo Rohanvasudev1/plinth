@@ -21,6 +21,7 @@ import { isGuardrail, type Decision, type NewDecision, type WhyRow } from "./dec
 import {
   FindingError,
   isFindingOptionKey,
+  LIVE_FINDING_STATES,
   type Finding,
   type FindingFact,
   type FindingKind,
@@ -715,7 +716,7 @@ export function createCustomerData(deps: {
     }
     const { subscriptionPrice } = finding;
     if (subscriptionPrice) {
-      cents(subscriptionPrice.price);
+      cents(subscriptionPrice.price); // Throws unless the price is whole cents.
       const already = selectFindings(customer).some(
         (candidate) =>
           candidate.subscriptionPrice?.merchant === subscriptionPrice.merchant &&
@@ -939,7 +940,7 @@ export function createCustomerData(deps: {
           and(
             eq(findingsTable.customerId, customer.id),
             eq(findingsTable.standingSearch, standingSearch),
-            inArray(findingsTable.state, ["open", "snoozed"]),
+            inArray(findingsTable.state, [...LIVE_FINDING_STATES]),
           ),
         )
         .run().changes;

@@ -9,6 +9,13 @@ export const FINDING_STATES = ["open", "chosen", "expired", "snoozed"] as const;
  */
 export type FindingState = (typeof FINDING_STATES)[number];
 
+/** The states in which a Finding is still waiting on the customer: open now, or snoozed until it opens again. */
+export const LIVE_FINDING_STATES = ["open", "snoozed"] as const satisfies readonly FindingState[];
+
+export function isLiveFinding(finding: Pick<Finding, "state">): boolean {
+  return (LIVE_FINDING_STATES as readonly FindingState[]).includes(finding.state);
+}
+
 /** What made a Finding: a paycheck sweep, a Mission, or the Subscription price rises Standing search. */
 export const FINDING_KINDS = ["sweep", "mission", "subscription_price_rise"] as const;
 export type FindingKind = (typeof FINDING_KINDS)[number];

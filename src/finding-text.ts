@@ -68,14 +68,14 @@ export function expiredReason(finding: Pick<Finding, "kind">): string {
   return finding.kind === "sweep" ? "A newer paycheck changed the numbers" : "Newer facts or your settings closed it";
 }
 
-/** The Source of every fact in a Subscription price rise Finding. */
-export const CARD_CHARGES_SOURCE = "From your card charges";
+/** The Source of every fact in a Subscription price rise Finding, in the spec's words. */
+export const CARD_PURCHASES_SOURCE = "From your card charges";
 
 /** What a Subscription price rise Finding can't know, stated as one of its facts. */
 export const PAY_NOT_USE = "Plinth can see what you pay, not whether you use it";
 
-/** A charge for a Subscription price rise Finding's facts, such as "$18.00 on Thu 15 Oct". */
-export function chargeText(amount: Cents, date: LocalDate): string {
+/** A Card purchase for a Subscription price rise Finding's facts, such as "$18.00 on Thu 15 Oct". */
+export function purchaseText(amount: Cents, date: LocalDate): string {
   return `${formatDollars(amount)} on ${formatLocalDate(date)}`;
 }
 
