@@ -6,7 +6,7 @@ import type { AgentActionOnHome, BillsBeforePayday, HomeAccount, SafeToSpend } f
 import { formatLocalDate, type LocalDate } from "@/calendar";
 import { cents, formatDollars } from "@/money";
 import { guardrailName, type Decision } from "@/decisions";
-import { describeOption, type Finding } from "@/findings";
+import { describeOption, findingStateLabel, type Finding } from "@/findings";
 import { requireCustomer } from "@/session";
 import { AgentActionsToast, FindingOptions, UndoButton } from "./agent-action-controls";
 import { WhyPanel } from "./why-panel";
@@ -64,11 +64,11 @@ function AgentActionsCard({ actions }: { actions: AgentActionOnHome[] }) {
   );
 }
 
-/** A sweep Finding's heading: how much the agent found above the Buffer, and where it would go. */
+/** A sweep Finding's heading: the fact it reports, how much is above the Buffer, without leaning to an Option. */
 function findingTitle(finding: Finding, accountName: (accountId: number) => string): string {
   const move = finding.options.find((option) => option.key === "move");
   if (!move) return "Your agent found something";
-  return `${formatDollars(move.amount)} above your Buffer in ${accountName(move.fromAccountId)}. Move it to ${accountName(move.toAccountId)}?`;
+  return `${formatDollars(move.amount)} above your Buffer in ${accountName(move.fromAccountId)}`;
 }
 
 function FindingCard({ finding, accountName }: { finding: Finding; accountName: (accountId: number) => string }) {
@@ -77,9 +77,9 @@ function FindingCard({ finding, accountName }: { finding: Finding; accountName: 
   return (
     <section className="card finding" aria-labelledby={headingId}>
       <div className="decision-head">
-        <span className="ftag">Your agent is asking</span>
+        <span className="finding-tag">Your agent is asking</span>
         <span className={`pill ${finding.state}`}>
-          {finding.state === "open" ? "Open" : finding.state === "chosen" ? "Chosen" : "Expired"}
+          {findingStateLabel(finding.state)}
         </span>
       </div>
       <h2 id={headingId}>{findingTitle(finding, accountName)}</h2>

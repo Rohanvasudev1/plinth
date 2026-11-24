@@ -2,6 +2,10 @@ import { getAppBank } from "@/app-bank";
 import { endToEndResetEnabled } from "@/e2e-reset";
 import { AUTONOMY_LEVELS, type AutonomyLevel } from "@/settings";
 
+function isAutonomyLevel(value: unknown): value is AutonomyLevel {
+  return typeof value === "string" && (AUTONOMY_LEVELS as readonly string[]).includes(value);
+}
+
 /**
  * Sets a seeded customer's Autonomy level, so an end-to-end test can set up the state it needs before the
  * Setup survey can change it. The body is `{ "customer": "<name>", "autonomyLevel": "<level>" }`. Like the reset
@@ -14,9 +18,7 @@ export async function POST(request: Request): Promise<Response> {
   const { customer: name, autonomyLevel } = body as Record<string, unknown>;
   const bank = getAppBank();
   const customer = bank.listCustomers().find((candidate) => candidate.name === name);
-  if (!customer || !(AUTONOMY_LEVELS as readonly unknown[]).includes(autonomyLevel)) {
-    return new Response(null, { status: 400 });
-  }
-  bank.changeSettings(customer, { autonomyLevel: autonomyLevel as AutonomyLevel });
+  if (!customer || !isAutonomyLevel(autonomyLevel)) return new Response(null, { status: 400 });
+  bank.changeSettings(customer, { autonomyLevel });
   return new Response(null, { status: 204 });
 }

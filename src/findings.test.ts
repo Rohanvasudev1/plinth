@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createBank, type Bank } from "./bank";
+import { localDate } from "./calendar";
 import { fixedClock } from "./clock";
 import type { Customer } from "./customer-data";
 import { openTestDatabase } from "./db/database";
@@ -254,5 +255,30 @@ describe("Sweep Findings over time", () => {
     for (let day = 0; day < 14; day++) bank.advanceClock();
 
     expect(bank.readHome(sam).findings.map((finding) => finding.state)).toEqual(["open", "chosen"]);
+  });
+
+  it("for a customer with no settings record, who hasn't finished setup, a paycheck makes no Finding and moves nothing", () => {
+    const bank = bankAt(FIRST_PAYDAY_9AM);
+    const newcomer = bank.systemData.createCustomer("Jordan Fielding");
+    const checking = bank.customerData.openAccount(newcomer, { kind: "checking", name: "Checking" });
+    const savings = bank.customerData.openAccount(newcomer, { kind: "savings", name: "Rainy day fund" });
+    bank.customerData.addPayroll(newcomer, {
+      accountId: checking.id,
+      employer: "acme-corp",
+      amount: cents(2_000_00),
+      firstPayDate: localDate("2026-11-20"),
+      intervalDays: 14,
+    });
+    bank.customerData.createRule(newcomer, {
+      kind: "buffer",
+      parameters: { checkingAccountId: checking.id, savingsAccountId: savings.id, buffer: cents(500_00) },
+      on: true,
+    });
+
+    bank.postPaycheck();
+
+    expect(bank.readFindings(newcomer)).toEqual([]);
+    expect(bank.readDecisionLog(newcomer)).toEqual([]);
+    expect(balancesOf(bank, newcomer)).toEqual({ checking: 2_000_00, savings: 0 });
   });
 });

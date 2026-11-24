@@ -1,4 +1,5 @@
 import { sql } from "drizzle-orm";
+import { FINDING_KINDS, FINDING_STATES } from "../findings";
 import { check, index, integer, sqliteTable, text, uniqueIndex, type AnySQLiteColumn } from "drizzle-orm/sqlite-core";
 
 /** The app's simulated time. It holds at most one row, with id 1. */
@@ -282,7 +283,7 @@ export const findingsTable = sqliteTable(
     customerId: integer("customer_id")
       .notNull()
       .references(() => customersTable.id),
-    kind: text("kind", { enum: ["sweep"] }).notNull(),
+    kind: text("kind", { enum: FINDING_KINDS }).notNull(),
     createdAtMs: integer("created_at_ms").notNull(),
     /** The ledger event that caused the Finding, such as the paycheck behind a sweep Finding. */
     ledgerEventId: integer("ledger_event_id")
@@ -294,7 +295,7 @@ export const findingsTable = sqliteTable(
     ruleVersion: integer("rule_version").notNull(),
     facts: text("facts", { mode: "json" }).notNull(),
     options: text("options", { mode: "json" }).notNull(),
-    state: text("state", { enum: ["open", "chosen", "expired"] }).notNull(),
+    state: text("state", { enum: FINDING_STATES }).notNull(),
     /** The key of the Option the customer picked, once the Finding is chosen. */
     chosenOption: text("chosen_option"),
     /** The guardrail that refused the customer's last pick, while the Finding is still open. */

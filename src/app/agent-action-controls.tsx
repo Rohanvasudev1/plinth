@@ -61,9 +61,9 @@ export function FindingOptions({
   return (
     <form action={formAction} className="finding-options">
       <input type="hidden" name="findingId" value={findingId} />
-      <div className="choices">
+      <div className="option-buttons">
         {options.map((option) => (
-          <button key={option.key} type="submit" name="option" value={option.key} className="choice" disabled={pending}>
+          <button key={option.key} type="submit" name="option" value={option.key} className="option-button" disabled={pending}>
             <b>{option.label}</b>
             <small>{option.detail}</small>
           </button>

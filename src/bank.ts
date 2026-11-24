@@ -56,7 +56,7 @@ export interface HomeView {
   billsBeforePayday: BillsBeforePayday;
   /** Null when the customer has no checking account. */
   safeToSpend: SafeToSpend | null;
-  /** The customer's Findings, open ones first so they can pick an Option, then chosen and expired ones. */
+  /** The customer's open Findings, newest first, so they can pick an Option, then their latest closed one, if any. */
   findings: Finding[];
   /** "What your agent did": every action the customer's agent took or tried to take, newest first. */
   agentActions: AgentActionOnHome[];
@@ -170,7 +170,7 @@ export function createBank(deps: { db: Database; clock: SettableClock }): Bank {
         safeToSpend: checking
           ? safeToSpend(checking, bufferRuleFor(customerData.listRules(customer), checking.id)?.parameters.buffer ?? cents(0), bills)
           : null,
-        findings: customerData.listFindings(customer),
+        findings: findingsOnHome(customerData.listFindings(customer)),
         agentActions: customerData
           .listDecisions(customer)
           .filter((decision) => decision.actor === "agent")
@@ -179,6 +179,13 @@ export function createBank(deps: { db: Database; clock: SettableClock }): Bank {
       };
     },
   };
+}
+
+/** Every open Finding, then only the newest chosen or expired one, so old Findings don't pile up on Home. */
+function findingsOnHome(findings: Finding[]): Finding[] {
+  const open = findings.filter((finding) => finding.state === "open");
+  const latestClosed = findings.find((finding) => finding.state !== "open");
+  return latestClosed ? [...open, latestClosed] : open;
 }
 
 function homeAccount(account: Account): HomeAccount {

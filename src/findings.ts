@@ -25,7 +25,8 @@ export interface LeaveOption {
 
 /** One choice in a Finding, with every amount fixed when the Finding was made. */
 export type FindingOption = MoveOption | LeaveOption;
-export type FindingOptionKey = FindingOption["key"];
+export const FINDING_OPTION_KEYS = ["move", "leave"] as const satisfies readonly FindingOption["key"][];
+export type FindingOptionKey = (typeof FINDING_OPTION_KEYS)[number];
 
 /** A Finding: facts the agent reports to the customer with Options. Nothing happens until the customer picks one. */
 export interface Finding {
@@ -72,5 +73,17 @@ export function describeOption(
 }
 
 export function isFindingOptionKey(key: string): key is FindingOptionKey {
-  return key === "move" || key === "leave";
+  return (FINDING_OPTION_KEYS as readonly string[]).includes(key);
+}
+
+/** A Finding's state in page copy. */
+export function findingStateLabel(state: FindingState): string {
+  switch (state) {
+    case "open":
+      return "Open";
+    case "chosen":
+      return "Chosen";
+    case "expired":
+      return "Expired";
+  }
 }
