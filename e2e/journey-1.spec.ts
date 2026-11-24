@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { restoreSeed } from "./restore-seed";
+import { expectNoHorizontalScroll } from "./page-checks";
 
 test.use({ viewport: { width: 390, height: 844 } });
 
@@ -34,8 +35,7 @@ test("Journey 1: Sam's paycheck lands, the agent sweeps $340, Sam checks Why and
   await expect(sweep.getByRole("button", { name: /Undo/ })).toHaveCount(0);
   await expect(page.getByRole("region", { name: "House fund" })).toContainText("$12,400.00");
 
-  const overflows = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
-  expect(overflows).toBe(false);
+  await expectNoHorizontalScroll(page);
 
   // The toast showed once: Home doesn't show it again.
   await page.reload();

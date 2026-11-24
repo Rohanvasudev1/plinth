@@ -22,4 +22,5 @@ The reviewer applies these during `/code-review`. The hard rules in `CLAUDE.md` 
 ## Tests
 
 - Each end-to-end test sets up the state it needs and doesn't depend on another test running first.
+- A test that one customer can't see another's data gives both customers data of their own, then reads each customer's view and checks it holds only their own figures. Checking that one customer's view doesn't change when the other acts is not enough.
 - An idempotency key names everything that makes the movement unique for that customer: `payroll:<employer>:<pay date>`, `bill:<bill id>:<due date>`, `sweep:<ledger event id>`, `finding:<finding id>`, `undo:<decision id>`.

@@ -16,7 +16,9 @@ Follow `.claude/skills/unslop/SKILL.md` in everything you write.
 
 - **Ready tickets** are open, labelled `ready-for-agent`, have no open blockers, and have no session on them. Keep at most 3 implementer sessions running.
 - **Start a session** with `create_session`, using `source_url` `https://github.com/Rohanvasudev1/plinth` and the title "Plinth #N: <ticket title>". The prompt can't start with "/", so `/implement` is impossible. Use this prompt:
-  > Implement GitHub issue #N in this repo. Read .claude/skills/implement/SKILL.md and follow it, including tdd and code-review. Follow CLAUDE.md, including the Implementer sessions section. When done, push your branch, open a pull request whose body starts with 'Closes #N', and comment the link on the issue.
+  > Implement GitHub issue #N in this repo. Read .claude/skills/implement/SKILL.md and follow it, including tdd and code-review. Follow CLAUDE.md, including the Implementer sessions section. When done, push your branch, open a pull request whose body starts with 'Closes #N', and comment the link on the issue. Then send a short summary by send_message to the manager session that created you (@parent).
+
+  Implementer sessions answer by `send_message`, not by GitHub comments, so expect their replies as cross-session messages.
 
   If another session is running at the same time, add a line naming the other ticket and saying to stay in scope.
 - **Check-ins:** use `send_later` every 10 minutes. Rohan asked for this; recurring tasks can't run more often than hourly. Write the full current state into each check-in message, because the message is your memory. Delete a pending check-in with `delete_trigger` when you replace it.
@@ -56,4 +58,6 @@ Follow `.claude/skills/unslop/SKILL.md` in everything you write.
   - A raw writer that skips the Decision log. `src/hard-rules.test.ts` now checks for it.
   - A guardrail reading a setting, which breaks ADR 0007.
   - An end-to-end test without `restoreSeed`.
+- A review decision can replace a figure in the spec, as $7,020 replaced the $6,480 Usual month income in milestone 3. Record it on the spec, and leave the new figures on every later ticket that checks them, the journey test above all.
+- Spell out the isolation test in the spec: both customers act, and each one's view holds only their own figures.
 - Decision log entries and Findings store their text when written. That is allowed, so don't send it back.

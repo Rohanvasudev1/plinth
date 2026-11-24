@@ -1,12 +1,8 @@
 import { expect, type Page, test } from "@playwright/test";
 import { restoreSeed } from "./restore-seed";
+import { expectNoHorizontalScroll } from "./page-checks";
 
 test.use({ viewport: { width: 390, height: 844 } });
-
-async function expectNoHorizontalScroll(page: Page) {
-  const overflows = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
-  expect(overflows).toBe(false);
-}
 
 async function signInAs(page: Page, name: string) {
   await page.goto("/sign-in");

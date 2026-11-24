@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { restoreSeed } from "./restore-seed";
 import { turnOnAgentAskingFirst } from "./setup-survey";
+import { expectNoHorizontalScroll } from "./page-checks";
 
 test.use({ viewport: { width: 390, height: 844 } });
 
@@ -30,8 +31,7 @@ test("with Ask me before everything, Sam's sweep becomes a Finding on Home, and 
   expect(headings[0]).toBe("$340.00 above your Buffer in Checking");
   await expect(finding.getByRole("button", { name: /Leave it in Checking/ })).toBeVisible();
   await expect(page.getByRole("region", { name: "House fund", exact: true })).toContainText("$12,400.00");
-  const overflows = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
-  expect(overflows).toBe(false);
+  await expectNoHorizontalScroll(page);
 
   await finding.getByRole("button", { name: /Move \$340 to House fund/ }).click();
   await expect(finding).toContainText("You chose: Move $340 to House fund");

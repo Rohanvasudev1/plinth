@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { restoreSeed } from "./restore-seed";
+import { expectNoHorizontalScroll } from "./page-checks";
 
 test.use({ viewport: { width: 390, height: 844 } });
 
@@ -24,8 +25,7 @@ test("Sam signs in and sees Checking, the House fund and its Goal on Home at pho
   await expect(houseFund).toContainText("31% of $40,000.00");
   await expect(houseFund.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "31");
 
-  const overflows = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
-  expect(overflows).toBe(false);
+  await expectNoHorizontalScroll(page);
 });
 
 test("Signing in as Priya shows her balances, not Sam's", async ({ page }) => {
@@ -56,6 +56,5 @@ test("Home shows the 30-day Forecast with the Buffer and its lowest point, above
 
   const chartWidth = await forecast.getByRole("img").evaluate((svg) => svg.getBoundingClientRect().width);
   expect(chartWidth).toBeLessThanOrEqual(390);
-  const overflows = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
-  expect(overflows).toBe(false);
+  await expectNoHorizontalScroll(page);
 });
