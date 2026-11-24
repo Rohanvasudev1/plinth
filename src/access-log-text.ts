@@ -62,3 +62,12 @@ export function unlinkAccess(account: string): NewAccessLogEntry {
     why: "You unlinked it, so Plinth deleted its copy of that data",
   };
 }
+
+/** An Export: the customer downloading one file of everything Plinth holds about them. */
+export function exportAccess(): NewAccessLogEntry {
+  return {
+    who: "customer",
+    what: "Everything Plinth holds about you",
+    why: "Export: you downloaded a copy of your data",
+  };
+}

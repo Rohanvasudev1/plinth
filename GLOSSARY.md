@@ -258,6 +258,10 @@ _Avoid_: Total balance, wealth, assets
 The customer-visible, permanent record of every read of the customer's data by anything other than the customer's own page views: who read it, what, why and when.
 _Avoid_: Audit trail, Read list, access history
 
+**Export**:
+One JSON file of everything Plinth holds about the customer, downloaded from Privacy. Each Export writes an access log entry with the customer as reader, and the file includes it.
+_Avoid_: Download, data dump, backup
+
 **Closed customer**:
 A customer who used Close and delete. Plinth has paid out their balances, deleted their working data, and kept the Ledger, Decision log and Access log as records. They can no longer sign in.
 _Avoid_: Deleted customer, deactivated account
