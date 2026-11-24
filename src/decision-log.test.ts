@@ -46,7 +46,10 @@ describe("Decision log", () => {
             label: "Amount",
             value: "$3,467.00 in Checking, less $1,500.00 Buffer and $1,627.00 of bills, rounded down to $340.00",
           },
-          { label: "Checked by", value: "Guardrails passed: Pause, ownership, positive amount, Rule on, Buffer kept" },
+          {
+            label: "Checked by",
+            value: "Guardrails passed: Pause, ownership, positive amount, Rule on, Buffer kept, Payment limit",
+          },
         ],
         ledgerTransactionId: sweep?.id,
         reversesDecisionId: null,

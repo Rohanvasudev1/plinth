@@ -4,9 +4,10 @@ export type DecisionResult = "Done" | "Refused" | "Reversed";
 
 /**
  * The guardrails checked before every agent action that moves money, in the order they run. Pause comes first,
- * so a paused agent is refused before anything else is judged.
+ * so a paused agent is refused before anything else is judged. The Payment limit comes last: when only it fails,
+ * the agent asks the customer with a Finding instead of acting alone, and an Option the customer picked passes it.
  */
-export const GUARDRAILS = ["agent_paused", "ownership", "positive amount", "Rule on", "Buffer kept"] as const;
+export const GUARDRAILS = ["agent_paused", "ownership", "positive amount", "Rule on", "Buffer kept", "Payment limit"] as const;
 export type Guardrail = (typeof GUARDRAILS)[number];
 
 /** A guardrail's name in Decision log copy. */
