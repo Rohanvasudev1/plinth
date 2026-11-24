@@ -35,6 +35,8 @@ export async function markAgentActionsSeen(decisionIds: number[]): Promise<void>
  */
 export interface ChooseOptionResult {
   message: string | null;
+  /** The Finding's full report, after the customer picked Read the full report. */
+  report: string | null;
 }
 
 /** Carries out the Option the signed-in customer picked on one of their Findings. */
@@ -46,10 +48,11 @@ export async function chooseOptionAction(
   const findingId = Number(form.get("findingId"));
   const option = String(form.get("option") ?? "");
   if (!Number.isSafeInteger(findingId) || !isFindingOptionKey(option)) {
-    return { message: "There is no such Option." };
+    return { message: "There is no such Option.", report: null };
   }
   const outcome = getAppBank().chooseOption(customer, findingId, option);
   revalidatePath("/", "layout");
-  if (outcome.ok || outcome.finding?.refusal) return { message: null };
-  return { message: outcome.reason };
+  if (outcome.ok) return { message: null, report: option === "read_report" ? outcome.finding.report : null };
+  if (outcome.finding?.refusal) return { message: null, report: null };
+  return { message: outcome.reason, report: null };
 }

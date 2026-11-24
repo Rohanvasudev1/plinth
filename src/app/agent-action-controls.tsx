@@ -74,6 +74,12 @@ export function FindingOptions({
           {result.message}
         </p>
       )}
+      {result?.report && (
+        <section className="report" aria-label="Full report">
+          <h3>Full report</h3>
+          <p>{result.report}</p>
+        </section>
+      )}
     </form>
   );
 }

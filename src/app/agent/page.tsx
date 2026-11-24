@@ -46,7 +46,7 @@ export default async function AgentAndLimitsPage() {
 
   return (
     <main className="page">
-      <NavBar customerName={customer.name} current="agent" />
+      <NavBar customer={customer} current="agent" />
       <header className="top">
         <div>
           <h1>Agent &amp; limits</h1>

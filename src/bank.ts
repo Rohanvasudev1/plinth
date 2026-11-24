@@ -6,6 +6,8 @@ import type { SettableClock } from "./clock";
 import { createCustomerData, type Account, type Customer, type CustomerData } from "./customer-data";
 import type { Database } from "./db/database";
 import type { Decision, DecisionResult } from "./decisions";
+import { countOpenFindings, readDiscoveriesPage, type DiscoveriesPage } from "./discoveries-page";
+import { reopenDueFindings } from "./finding-reminders";
 import { chooseOption, type ChooseOptionOutcome } from "./finding-choices";
 import type { Finding, FindingOptionKey } from "./findings";
 import { setGoalTarget } from "./goal-changes";
@@ -37,6 +39,7 @@ export type { CategoryFigures, ForecastFigures, ForecastPage } from "./forecast-
 export type { Projection, ProjectionLine, ProjectionLines } from "./projection";
 export type { Forecast } from "./forecast";
 export type { ChooseOptionOutcome } from "./finding-choices";
+export type { AgentsViewOnPage, DiscoveriesPage, FindingOnPage } from "./discoveries-page";
 
 export interface GoalProgress {
   target: Cents;
@@ -68,8 +71,13 @@ export interface HomeView {
   safeToSpend: SafeToSpend | null;
   /** The 30-day Forecast of the checking balance. Null when the customer has no checking account. */
   forecast: Forecast | null;
-  /** The customer's open Findings, newest first, so they can pick an Option, then their latest closed one, if any. */
+  /**
+   * The customer's open sweep Findings, newest first, so they can pick an Option, then their latest closed one, if
+   * any. Findings of every kind are on Discoveries.
+   */
   findings: Finding[];
+  /** How many of the customer's Findings of any kind are open, for the "Your agent found N things" card. */
+  openFindingCount: number;
   /** "What your agent did": every action the customer's agent took or tried to take, newest first. */
   agentActions: AgentActionOnHome[];
   /** Agent actions the customer hasn't been shown yet, newest first, for the toast. */
@@ -141,6 +149,13 @@ export interface Bank extends Simulator, RuleChanges {
   /** The customer's Findings, open ones first, each group newest first. */
   readFindings(customer: Customer): Finding[];
   /**
+   * The Discoveries page: every Finding newest first, each Agent's view shown as the current Advice setting allows,
+   * and the open Finding count.
+   */
+  readDiscoveries(customer: Customer): DiscoveriesPage;
+  /** How many of the customer's Findings are open, for the nav bar's Discoveries badge. */
+  countOpenFindings(customer: Customer): number;
+  /**
    * Carries out the Option the customer picked on one of their open Findings. "Move" re-runs the guardrails and
    * moves money at most once; "Leave it" moves nothing. Either way it writes a Decision log entry.
    */
@@ -176,6 +191,21 @@ export function createBank(deps: { db: Database; clock: SettableClock }): Bank {
 
   return {
     ...simulator,
+    advanceClock() {
+      // A reminder date the clock reaches opens its snoozed Finding again, in the same transaction as the move. The
+      // clock lives outside that transaction, so it is put back by hand if anything fails.
+      const before = clock.now();
+      try {
+        return customerData.inOneTransaction(() => {
+          const advanced = simulator.advanceClock();
+          reopenDueFindings({ clock, customerData, systemData });
+          return advanced;
+        });
+      } catch (error) {
+        clock.setTo(before);
+        throw error;
+      }
+    },
     ...createRuleChanges(customerData),
     clock,
     customerData,
@@ -202,6 +232,8 @@ export function createBank(deps: { db: Database; clock: SettableClock }): Bank {
     readActivity: (customer) => readActivity(customerData, customer),
     readForecastPage: (customer) => readForecastPage(customerData, customer, localDateOf(clock.now())),
     readFindings: (customer) => customerData.listFindings(customer),
+    readDiscoveries: (customer) => readDiscoveriesPage(customerData, customer),
+    countOpenFindings: (customer) => countOpenFindings(customerData.listFindings(customer)),
     chooseOption: (customer, findingId, option) => chooseOption({ clock, customerData }, customer, findingId, option),
     undo: (customer, decisionId) => undoAgentAction(customerData, customer, decisionId),
     markAgentActionsSeen: (customer, decisionIds) => customerData.markAgentActionsSeen(customer, decisionIds),
@@ -209,6 +241,7 @@ export function createBank(deps: { db: Database; clock: SettableClock }): Bank {
       const accounts = customerData.listAccounts(customer);
       const checking = accounts.find((account) => account.kind === "checking");
       const bills = billsBeforePayday(customer);
+      const findings = customerData.listFindings(customer);
       return {
         customerName: customer.name,
         today: clock.now(),
@@ -225,7 +258,8 @@ export function createBank(deps: { db: Database; clock: SettableClock }): Bank {
           ? safeToSpend(checking, bufferRuleFor(customerData.listRules(customer), checking.id)?.parameters.buffer ?? cents(0), bills)
           : null,
         forecast: forecastFor(customer),
-        findings: findingsOnHome(customerData.listFindings(customer)),
+        findings: findingsOnHome(findings.filter((finding) => finding.kind === "sweep")),
+        openFindingCount: countOpenFindings(findings),
         agentActions: customerData
           .listDecisions(customer)
           .filter((decision) => decision.actor === "agent")

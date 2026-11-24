@@ -1,6 +1,7 @@
 import { localDateOf } from "./calendar";
 import type { Clock } from "./clock";
 import type { Customer, CustomerData, LedgerTransaction } from "./customer-data";
+import { SWEEP_SOURCES, sweepFindingTitle } from "./finding-text";
 import type { LedgerEvent, LedgerEventDispatcher } from "./ledger-events";
 import { formatDollars, type Cents } from "./money";
 import { bufferRuleFor, type BufferRule } from "./rules";
@@ -98,14 +99,15 @@ export function startBufferAgent(deps: {
     if (route.route === "ask" && !refusal && checking && savings) {
       customerData.createFinding(customer, {
         kind: "sweep",
+        title: sweepFindingTitle(amount, checking.name),
         ledgerEventId: event.id,
         rule: { id: rule.id, version: rule.version },
         facts: [
-          { label: "Paycheck", value: paycheck },
-          billsRow(bills),
-          bufferRuleRow(rule, checking, savings),
-          amountRow,
-          { label: "Why your agent is asking", value: route.why },
+          { label: "Paycheck", value: paycheck, source: SWEEP_SOURCES.paycheck },
+          { ...billsRow(bills), source: SWEEP_SOURCES.bills },
+          { ...bufferRuleRow(rule, checking, savings), source: SWEEP_SOURCES.rule },
+          { ...amountRow, source: SWEEP_SOURCES.amount },
+          { label: "Why your agent is asking", value: route.why, source: SWEEP_SOURCES.why },
         ],
         options: [
           { key: "move", amount, fromAccountId: checking.id, toAccountId: savings.id },

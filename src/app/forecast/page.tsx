@@ -144,7 +144,7 @@ export default async function ForecastPage() {
   const page = getAppBank().readForecastPage(customer);
   return (
     <main className="page">
-      <NavBar customerName={customer.name} current="forecast" />
+      <NavBar customer={customer} current="forecast" />
       <header className="top">
         <div>
           <h1>Forecast</h1>
