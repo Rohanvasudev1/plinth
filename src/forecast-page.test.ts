@@ -34,11 +34,13 @@ describe("the Forecast page", () => {
     expect(usualByCategory(page)).toEqual({
       Housing: 1_450_00,
       Utilities: 177_00,
-      Groceries: 1_120_00,
+      // Groceries took up each change in Subscriptions, so the two move in opposite directions:
+      // ($1,123.00 × 3 + $1,110.01 × 2 + $1,107.01) ÷ 6 = $1,116.005, and ($15.00 × 3 + $27.99 × 2 + $30.99) ÷ 6 = $21.995.
+      Groceries: 1_116_01,
       "Eating out": 550_00,
       Shopping: 1_320_00,
       Transport: 215_00,
-      Subscriptions: 18_00,
+      Subscriptions: 22_00,
       Entertainment: 90_00,
       Health: 168_00,
     });
@@ -54,11 +56,11 @@ describe("the Forecast page", () => {
     expect(onPaceByCategory(page)).toEqual({
       Housing: 1_450_00, // Rent, not scaled
       Utilities: 177_00, // Internet, Phone and Power, not scaled
-      Groceries: 883_50, // $559.55 × 30 ÷ 19 = $883.50
+      Groceries: 862_99, // $546.56 × 30 ÷ 19 = $862.989…
       "Eating out": 929_21, // $588.50 × 30 ÷ 19 = $929.210…
       Shopping: 2_701_82, // $1,711.15 × 30 ÷ 19 = $2,701.815…
       Transport: 266_21, // $168.60 × 30 ÷ 19 = $266.210…
-      Subscriptions: 28_42, // $18.00 × 30 ÷ 19 = $28.421…
+      Subscriptions: 48_93, // Tunewell $18.00 and Clipreel $12.99: $30.99 × 30 ÷ 19 = $48.931…
       Entertainment: 67_11, // $42.50 × 30 ÷ 19 = $67.105…
       Health: 125_21, // $79.30 × 30 ÷ 19 = $125.210…
     });

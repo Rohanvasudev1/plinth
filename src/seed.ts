@@ -2,16 +2,21 @@ import { dayOfMonth, localDate, localDateOf, sameMonth, sameTimeNextDay, type Lo
 import { fixedClock, type Clock } from "./clock";
 import type { Account, Customer, CustomerData, NewAccount, NewPayroll, NewScheduledBill } from "./customer-data";
 import { cents, type Cents } from "./money";
-import type { GoalPreference, SettingsChoices } from "./settings";
+import { STANDING_SEARCHES_ON, type GoalPreference, type SettingsChoices } from "./settings";
 import { billPaymentTransaction, createSimulator, paycheckTransaction, type MerchantKey } from "./simulator";
 import { isBillDue, isOnPayCycle } from "./schedules";
 import type { SystemData } from "./system-data";
 
-/** A Card purchase from checking on a day of the month, from 1 to 28 so it falls in every month. */
+/**
+ * A Card purchase from checking on a day of the month, from 1 to 28 so it falls in every month, posted only on
+ * dates from `from` through `through` when they are given.
+ */
 interface SeedPurchase {
   day: number;
   merchant: MerchantKey;
   amount: Cents;
+  from?: LocalDate;
+  through?: LocalDate;
 }
 
 /**
@@ -55,6 +60,7 @@ function seedSettings(goal: GoalPreference): SettingsChoices {
     riskAnswers: { marketDrop: "wait", timeHorizon: "over_10_years" },
     dataChoices: { trainModels: false, shareWithPartners: false, keepChatHistory: false },
     goalPreferences: [goal],
+    standingSearches: STANDING_SEARCHES_ON,
   };
 }
 
@@ -68,8 +74,9 @@ const HISTORY_OPENS = new Date("2026-04-30T13:00:00Z");
 const HISTORY_THROUGH = localDate("2026-11-18");
 
 /**
- * Sam's Card purchases in a usual month: $3,481.00 at the eight Merchants, which with $1,627.00 of Scheduled bills
- * makes the Usual month's $5,108.00 of spending.
+ * Sam's Card purchases in a usual month: $3,481.00 at nine Merchants, which with $1,627.00 of Scheduled bills
+ * makes the Usual month's $5,108.00 of spending. Tunewell Streaming's price rose from $15.00 to $18.00 in October,
+ * and a Clipreel free trial turned paid on 14 August. Groceries take up each change, so every month's total holds.
  */
 const SAMS_MONTHLY_PURCHASES: SeedPurchase[] = [
   { day: 2, merchant: "morning-crumb-cafe", amount: cents(14_50) },
@@ -77,7 +84,11 @@ const SAMS_MONTHLY_PURCHASES: SeedPurchase[] = [
   { day: 5, merchant: "morning-crumb-cafe", amount: cents(17_25) },
   { day: 8, merchant: "cityline-transit", amount: cents(127_00) },
   { day: 8, merchant: "morning-crumb-cafe", amount: cents(15_80) },
-  { day: 9, merchant: "green-basket-market", amount: cents(268_40) },
+  // $268.40 of Groceries, less the change in Subscriptions that month: +$3.00 while Tunewell cost $3.00 less,
+  // then -$12.99 for Clipreel, so every month's total spending stays $5,108.00.
+  { day: 9, merchant: "green-basket-market", amount: cents(271_40), through: localDate("2026-07-31") },
+  { day: 9, merchant: "green-basket-market", amount: cents(258_41), from: localDate("2026-08-01"), through: localDate("2026-09-30") },
+  { day: 9, merchant: "green-basket-market", amount: cents(255_41), from: localDate("2026-10-01") },
   { day: 9, merchant: "bright-reel-cinema", amount: cents(42_50) },
   { day: 10, merchant: "lantern-noodle-bar", amount: cents(71_40) },
   { day: 11, merchant: "morning-crumb-cafe", amount: cents(16_45) },
@@ -86,7 +97,10 @@ const SAMS_MONTHLY_PURCHASES: SeedPurchase[] = [
   { day: 13, merchant: "morning-crumb-cafe", amount: cents(13_90) },
   { day: 14, merchant: "lantern-noodle-bar", amount: cents(62_90) },
   { day: 15, merchant: "cityline-transit", amount: cents(41_60) },
-  { day: 15, merchant: "tunewell-streaming", amount: cents(18_00) },
+  { day: 14, merchant: "clipreel", amount: cents(12_99), from: localDate("2026-08-14") },
+  // Tunewell Streaming's price went up in October.
+  { day: 15, merchant: "tunewell-streaming", amount: cents(15_00), through: localDate("2026-09-30") },
+  { day: 15, merchant: "tunewell-streaming", amount: cents(18_00), from: localDate("2026-10-01") },
   { day: 16, merchant: "green-basket-market", amount: cents(291_15) },
   { day: 17, merchant: "morning-crumb-cafe", amount: cents(18_10) },
   { day: 18, merchant: "harbor-and-pine-goods", amount: cents(348_75) },
@@ -275,7 +289,13 @@ export function seedDemoData(system: SystemData, data: CustomerData, customerDat
       const purchases = sameMonth(date, HISTORY_THROUGH)
         ? [...history.monthlyPurchases, ...history.novemberPurchases]
         : history.monthlyPurchases;
-      for (const { merchant, amount } of purchases.filter((purchase) => purchase.day === dayOfMonth(date))) {
+      const due = purchases.filter(
+        (purchase) =>
+          purchase.day === dayOfMonth(date) &&
+          (purchase.from === undefined || purchase.from <= date) &&
+          (purchase.through === undefined || date <= purchase.through),
+      );
+      for (const { merchant, amount } of due) {
         const key = `card:${merchant}:${date}`;
         const posted = simulator.cardPurchase(customer, { accountId: checking.id, merchant, amount, idempotencyKey: key });
         // The key holds one purchase per Merchant a day, so a pattern with two would otherwise lose one silently.

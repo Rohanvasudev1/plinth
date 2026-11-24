@@ -237,7 +237,7 @@ export const decisionsTable = sqliteTable(
 
 /**
  * One version of a customer's settings record (ADR 0007): the Autonomy level, the Advice setting, the raw risk
- * answers, the data choices and the ordered goal preferences. Rows are never updated: a change writes the next
+ * answers, the data choices, the ordered goal preferences and the Standing search switches. Rows are never updated: a change writes the next
  * version. A customer with no row has not finished setup.
  */
 export const settingsVersionsTable = sqliteTable(
@@ -257,6 +257,8 @@ export const settingsVersionsTable = sqliteTable(
     keepChatHistory: integer("keep_chat_history", { mode: "boolean" }).notNull(),
     /** A JSON array of goal keys, most important first. */
     goalPreferences: text("goal_preferences", { mode: "json" }).notNull(),
+    /** The Subscription price rises Standing search's switch. On unless the customer switched it off. */
+    subscriptionPriceRises: integer("subscription_price_rises", { mode: "boolean" }).notNull().default(true),
     createdAtMs: integer("created_at_ms").notNull(),
   },
   (table) => [
@@ -314,6 +316,10 @@ export const findingsTable = sqliteTable(
     missionId: integer("mission_id"),
     /** The Standing search that made the Finding. */
     standingSearch: text("standing_search", { enum: STANDING_SEARCHES }),
+    /** The Merchant a Subscription price rise Finding is about, as the Card purchase names it. */
+    subscriptionMerchant: text("subscription_merchant"),
+    /** The new price, in cents, a Subscription price rise Finding is about. One Finding per customer, Merchant and price. */
+    subscriptionPriceCents: integer("subscription_price_cents"),
     state: text("state", { enum: FINDING_STATES }).notNull(),
     /** The YYYY-MM-DD date a snoozed Finding opens again. */
     snoozedUntil: text("snoozed_until"),
@@ -326,6 +332,11 @@ export const findingsTable = sqliteTable(
   (table) => [
     index("findings_customer_id").on(table.customerId),
     uniqueIndex("findings_customer_event_kind").on(table.customerId, table.ledgerEventId, table.kind),
+    uniqueIndex("findings_customer_subscription_price").on(
+      table.customerId,
+      table.subscriptionMerchant,
+      table.subscriptionPriceCents,
+    ),
     check("findings_chosen_option", sql`(${table.state} = 'chosen') = (${table.chosenOption} IS NOT NULL)`),
     check("findings_refusal", sql`(${table.refusedBy} IS NULL) = (${table.refusalReason} IS NULL)`),
     check("findings_snoozed_until", sql`(${table.state} = 'snoozed') = (${table.snoozedUntil} IS NOT NULL)`),
@@ -339,6 +350,10 @@ export const findingsTable = sqliteTable(
     check(
       "findings_standing_search_link",
       sql`(${table.standingSearch} IS NOT NULL) = (${table.kind} = 'subscription_price_rise')`,
+    ),
+    check(
+      "findings_subscription_price",
+      sql`(${table.subscriptionMerchant} IS NOT NULL AND ${table.subscriptionPriceCents} IS NOT NULL) = (${table.kind} = 'subscription_price_rise')`,
     ),
   ],
 );

@@ -9,6 +9,13 @@ export const FINDING_STATES = ["open", "chosen", "expired", "snoozed"] as const;
  */
 export type FindingState = (typeof FINDING_STATES)[number];
 
+/** The states in which a Finding is still waiting on the customer: open now, or snoozed until it opens again. */
+export const LIVE_FINDING_STATES = ["open", "snoozed"] as const satisfies readonly FindingState[];
+
+export function isLiveFinding(finding: Pick<Finding, "state">): boolean {
+  return (LIVE_FINDING_STATES as readonly FindingState[]).includes(finding.state);
+}
+
 /** What made a Finding: a paycheck sweep, a Mission, or the Subscription price rises Standing search. */
 export const FINDING_KINDS = ["sweep", "mission", "subscription_price_rise"] as const;
 export type FindingKind = (typeof FINDING_KINDS)[number];
@@ -16,6 +23,10 @@ export type FindingKind = (typeof FINDING_KINDS)[number];
 /** The Standing searches the agent runs by itself as new data arrives. */
 export const STANDING_SEARCHES = ["subscription_price_rises"] as const;
 export type StandingSearch = (typeof STANDING_SEARCHES)[number];
+
+export function isStandingSearch(search: string): search is StandingSearch {
+  return (STANDING_SEARCHES as readonly string[]).includes(search);
+}
 
 /** One fact in a Finding, with its Source: where it came from, such as "From your card charges". */
 export interface FindingFact extends WhyRow {
@@ -98,6 +109,11 @@ export interface Finding {
   missionId: number | null;
   /** The Standing search that made the Finding, on a Standing search Finding. */
   standingSearch: StandingSearch | null;
+  /**
+   * The Merchant and new price a Subscription price rise Finding is about. A customer has at most one Finding per
+   * Merchant and price. Null on every other kind.
+   */
+  subscriptionPrice: { merchant: string; price: Cents } | null;
   /** The date a snoozed Finding opens again. Null unless the Finding is snoozed. */
   snoozedUntil: LocalDate | null;
   /** The Option the customer picked. Null unless the Finding is chosen. */
@@ -107,7 +123,9 @@ export interface Finding {
 }
 
 export type NewFinding = Pick<Finding, "kind" | "title" | "facts" | "options"> &
-  Partial<Pick<Finding, "ledgerEventId" | "rule" | "agentsView" | "report" | "missionId" | "standingSearch">>;
+  Partial<
+    Pick<Finding, "ledgerEventId" | "rule" | "agentsView" | "report" | "missionId" | "standingSearch" | "subscriptionPrice">
+  >;
 
 /** The Finding isn't the customer's, or can't take the Option asked for. */
 export class FindingError extends Error {

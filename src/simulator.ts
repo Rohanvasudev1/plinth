@@ -35,7 +35,8 @@ export type PostedTransaction = PostedPaycheck | PostedBill;
 
 /**
  * The simulated Merchants a customer can pay by Card purchase, each with one Category. Every purchase still
- * settles through the single Merchant clearing account.
+ * settles through the single Merchant clearing account. A free-trial Merchant's first charge is a free trial
+ * turning paid.
  */
 export const MERCHANTS = {
   "green-basket-market": { name: "Green Basket Market", category: "Groceries" },
@@ -44,15 +45,21 @@ export const MERCHANTS = {
   "harbor-and-pine-goods": { name: "Harbor & Pine Goods", category: "Shopping" },
   "cityline-transit": { name: "Cityline Transit", category: "Transport" },
   "tunewell-streaming": { name: "Tunewell Streaming", category: "Subscriptions" },
+  clipreel: { name: "Clipreel", category: "Subscriptions", freeTrial: true },
   "bright-reel-cinema": { name: "Bright Reel Cinema", category: "Entertainment" },
   "willow-street-pharmacy": { name: "Willow Street Pharmacy", category: "Health" },
-} as const satisfies Record<string, { name: string; category: Category }>;
+} as const satisfies Record<string, { name: string; category: Category; freeTrial?: true }>;
 
 /** A Merchant's key, such as `lantern-noodle-bar`. */
 export type MerchantKey = keyof typeof MERCHANTS;
 
 export function isMerchantKey(key: string): key is MerchantKey {
   return Object.hasOwn(MERCHANTS, key);
+}
+
+/** Whether the Merchant with this name, as a Card purchase's counterparty names it, is a free-trial Merchant. */
+export function isFreeTrialMerchant(name: string): boolean {
+  return Object.values(MERCHANTS).some((merchant) => merchant.name === name && "freeTrial" in merchant);
 }
 
 export interface CardPurchase {

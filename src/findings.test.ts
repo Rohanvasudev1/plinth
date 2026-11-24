@@ -15,6 +15,11 @@ function bankAt(at: Date): Bank {
   return createBank({ db: openTestDatabase(), clock: fixedClock(at) });
 }
 
+/** The customer's sweep Findings. Sam's seeded Subscription price rise Findings are tested elsewhere. */
+function sweepFindings(bank: Bank, customer: Customer) {
+  return bank.readFindings(customer).filter((finding) => finding.kind === "sweep");
+}
+
 function balancesOf(bank: Bank, customer: Customer) {
   const [checking, savings] = bank.customerData.listAccounts(customer);
   return { checking: checking?.balance, savings: savings?.balance };
@@ -33,7 +38,7 @@ describe("The Autonomy level and the sweep", () => {
 
     expect(balancesOf(bank, sam)).toEqual({ checking: 3_467_00, savings: 12_400_00 });
     expect(agentEntriesIn(bank, sam)).toEqual([]);
-    const [finding, ...others] = bank.readFindings(sam);
+    const [finding, ...others] = sweepFindings(bank, sam);
     expect(others).toEqual([]);
     expect(finding).toMatchObject({
       kind: "sweep",
@@ -60,7 +65,7 @@ describe("The Autonomy level and the sweep", () => {
     bank.postPaycheck();
 
     expect(balancesOf(bank, sam)).toEqual({ checking: 3_127_00, savings: 12_740_00 });
-    expect(bank.readFindings(sam)).toEqual([]);
+    expect(sweepFindings(bank, sam)).toEqual([]);
   });
 
   it("with small_things, sweeps alone under and at the Payment limit, and makes a Finding over it", () => {
@@ -78,14 +83,14 @@ describe("The Autonomy level and the sweep", () => {
 
       if (swept) {
         expect(balancesOf(bank, sam), `limit ${limit}`).toEqual({ checking: 3_127_00, savings: 12_740_00 });
-        expect(bank.readFindings(sam), `limit ${limit}`).toEqual([]);
+        expect(sweepFindings(bank, sam), `limit ${limit}`).toEqual([]);
         expect(agentEntriesIn(bank, sam)[0]?.why).toContainEqual({
           label: "Checked by",
           value: "Guardrails passed: Pause, ownership, positive amount, Rule on, Buffer kept, Payment limit",
         });
       } else {
         expect(balancesOf(bank, sam), `limit ${limit}`).toEqual({ checking: 3_467_00, savings: 12_400_00 });
-        const [finding] = bank.readFindings(sam);
+        const [finding] = sweepFindings(bank, sam);
         expect(finding?.options[0]).toMatchObject({ key: "move", amount: 340_00 });
         expect(finding?.facts).toContainEqual({
           label: "Why your agent is asking",
@@ -109,7 +114,7 @@ function samAskedAboutSweep(): { bank: Bank; sam: Customer; findingId: number } 
   const sam = signInByName(bank, "Sam Calloway");
   bank.changeSettings(sam, { autonomyLevel: "ask_first" });
   bank.postPaycheck();
-  const [finding] = bank.readFindings(sam);
+  const [finding] = sweepFindings(bank, sam);
   if (!finding) throw new Error("The paycheck made no Finding");
   return { bank, sam, findingId: finding.id };
 }
@@ -137,7 +142,7 @@ describe("Picking an Option on a sweep Finding", () => {
       ledgerTransactionId: posted?.id,
       amount: 340_00,
     });
-    expect(bank.readFindings(sam)).toEqual([expect.objectContaining({ state: "chosen", chosenOption: "move" })]);
+    expect(sweepFindings(bank, sam)).toEqual([expect.objectContaining({ state: "chosen", chosenOption: "move" })]);
   });
 
   it("Move picked twice moves money once", () => {
@@ -171,7 +176,7 @@ describe("Picking an Option on a sweep Finding", () => {
         trigger: expect.objectContaining({ description: "You chose this Option" }),
       }),
     ]);
-    expect(bank.readFindings(sam)).toEqual([
+    expect(sweepFindings(bank, sam)).toEqual([
       expect.objectContaining({ state: "open", refusal: { guardrail: "Buffer kept", reason } }),
     ]);
   });
@@ -191,7 +196,7 @@ describe("Picking an Option on a sweep Finding", () => {
       ledgerTransactionId: null,
       trigger: { description: "You chose this Option" },
     });
-    expect(bank.readFindings(sam)).toEqual([expect.objectContaining({ state: "chosen", chosenOption: "leave" })]);
+    expect(sweepFindings(bank, sam)).toEqual([expect.objectContaining({ state: "chosen", chosenOption: "leave" })]);
     expect(bank.chooseOption(sam, findingId, "move")).toMatchObject({ ok: false });
     expect(balancesOf(bank, sam)).toEqual({ checking: 3_467_00, savings: 12_400_00 });
   });
@@ -215,11 +220,11 @@ describe("Sweep Findings over time", () => {
     bank.changeSettings(sam, { autonomyLevel: "ask_first" });
     // The clock starts on Thursday 19 November: the next day is payday, and Acme Corp pays every 14 days.
     bank.advanceClock();
-    const [first] = bank.readFindings(sam);
+    const [first] = sweepFindings(bank, sam);
 
     for (let day = 0; day < 14; day++) bank.advanceClock();
 
-    const [newest, expired, ...others] = bank.readFindings(sam);
+    const [newest, expired, ...others] = sweepFindings(bank, sam);
     expect(others).toEqual([]);
     expect(newest).toMatchObject({ state: "open" });
     expect(newest?.ledgerEventId).not.toBe(first?.ledgerEventId);
@@ -235,7 +240,7 @@ describe("Sweep Findings over time", () => {
 
     bank.postPaycheck();
 
-    expect(bank.readFindings(sam)).toEqual([]);
+    expect(sweepFindings(bank, sam)).toEqual([]);
     expect(balancesOf(bank, sam)).toEqual({ checking: 3_467_00, savings: 12_400_00 });
     expect(agentEntriesIn(bank, sam)).toEqual([
       expect.objectContaining({ result: "Refused", refusedBy: "agent_paused" }),
@@ -246,14 +251,14 @@ describe("Sweep Findings over time", () => {
     const { bank, sam, findingId } = samAskedAboutSweep();
     const priya = signInByName(bank, "Priya Natarajan");
 
-    expect(bank.readFindings(priya)).toEqual([]);
+    expect(sweepFindings(bank, priya)).toEqual([]);
     expect(bank.chooseOption(priya, findingId, "move")).toEqual({
       ok: false,
       reason: "There is no such Finding.",
       finding: undefined,
     });
     expect(balancesOf(bank, sam)).toEqual({ checking: 3_467_00, savings: 12_400_00 });
-    expect(bank.readFindings(sam)).toEqual([expect.objectContaining({ state: "open" })]);
+    expect(sweepFindings(bank, sam)).toEqual([expect.objectContaining({ state: "open" })]);
   });
 
   it("Alex can't see Sam's Findings, settings or Rules", () => {
@@ -263,7 +268,7 @@ describe("Sweep Findings over time", () => {
     const [samsBuffer] = bank.customerData.listRules(sam);
     if (!samsBuffer) throw new Error("Sam's buffer Rule is missing");
 
-    expect(bank.readFindings(alex)).toEqual([]);
+    expect(sweepFindings(bank, alex)).toEqual([]);
     expect(bank.chooseOption(alex, findingId, "move")).toEqual({
       ok: false,
       reason: "There is no such Finding.",
@@ -279,7 +284,7 @@ describe("Sweep Findings over time", () => {
     expect(() => bank.setBuffer(alex, samsBuffer.id, cents(0))).toThrow();
 
     expect(balancesOf(bank, sam)).toEqual({ checking: 3_467_00, savings: 12_400_00 });
-    expect(bank.readFindings(sam)).toEqual([expect.objectContaining({ state: "open" })]);
+    expect(sweepFindings(bank, sam)).toEqual([expect.objectContaining({ state: "open" })]);
     expect(bank.readSettings(sam)).toMatchObject({ autonomyLevel: "ask_first", goalPreferences: ["buy_home"] });
     expect(bank.customerData.getRule(sam, samsBuffer.id)?.parameters).toMatchObject({ buffer: 1_500_00 });
   });
@@ -289,7 +294,7 @@ describe("Sweep Findings over time", () => {
     const sam = signInByName(bank, "Sam Calloway");
     bank.changeSettings(sam, { autonomyLevel: "ask_first" });
     bank.advanceClock();
-    const [first] = bank.readFindings(sam);
+    const [first] = sweepFindings(bank, sam);
     bank.chooseOption(sam, first?.id ?? 0, "leave");
     for (let day = 0; day < 14; day++) bank.advanceClock();
 
@@ -316,7 +321,7 @@ describe("Sweep Findings over time", () => {
 
     bank.postPaycheck();
 
-    expect(bank.readFindings(newcomer)).toEqual([]);
+    expect(sweepFindings(bank, newcomer)).toEqual([]);
     expect(bank.readDecisionLog(newcomer)).toEqual([]);
     expect(balancesOf(bank, newcomer)).toEqual({ checking: 2_000_00, savings: 0 });
   });
@@ -324,7 +329,7 @@ describe("Sweep Findings over time", () => {
   it("a Finding isn't a refusal: under ask_first its facts give the reason and name no guardrail", () => {
     const { bank, sam } = samAskedAboutSweep();
 
-    const [finding] = bank.readFindings(sam);
+    const [finding] = sweepFindings(bank, sam);
 
     expect(finding?.facts).toContainEqual({
       label: "Why your agent is asking",

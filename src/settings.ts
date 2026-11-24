@@ -1,3 +1,5 @@
+import { STANDING_SEARCHES, type StandingSearch } from "./findings";
+
 /** How much the agent does alone (ADR 0007). */
 export const AUTONOMY_LEVELS = ["ask_first", "small_things", "within_rules"] as const;
 export type AutonomyLevel = (typeof AUTONOMY_LEVELS)[number];
@@ -45,14 +47,25 @@ export interface DataChoices {
   keepChatHistory: boolean;
 }
 
-/** Everything a settings record holds, without its version. */
-export interface SettingsChoices {
+/** Each Standing search's on/off switch. */
+export type StandingSearchSwitches = Record<StandingSearch, boolean>;
+
+/** Every Standing search starts switched on. */
+export const STANDING_SEARCHES_ON: StandingSearchSwitches = { subscription_price_rises: true };
+
+/** The choices the Setup survey asks about: everything in a settings record but the Standing search switches. */
+export interface SurveyChoices {
   autonomyLevel: AutonomyLevel;
   adviceSetting: AdviceSetting;
   riskAnswers: RiskAnswers;
   dataChoices: DataChoices;
   /** Most important first. No goal appears twice. */
   goalPreferences: GoalPreference[];
+}
+
+/** Everything a settings record holds, without its version. */
+export interface SettingsChoices extends SurveyChoices {
+  standingSearches: StandingSearchSwitches;
 }
 
 /** One version of a customer's settings record (ADR 0007). Each change writes the next version. */
@@ -68,6 +81,21 @@ export class SettingsError extends Error {
 
 /** Checks `choices` against the settings record's schema and returns them typed, or throws SettingsError. */
 export function parseSettingsChoices(choices: unknown): SettingsChoices {
+  if (!isObject(choices)) throw new SettingsError("Settings must be an object");
+  const { standingSearches, ...surveyChoices } = choices;
+  if (!isObject(standingSearches) || !STANDING_SEARCHES.every((search) => typeof standingSearches[search] === "boolean")) {
+    throw new SettingsError("Each Standing search must be switched on or off");
+  }
+  return {
+    ...parseSurveyChoices(surveyChoices),
+    standingSearches: Object.fromEntries(
+      STANDING_SEARCHES.map((search) => [search, standingSearches[search] === true]),
+    ) as StandingSearchSwitches,
+  };
+}
+
+/** Checks the Setup survey's choices against the settings record's schema and returns them typed, or throws SettingsError. */
+export function parseSurveyChoices(choices: unknown): SurveyChoices {
   if (!isObject(choices)) throw new SettingsError("Settings must be an object");
   const { autonomyLevel, adviceSetting, riskAnswers, dataChoices, goalPreferences } = choices;
   if (!isOneOf(AUTONOMY_LEVELS, autonomyLevel)) throw new SettingsError("Unknown Autonomy level");

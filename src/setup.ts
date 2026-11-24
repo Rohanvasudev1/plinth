@@ -3,7 +3,7 @@ import { customerChangeDecision, type NewDecision, type WhyRow } from "./decisio
 import { formatDollarsBriefly } from "./money";
 import { describeRule, sweepTargetText } from "./rule-changes";
 import { bufferRuleFor, type Rule, type RuleContent } from "./rules";
-import { isSavingsGoal, SettingsError, type SavingsGoal, type Settings } from "./settings";
+import { isSavingsGoal, SettingsError, STANDING_SEARCHES_ON, type SavingsGoal, type Settings } from "./settings";
 import { settingsRows } from "./settings-text";
 import { GOAL_ACCOUNT_NAMES, STANDARD_SETUP, type SetupAnswers } from "./setup-answers";
 
@@ -23,7 +23,8 @@ export function applySetup(
   source: "survey" | "skip",
 ): Settings {
   return customerData.inOneTransaction(() => {
-    const isFirstRun = customerData.getSettings(customer) === undefined;
+    const current = customerData.getSettings(customer);
+    const isFirstRun = current === undefined;
     if (source === "skip" && !isFirstRun) {
       throw new SettingsError("Skip is only for a customer who hasn't finished setup");
     }
@@ -31,7 +32,11 @@ export function applySetup(
       source === "skip" ? "You skipped the Setup survey" : isFirstRun ? "You finished the Setup survey" : "You ran setup again";
     const { buffer, paymentLimit, ...choices } = answers;
 
-    const settings = customerData.saveSettings(customer, choices);
+    // The survey doesn't ask about Standing searches, so their switches stay as they are, or start on.
+    const settings = customerData.saveSettings(customer, {
+      ...choices,
+      standingSearches: current?.standingSearches ?? STANDING_SEARCHES_ON,
+    });
     const accounts = customerData.listAccounts(customer);
     const checking = accounts.find((account) => account.kind === "checking");
     if (!checking) throw new SettingsError("Setup needs a checking account to keep the Buffer in");
@@ -85,7 +90,7 @@ export function applySetup(
 export function readSetupAnswers(customerData: CustomerData, customer: Customer): SetupAnswers | undefined {
   const settings = customerData.getSettings(customer);
   if (!settings) return undefined;
-  const { version: _version, createdAt: _createdAt, ...choices } = settings;
+  const { version: _version, createdAt: _createdAt, standingSearches: _standingSearches, ...choices } = settings;
   const checking = customerData.listAccounts(customer).find((account) => account.kind === "checking");
   const rules = customerData.listRules(customer);
   const bufferRule = checking && bufferRuleFor(rules, checking.id);

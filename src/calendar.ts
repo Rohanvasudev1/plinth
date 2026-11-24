@@ -119,3 +119,9 @@ export function firstOfNextMonth(date: LocalDate): LocalDate {
 export function firstOfPreviousMonth(date: LocalDate): LocalDate {
   return firstOfMonth(addDays(firstOfMonth(date), -1));
 }
+
+/** The same day of the next month, or that month's last day when it is shorter, as 31 Jan to 28 Feb. */
+export function sameDayNextMonth(date: LocalDate): LocalDate {
+  const firstOfNext = firstOfNextMonth(date);
+  return addDays(firstOfNext, Math.min(dayOfMonth(date), daysInMonth(firstOfNext)) - 1);
+}

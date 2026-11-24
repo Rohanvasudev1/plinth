@@ -1,12 +1,12 @@
 import { cents, type Cents } from "./money";
 import { RuleParametersError } from "./rules";
-import { parseSettingsChoices, SettingsError, type SavingsGoal, type SettingsChoices } from "./settings";
+import { parseSurveyChoices, SettingsError, type SavingsGoal, type SurveyChoices } from "./settings";
 
 /**
  * Everything the Setup survey asks: the settings record's choices, plus the Buffer and the Payment limit, which
  * become Rules (ADR 0007).
  */
-export interface SetupAnswers extends SettingsChoices {
+export interface SetupAnswers extends SurveyChoices {
   buffer: Cents;
   paymentLimit: Cents;
 }
@@ -40,5 +40,5 @@ export function parseSetupAnswers(answers: unknown): SetupAnswers {
   if (!Number.isSafeInteger(buffer) || !Number.isSafeInteger(paymentLimit)) {
     throw new RuleParametersError("The Buffer and the Payment limit must be amounts in cents");
   }
-  return { ...parseSettingsChoices(choices), buffer: cents(buffer as number), paymentLimit: cents(paymentLimit as number) };
+  return { ...parseSurveyChoices(choices), buffer: cents(buffer as number), paymentLimit: cents(paymentLimit as number) };
 }

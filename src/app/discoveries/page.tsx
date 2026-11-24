@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { getAppBank } from "@/app-bank";
 import { requireCustomer } from "@/session";
-import { ADVICE_SETTING_TEXT } from "@/settings-text";
+import { ADVICE_SETTING_TEXT, STANDING_SEARCH_TEXT } from "@/settings-text";
+import { StandingSearchSwitch } from "../agent-action-controls";
 import { FindingCard } from "../finding-card";
 import { NavBar } from "../nav-bar";
 
@@ -29,6 +30,24 @@ export default async function DiscoveriesPage() {
         <p className="card muted">Your agent hasn&rsquo;t found anything yet.</p>
       ) : (
         page.findings.map((finding) => <FindingCard key={finding.id} finding={finding} accountName={accountName} />)
+      )}
+
+      {page.standingSearches.length > 0 && (
+        <section className="card" aria-labelledby="standing-searches">
+          <h2 id="standing-searches">Standing searches</h2>
+          <p className="muted">Your agent runs these by itself as new data arrives.</p>
+          <ul className="rules">
+            {page.standingSearches.map(({ search, on }) => (
+              <li key={search} className="rule">
+                <div>
+                  <b>{STANDING_SEARCH_TEXT[search].name}</b>
+                  <p className="muted">{STANDING_SEARCH_TEXT[search].description}</p>
+                </div>
+                <StandingSearchSwitch search={search} on={on} label={STANDING_SEARCH_TEXT[search].name} />
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
       {page.adviceSetting && (

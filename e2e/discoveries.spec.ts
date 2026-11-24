@@ -23,8 +23,9 @@ test("Sam's sweep Finding shows on Discoveries with its Sources, and the nav bad
 
   await page.goto("/");
   const discoveriesLink = page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: /Discoveries/ });
-  await expect(discoveriesLink).toContainText("1");
-  const card = page.getByRole("link", { name: /Your agent found 1 thing/ });
+  // The sweep Finding, and Sam's two seeded Subscription price rise Findings.
+  await expect(discoveriesLink).toContainText("3");
+  const card = page.getByRole("link", { name: /Your agent found 3 things/ });
   await expect(card).toContainText("Nothing changes unless you choose.");
   await expectNoHorizontalScroll(page);
 
@@ -42,9 +43,9 @@ test("Sam's sweep Finding shows on Discoveries with its Sources, and the nav bad
 
   await finding.getByRole("button", { name: /Leave it in Checking/ }).click();
   await expect(finding).toContainText("You chose: Leave it in Checking");
-  await expect(discoveriesLink).not.toContainText("1");
+  await expect(discoveriesLink).toContainText("2");
   await page.goto("/");
-  await expect(page.getByRole("link", { name: /Your agent found/ })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: /Your agent found 2 things/ })).toBeVisible();
 });
 
 test("with no open Findings, Discoveries says so and shows the Advice setting", async ({ page }) => {

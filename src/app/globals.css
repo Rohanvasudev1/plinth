@@ -285,6 +285,11 @@ a.button { display: inline-block; text-decoration: none; }
 .agents-view h3 { margin: 0 0 4px; font-size: 0.85rem; }
 .agents-view p { margin: 4px 0 0; overflow-wrap: anywhere; }
 details.agents-view summary { cursor: pointer; width: fit-content; color: var(--focus); }
+.link-button {
+  padding: 0; border: 0; background: none; color: var(--focus); text-decoration: underline;
+  font: inherit; text-align: left; cursor: pointer;
+}
+.link-button:disabled { opacity: 0.6; cursor: progress; }
 .report { padding: 10px 12px; background: var(--bg); border-radius: 8px; }
 .report h3 { margin: 0 0 4px; font-size: 0.85rem; }
 .report p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }

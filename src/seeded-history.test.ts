@@ -141,18 +141,37 @@ describe("Sam's seeded history", () => {
     expect(totalIn(bank, sam, "2026-10", ["Housing", "Utilities"])).toBe(1_627_00);
   });
 
-  it("makes the same Card purchases at the Merchants every full month", () => {
+  it("spends the same at the Merchants every full month, with Groceries taking up each Subscriptions change", () => {
     const bank = openTestBank();
     const sam = signInByName(bank, "Sam Calloway");
     const purchasesIn = (month: string) =>
       history(bank, sam)
         .filter((transaction) => dateOf(transaction).startsWith(month) && transaction.idempotencyKey.startsWith("card:"))
-        .map((transaction) => [dateOf(transaction).slice(8), transaction.counterparty, amountFor(bank, sam, transaction)]);
+        .map((transaction) => [dateOf(transaction).slice(8), transaction.counterparty, amountFor(bank, sam, transaction)] as const);
+    const SUBSCRIPTIONS_AND_GROCERIES = ["Tunewell Streaming", "Clipreel", "Green Basket Market"];
+    const others = (month: string) => purchasesIn(month).filter(([, merchant]) => !SUBSCRIPTIONS_AND_GROCERIES.includes(merchant ?? ""));
+    const totalOf = (month: string) => purchasesIn(month).reduce((sum, [, , amount]) => sum + amount, 0);
+    const chargesAt = (merchant: string) =>
+      FULL_MONTHS.map((month) => {
+        const charge = purchasesIn(month).find(([, name]) => name === merchant);
+        return charge ? [charge[0], charge[2]] : null;
+      });
 
-    const may = purchasesIn("2026-05");
-
-    expect(new Set(may.map(([, merchant]) => merchant)).size).toBe(8);
-    for (const month of FULL_MONTHS) expect(purchasesIn(month)).toEqual(may);
+    expect(new Set(purchasesIn("2026-05").map(([, merchant]) => merchant)).size).toBe(8);
+    expect(new Set(purchasesIn("2026-10").map(([, merchant]) => merchant)).size).toBe(9);
+    for (const month of FULL_MONTHS) {
+      expect(others(month), month).toEqual(others("2026-05"));
+      expect(totalOf(month), month).toBe(3_481_00);
+    }
+    expect(chargesAt("Tunewell Streaming")).toEqual([
+      ["15", 15_00],
+      ["15", 15_00],
+      ["15", 15_00],
+      ["15", 15_00],
+      ["15", 15_00],
+      ["15", 18_00],
+    ]);
+    expect(chargesAt("Clipreel")).toEqual([null, null, null, ["14", 12_99], ["14", 12_99], ["14", 12_99]]);
   });
 
   it("moves money from Checking to the House fund once a month, as Savings and not as spending", () => {

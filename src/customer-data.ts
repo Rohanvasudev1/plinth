@@ -21,12 +21,14 @@ import { isGuardrail, type Decision, type NewDecision, type WhyRow } from "./dec
 import {
   FindingError,
   isFindingOptionKey,
+  LIVE_FINDING_STATES,
   type Finding,
   type FindingFact,
   type FindingKind,
   type FindingOption,
   type FindingOptionKey,
   type NewFinding,
+  type StandingSearch,
 } from "./findings";
 import type { LedgerEvent, LedgerEventDispatcher } from "./ledger-events";
 import { checkGoalTarget, GoalError } from "./goals";
@@ -87,6 +89,8 @@ export interface PostedLedgerTransaction {
 
 export interface LedgerTransaction {
   id: number;
+  /** The ledger event written when the transaction posted. */
+  ledgerEventId: number;
   idempotencyKey: string;
   description: string;
   postedAt: Date;
@@ -210,7 +214,7 @@ export interface CustomerData {
   /**
    * Makes an open Finding, timed by the clock. Its Rule and the accounts its Options name must be the customer's,
    * and Read the full report needs a report. Throws FindingError if the customer already has a Finding of this kind
-   * for this ledger event.
+   * for this ledger event, or one about this subscription's Merchant and price.
    */
   createFinding(customer: Customer, finding: NewFinding): Finding;
   /** The customer's Findings, open ones first, each group newest first. */
@@ -219,6 +223,8 @@ export interface CustomerData {
   getFinding(customer: Customer, findingId: number): Finding | undefined;
   /** Expires every open Finding of this kind of the customer's. Returns how many it expired. */
   expireOpenFindings(customer: Customer, kind: FindingKind): number;
+  /** Expires every open or snoozed Finding of the customer's that this Standing search made. Returns how many. */
+  expireStandingSearchFindings(customer: Customer, standingSearch: StandingSearch): number;
   /** Snoozes the customer's open Finding until `until`, clearing any earlier refusal. Throws FindingError if it isn't open. */
   snoozeFinding(customer: Customer, findingId: number, until: LocalDate): Finding;
   /** The customer's snoozed Findings whose date is `today` or earlier. */
@@ -421,9 +427,10 @@ export function createCustomerData(deps: {
     only: { idempotencyKey?: string; id?: number } = {},
   ): LedgerTransaction[] {
     const { idempotencyKey, id } = only;
-    const transactions = db
-      .select()
+    const rows = db
+      .select({ transaction: ledgerTransactionsTable, ledgerEventId: ledgerEventsTable.id })
       .from(ledgerTransactionsTable)
+      .leftJoin(ledgerEventsTable, eq(ledgerEventsTable.ledgerTransactionId, ledgerTransactionsTable.id))
       .where(
         and(
           eq(ledgerTransactionsTable.customerId, customer.id),
@@ -433,7 +440,8 @@ export function createCustomerData(deps: {
       )
       .orderBy(asc(ledgerTransactionsTable.id))
       .all();
-    if (transactions.length === 0) return [];
+    if (rows.length === 0) return [];
+    const transactions = rows.map(({ transaction }) => transaction);
     const entries = db
       .select()
       .from(ledgerEntriesTable)
@@ -445,17 +453,21 @@ export function createCustomerData(deps: {
       )
       .orderBy(asc(ledgerEntriesTable.id))
       .all();
-    return transactions.map((transaction) => ({
-      id: transaction.id,
-      idempotencyKey: transaction.idempotencyKey,
-      description: transaction.description,
-      postedAt: new Date(transaction.postedAtMs),
-      counterparty: transaction.counterparty,
-      category: transaction.category,
-      entries: entries
-        .filter((entry) => entry.ledgerTransactionId === transaction.id)
-        .map((entry) => ({ accountId: entry.accountId, amount: cents(entry.amountCents) })),
-    }));
+    return rows.map(({ transaction, ledgerEventId }) => {
+      if (ledgerEventId === null) throw new Error(`Ledger transaction ${transaction.id} has no ledger event`);
+      return {
+        id: transaction.id,
+        ledgerEventId,
+        idempotencyKey: transaction.idempotencyKey,
+        description: transaction.description,
+        postedAt: new Date(transaction.postedAtMs),
+        counterparty: transaction.counterparty,
+        category: transaction.category,
+        entries: entries
+          .filter((entry) => entry.ledgerTransactionId === transaction.id)
+          .map((entry) => ({ accountId: entry.accountId, amount: cents(entry.amountCents) })),
+      };
+    });
   }
 
   /** The customer's Rules at `version`, or at their latest version when `version` is left out. */
@@ -572,6 +584,7 @@ export function createCustomerData(deps: {
         keepChatHistory: row.keepChatHistory,
       },
       goalPreferences: row.goalPreferences,
+      standingSearches: { subscription_price_rises: row.subscriptionPriceRises },
     });
     return { version: row.version, ...choices, createdAt: new Date(row.createdAtMs) };
   }
@@ -593,6 +606,7 @@ export function createCustomerData(deps: {
             shareWithPartners: parsed.dataChoices.shareWithPartners,
             keepChatHistory: parsed.dataChoices.keepChatHistory,
             goalPreferences: parsed.goalPreferences,
+            subscriptionPriceRises: parsed.standingSearches.subscription_price_rises,
             createdAtMs: clock.now().getTime(),
           })
           .run();
@@ -646,6 +660,10 @@ export function createCustomerData(deps: {
           report: row.report,
           missionId: row.missionId,
           standingSearch: row.standingSearch,
+          subscriptionPrice:
+            row.subscriptionMerchant === null || row.subscriptionPriceCents === null
+              ? null
+              : { merchant: row.subscriptionMerchant, price: cents(row.subscriptionPriceCents) },
           snoozedUntil: row.snoozedUntil === null ? null : localDate(row.snoozedUntil),
           chosenOption: row.chosenOption,
           refusal:
@@ -696,6 +714,16 @@ export function createCustomerData(deps: {
         .get();
       if (already) throw new FindingError(`This customer already has a ${finding.kind} Finding for that ledger event`);
     }
+    const { subscriptionPrice } = finding;
+    if (subscriptionPrice) {
+      cents(subscriptionPrice.price); // Throws unless the price is whole cents.
+      const already = selectFindings(customer).some(
+        (candidate) =>
+          candidate.subscriptionPrice?.merchant === subscriptionPrice.merchant &&
+          candidate.subscriptionPrice.price === subscriptionPrice.price,
+      );
+      if (already) throw new FindingError(`This customer already has a Finding about ${subscriptionPrice.merchant} at that price`);
+    }
     const row = db
       .insert(findingsTable)
       .values({
@@ -712,6 +740,8 @@ export function createCustomerData(deps: {
         report: finding.report ?? null,
         missionId: finding.missionId ?? null,
         standingSearch: finding.standingSearch ?? null,
+        subscriptionMerchant: finding.subscriptionPrice?.merchant ?? null,
+        subscriptionPriceCents: finding.subscriptionPrice?.price ?? null,
         state: "open",
       })
       .returning({ id: findingsTable.id })
@@ -899,6 +929,19 @@ export function createCustomerData(deps: {
         .set({ state: "expired", refusedBy: null, refusalReason: null })
         .where(
           and(eq(findingsTable.customerId, customer.id), eq(findingsTable.kind, kind), eq(findingsTable.state, "open")),
+        )
+        .run().changes;
+    },
+    expireStandingSearchFindings(customer, standingSearch) {
+      return db
+        .update(findingsTable)
+        .set({ state: "expired", snoozedUntil: null, refusedBy: null, refusalReason: null })
+        .where(
+          and(
+            eq(findingsTable.customerId, customer.id),
+            eq(findingsTable.standingSearch, standingSearch),
+            inArray(findingsTable.state, [...LIVE_FINDING_STATES]),
+          ),
         )
         .run().changes;
     },
