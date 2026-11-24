@@ -1,0 +1,5 @@
+# Missions read through scoped tools and pick Options from a fixed list
+
+A Mission's language model only reads. Its tools read the asking customer's data through the customer data layer (ADR 0004), and none of them moves money or changes a Rule or setting. The model's only output is one Finding. That Finding's Options come from a fixed list defined in code: Read the full report, Remind me on a date, Not now, and Move money between the customer's own accounts. The model picks Options and fills in their details. Code checks each one and drops any it can't check. Every fact must name the tool call it came from, or code rejects the Finding.
+
+We considered letting the model write free-form Options. That would make Findings read more like the demo. But an Option is the one place a Finding turns into an action, so each Option kind needs code that carries it out through the guardrails and writes the Decision log. A free-form Option would have no such code. A new Option kind is a code change and a ticket.

@@ -118,6 +118,22 @@ _Avoid_: Suggestion, recommendation, alert
 One choice in a Finding, stating what it does.
 _Avoid_: Action, choice button
 
+**Source**:
+Where a fact in a Finding came from, such as the customer's card charges over a stated period.
+_Avoid_: Citation, reference
+
+**Agent's view**:
+The Option the agent would pick in a Finding, and why, shown only as far as the Advice setting allows.
+_Avoid_: Lean, recommendation, advice
+
+**Mission**:
+A question the customer sends the agent to look into, which reads only that customer's data and reports back with one Finding.
+_Avoid_: Job, task, query
+
+**Standing search**:
+A check the agent runs by itself as new data arrives, which only reports Findings and which the customer can switch off.
+_Avoid_: Alert, monitor, watch
+
 **Setup survey**:
 The questions a customer answers before the agent acts, whose answers become Rules, Goals and settings.
 _Avoid_: Onboarding, wizard
