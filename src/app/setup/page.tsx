@@ -1,7 +1,7 @@
-import Link from "next/link";
 import { getAppBank } from "@/app-bank";
 import { requireCustomer } from "@/session";
 import { STANDARD_SETUP } from "@/setup-answers";
+import { NavBar } from "../nav-bar";
 import { SetupSurvey } from "./setup-survey";
 
 export const dynamic = "force-dynamic";
@@ -13,11 +13,9 @@ export default async function RunSetupAgainPage() {
   const current = bank.readSetupAnswers(customer);
   return (
     <main className="page narrow">
+      <NavBar customerName={customer.name} />
       <header className="top">
         <h1>Run setup again</h1>
-        <p className="muted signed-in">
-          {customer.name} · <Link href="/agent">Agent &amp; limits</Link>
-        </p>
       </header>
       <p className="muted">
         Nothing changes until you turn your agent on at the end. A goal you drop keeps its account and the money in it.

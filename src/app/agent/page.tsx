@@ -5,6 +5,7 @@ import { GOAL_TARGET_RANGE } from "@/goals";
 import { formatDollarRange, formatDollarsBriefly, formatDollarsForInput } from "@/money";
 import { isSavingsGoal } from "@/settings";
 import { requireCustomer } from "@/session";
+import { NavBar } from "../nav-bar";
 import { GoalTargetForm, PauseForm, RuleAmountForm, RuleSwitch } from "./agent-forms";
 
 export const dynamic = "force-dynamic";
@@ -45,14 +46,12 @@ export default async function AgentAndLimitsPage() {
 
   return (
     <main className="page">
+      <NavBar customerName={customer.name} current="agent" />
       <header className="top">
         <div>
           <h1>Agent &amp; limits</h1>
           <p className="muted">What your agent may do on its own, and the limits it can&rsquo;t break.</p>
         </div>
-        <p className="muted signed-in">
-          {customer.name} · <Link href="/">Home</Link> · <Link href="/decision-log">Decision log</Link>
-        </p>
       </header>
 
       <section className="card" aria-labelledby="your-rules">

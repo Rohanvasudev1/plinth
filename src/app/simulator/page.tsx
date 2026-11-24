@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
-import Link from "next/link";
 import { DISPLAY_TIME_ZONE } from "@/app-clock";
 import { getAppBank } from "@/app-bank";
 import { formatDollars } from "@/money";
 import { requireCustomer } from "@/session";
 import { MERCHANTS } from "@/simulator";
+import { NavBar } from "../nav-bar";
 import { CardPurchaseForm, ClockControls } from "./simulator-forms";
 
 export const dynamic = "force-dynamic";
@@ -27,14 +27,12 @@ export default async function SimulatorPage() {
   const now = bank.clock.now();
   return (
     <main className="page">
+      <NavBar customerName={customer.name} current="simulator" />
       <header className="top">
         <div>
           <h1>Simulator</h1>
           <p className="muted">Testing only. Plays the employer, the billers and the merchants. All money is imaginary.</p>
         </div>
-        <p className="muted signed-in">
-          {customer.name} · <Link href="/">Home</Link> · <Link href="/decision-log">Decision log</Link>
-        </p>
       </header>
 
       <section className="card simulator" aria-labelledby="simulated-time">
