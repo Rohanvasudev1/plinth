@@ -43,11 +43,11 @@ export const GOAL_PREFERENCE_TEXT: Record<GoalPreference, string> = {
   spend_less: "Spend less",
 };
 
-export function onOff(on: boolean): string {
+function onOff(on: boolean): string {
   return on ? "On" : "Off";
 }
 
-export function goalsText(goals: GoalPreference[]): string {
+function goalsText(goals: GoalPreference[]): string {
   return goals.length === 0 ? "None" : goals.map((goal) => GOAL_PREFERENCE_TEXT[goal]).join(", ");
 }
 

@@ -69,6 +69,7 @@ describe("Setup survey", () => {
       expect.objectContaining({ kind: "payment_limit", version: 1, on: true, parameters: { paymentLimit: 250_00 } }),
     ]);
     const [bufferRule, limitRule] = bank.customerData.listRules(alex);
+    expect(bank.readDecisionLog(alex).at(-1)?.why).toContainEqual({ label: "Goal accounts opened", value: "Travel fund, House fund" });
     expect(bank.readDecisionLog(alex).map(({ actor, trigger, rule, action, result, amount }) => ({ actor, trigger: trigger.description, rule, action, result, amount }))).toEqual([
       {
         actor: "customer",
@@ -82,7 +83,7 @@ describe("Setup survey", () => {
         actor: "customer",
         trigger: "You finished the Setup survey",
         rule: { id: bufferRule?.id, version: 1 },
-        action: "Set the Buffer to $1,000, moving the rest to Travel fund",
+        action: "Set the Buffer to $1,000, move the rest to Travel fund",
         result: "Done",
         amount: 0,
       },
@@ -190,7 +191,7 @@ describe("Setup survey", () => {
     // The Payment limit didn't change, so it gets no new version.
     expect(bank.customerData.getRule(sam, limitRule!.id)).toMatchObject({ version: 1 });
     expect(bank.readDecisionLog(sam).map((entry) => [entry.trigger.description, entry.action])).toEqual([
-      ["You ran setup again", "Set the Buffer to $1,500, moving the rest to Emergency cushion"],
+      ["You ran setup again", "Set the Buffer to $1,500, move the rest to Emergency cushion"],
       ["You ran setup again", "Saved your settings from the Setup survey"],
     ]);
 
@@ -265,5 +266,16 @@ describe("Setup survey", () => {
     });
     bank.finishSetup(alex, ALEX_ANSWERS);
     expect(bank.readSetupAnswers(alex)).toEqual(ALEX_ANSWERS);
+  });
+
+  it("Skip is only for a customer who hasn't finished setup: it refuses Sam, and saves nothing", () => {
+    const bank = openTestBank();
+    const sam = signInByName(bank, "Sam Calloway");
+    const before = { settings: bank.readSettings(sam), rules: bank.customerData.listRules(sam) };
+
+    expect(() => bank.skipSetup(sam)).toThrow(SettingsError);
+
+    expect({ settings: bank.readSettings(sam), rules: bank.customerData.listRules(sam) }).toEqual(before);
+    expect(bank.readDecisionLog(sam)).toEqual([]);
   });
 });

@@ -103,7 +103,6 @@ function switchedText(on: boolean): string {
   return on ? "switched on" : "switched off";
 }
 
-/**
 /** Where a buffer Rule moves the rest, such as "move the rest to House fund". */
 export function sweepTargetText(savingsAccountId: number | null, accountName: (accountId: number) => string): string {
   return savingsAccountId === null ? "with no savings goal to move the rest to" : `move the rest to ${accountName(savingsAccountId)}`;

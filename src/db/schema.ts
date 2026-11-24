@@ -1,4 +1,5 @@
 import { sql } from "drizzle-orm";
+import { SAVINGS_GOALS } from "../settings";
 import { check, index, integer, sqliteTable, text, uniqueIndex, type AnySQLiteColumn } from "drizzle-orm/sqlite-core";
 
 /** The app's simulated time. It holds at most one row, with id 1. */
@@ -29,7 +30,7 @@ export const accountsTable = sqliteTable(
     /** The Goal's target amount, only on savings accounts that have one. */
     goalCents: integer("goal_cents"),
     /** The savings goal this Goal account is for, such as `buy_home`. At most one account per goal per customer. */
-    goal: text("goal", { enum: ["buy_home", "emergency_cushion", "travel"] }),
+    goal: text("goal", { enum: SAVINGS_GOALS }),
   },
   (table) => [
     index("accounts_customer_id").on(table.customerId),

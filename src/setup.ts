@@ -1,8 +1,8 @@
 import type { Account, Customer, CustomerData } from "./customer-data";
 import { customerChangeDecision, type NewDecision, type WhyRow } from "./decisions";
 import { formatDollarsBriefly } from "./money";
-import { describeRule } from "./rule-changes";
-import { bufferRuleFor, type Rule } from "./rules";
+import { describeRule, sweepTargetText } from "./rule-changes";
+import { bufferRuleFor, type Rule, type RuleContent } from "./rules";
 import { isSavingsGoal, SettingsError, type SavingsGoal, type Settings } from "./settings";
 import { settingsRows } from "./settings-text";
 import { GOAL_ACCOUNT_NAMES, STANDARD_SETUP, type SetupAnswers } from "./setup-answers";
@@ -20,53 +20,56 @@ export function applySetup(
   customerData: CustomerData,
   customer: Customer,
   answers: SetupAnswers,
-  how: "survey" | "skip",
+  source: "survey" | "skip",
 ): Settings {
   return customerData.inOneTransaction(() => {
     const isFirstRun = customerData.getSettings(customer) === undefined;
+    if (source === "skip" && !isFirstRun) {
+      throw new SettingsError("Skip is only for a customer who hasn't finished setup");
+    }
     const trigger =
-      how === "skip" ? "You skipped the Setup survey" : isFirstRun ? "You finished the Setup survey" : "You ran setup again";
+      source === "skip" ? "You skipped the Setup survey" : isFirstRun ? "You finished the Setup survey" : "You ran setup again";
     const { buffer, paymentLimit, ...choices } = answers;
 
     const settings = customerData.saveSettings(customer, choices);
-    customerData.recordDecision(
-      customer,
-      customerChangeDecision({
-        trigger,
-        rule: null,
-        action: how === "skip" ? "Saved the standard settings" : "Saved your settings from the Setup survey",
-        why: [
-          { label: "Trigger", value: trigger },
-          { label: "Settings", value: `Version ${settings.version}` },
-          ...settingsRows(settings),
-        ],
-      }),
-    );
-
     const accounts = customerData.listAccounts(customer);
     const checking = accounts.find((account) => account.kind === "checking");
     if (!checking) throw new SettingsError("Setup needs a checking account to keep the Buffer in");
     const sweepOrder = settings.goalPreferences
       .filter(isSavingsGoal)
       .map((goal) => goalAccount(customerData, customer, accounts, goal));
+    const opened = sweepOrder.filter((account) => !accounts.some((existing) => existing.id === account.id));
+    customerData.recordDecision(
+      customer,
+      customerChangeDecision({
+        trigger,
+        rule: null,
+        action: source === "skip" ? "Saved the standard settings" : "Saved your settings from the Setup survey",
+        why: [
+          { label: "Trigger", value: trigger },
+          { label: "Settings", value: `Version ${settings.version}` },
+          ...settingsRows(settings),
+          {
+            label: "Goal accounts opened",
+            value: opened.length === 0 ? "None" : opened.map((account) => account.name).join(", "),
+          },
+        ],
+      }),
+    );
+
     const sweepTarget = sweepOrder[0] ?? null;
     const accountName = (accountId: number) =>
-      [...accounts, ...sweepOrder].find((account) => account.id === accountId)?.name ?? "an account";
-
+      [...accounts, ...opened].find((account) => account.id === accountId)?.name ?? "an account";
     const rules = customerData.listRules(customer);
-    const bufferParameters = { checkingAccountId: checking.id, savingsAccountId: sweepTarget?.id ?? null, buffer };
+    const savingsAccountId = sweepTarget?.id ?? null;
     setRule(customerData, customer, bufferRuleFor(rules, checking.id), {
-      kind: "buffer",
-      parameters: bufferParameters,
+      content: { kind: "buffer", parameters: { checkingAccountId: checking.id, savingsAccountId, buffer } },
       trigger,
-      action: sweepTarget
-        ? `Set the Buffer to ${formatDollarsBriefly(buffer)}, moving the rest to ${sweepTarget.name}`
-        : `Set the Buffer to ${formatDollarsBriefly(buffer)}, with no savings goal to move the rest to`,
+      action: `Set the Buffer to ${formatDollarsBriefly(buffer)}, ${sweepTargetText(savingsAccountId, accountName)}`,
       accountName,
     });
     setRule(customerData, customer, rules.find((rule) => rule.kind === "payment_limit"), {
-      kind: "payment_limit",
-      parameters: { paymentLimit },
+      content: { kind: "payment_limit", parameters: { paymentLimit } },
       trigger,
       action: `Set the Payment limit to ${formatDollarsBriefly(paymentLimit)}`,
       accountName,
@@ -110,15 +113,9 @@ function setRule(
   customerData: CustomerData,
   customer: Customer,
   existing: Rule | undefined,
-  change: {
-    kind: Rule["kind"];
-    parameters: object;
-    trigger: string;
-    action: string;
-    accountName: (accountId: number) => string;
-  },
+  change: { content: RuleContent; trigger: string; action: string; accountName: (accountId: number) => string },
 ): void {
-  const { kind, parameters, trigger, action, accountName } = change;
+  const { content, trigger, action, accountName } = change;
   const decision = (rule: Rule, why: WhyRow[]): NewDecision =>
     customerChangeDecision({
       trigger,
@@ -128,19 +125,25 @@ function setRule(
     });
 
   if (!existing) {
-    const created = customerData.createRule(customer, { kind, parameters, on: true });
+    const created = customerData.createRule(customer, { ...content, on: true });
     customerData.recordDecision(customer, decision(created, [{ label: "Rule", value: describeRule(created, accountName) }]));
     return;
   }
-  if (JSON.stringify(existing.parameters) === JSON.stringify(parameters)) return;
+  if (sameParameters(existing.parameters, content.parameters)) return;
   customerData.reviseRule(
     customer,
     existing.id,
-    () => ({ parameters }),
+    () => ({ parameters: content.parameters }),
     (before, after) =>
       decision(after, [
         { label: "Before", value: describeRule(before, accountName) },
         { label: "After", value: describeRule(after, accountName) },
       ]),
   );
+}
+
+/** True when two Rules' parameters hold the same values, whatever order their fields are in. */
+function sameParameters(a: RuleContent["parameters"], b: RuleContent["parameters"]): boolean {
+  const entries = (parameters: object) => Object.entries(parameters).sort(([x], [y]) => x.localeCompare(y));
+  return JSON.stringify(entries(a)) === JSON.stringify(entries(b));
 }

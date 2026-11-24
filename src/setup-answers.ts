@@ -1,4 +1,5 @@
 import { cents, type Cents } from "./money";
+import { RuleParametersError } from "./rules";
 import { parseSettingsChoices, SettingsError, type SavingsGoal, type SettingsChoices } from "./settings";
 
 /**
@@ -29,14 +30,15 @@ export const GOAL_ACCOUNT_NAMES: Record<SavingsGoal, string> = {
 };
 
 /**
- * Checks survey answers sent from a page and returns them typed, or throws SettingsError. Amounts must be whole
- * cents here; the Rules check their ranges when setup is applied.
+ * Checks survey answers sent from a page and returns them typed. Throws SettingsError for choices that don't fit
+ * the settings record, and RuleParametersError for amounts that aren't whole cents; the Rules check their ranges
+ * when setup is applied.
  */
 export function parseSetupAnswers(answers: unknown): SetupAnswers {
   if (typeof answers !== "object" || answers === null) throw new SettingsError("Setup answers must be an object");
   const { buffer, paymentLimit, ...choices } = answers as Record<string, unknown>;
   if (!Number.isSafeInteger(buffer) || !Number.isSafeInteger(paymentLimit)) {
-    throw new SettingsError("The Buffer and the Payment limit must be amounts in cents");
+    throw new RuleParametersError("The Buffer and the Payment limit must be amounts in cents");
   }
   return { ...parseSettingsChoices(choices), buffer: cents(buffer as number), paymentLimit: cents(paymentLimit as number) };
 }
