@@ -1,6 +1,8 @@
 import { sql } from "drizzle-orm";
 import { CATEGORIES } from "../categories";
+import { DECISION_RESULTS } from "../decisions";
 import { FINDING_KINDS, FINDING_STATES, STANDING_SEARCHES } from "../findings";
+import { MISSION_STATES } from "../missions";
 import { SAVINGS_GOALS } from "../settings";
 import { check, index, integer, sqliteTable, text, uniqueIndex, type AnySQLiteColumn } from "drizzle-orm/sqlite-core";
 
@@ -214,7 +216,7 @@ export const decisionsTable = sqliteTable(
     fromAccountId: integer("from_account_id").references(() => accountsTable.id),
     toAccountId: integer("to_account_id").references(() => accountsTable.id),
     amountCents: integer("amount_cents").notNull(),
-    result: text("result", { enum: ["Done", "Refused", "Reversed"] }).notNull(),
+    result: text("result", { enum: DECISION_RESULTS }).notNull(),
     /** The guardrail that refused the action, on a Refused entry. */
     refusedBy: text("refused_by"),
     why: text("why", { mode: "json" }).notNull(),
@@ -224,6 +226,10 @@ export const decisionsTable = sqliteTable(
     reversesDecisionId: integer("reverses_decision_id").references((): AnySQLiteColumn => decisionsTable.id),
     /** When the customer was first shown this agent action in a toast. Null until then. */
     seenAtMs: integer("seen_at_ms"),
+    /** The Mission an entry reports on: the agent acted because the customer asked, so it names no Rule. */
+    missionId: integer("mission_id").references((): AnySQLiteColumn => missionsTable.id),
+    /** The Finding a Reported entry links to. */
+    findingId: integer("finding_id").references((): AnySQLiteColumn => findingsTable.id),
   },
   (table) => [
     index("decisions_customer_id").on(table.customerId),
@@ -231,7 +237,10 @@ export const decisionsTable = sqliteTable(
     uniqueIndex("decisions_reverses_decision_id").on(table.reversesDecisionId),
     check("decisions_refused_by", sql`(${table.result} = 'Refused') = (${table.refusedBy} IS NOT NULL)`),
     check("decisions_rule_version", sql`(${table.ruleId} IS NULL) = (${table.ruleVersion} IS NULL)`),
-    check("decisions_agent_uses_rule", sql`${table.actor} = 'customer' OR ${table.ruleId} IS NOT NULL`),
+    check(
+      "decisions_agent_uses_rule",
+      sql`${table.actor} = 'customer' OR ${table.ruleId} IS NOT NULL OR ${table.missionId} IS NOT NULL`,
+    ),
   ],
 );
 
@@ -311,7 +320,7 @@ export const findingsTable = sqliteTable(
     /** A Mission's full report. */
     report: text("report"),
     /** The Mission that made the Finding. */
-    missionId: integer("mission_id"),
+    missionId: integer("mission_id").references((): AnySQLiteColumn => missionsTable.id),
     /** The Standing search that made the Finding. */
     standingSearch: text("standing_search", { enum: STANDING_SEARCHES }),
     state: text("state", { enum: FINDING_STATES }).notNull(),
@@ -326,6 +335,7 @@ export const findingsTable = sqliteTable(
   (table) => [
     index("findings_customer_id").on(table.customerId),
     uniqueIndex("findings_customer_event_kind").on(table.customerId, table.ledgerEventId, table.kind),
+    uniqueIndex("findings_mission_id").on(table.missionId),
     check("findings_chosen_option", sql`(${table.state} = 'chosen') = (${table.chosenOption} IS NOT NULL)`),
     check("findings_refusal", sql`(${table.refusedBy} IS NULL) = (${table.refusalReason} IS NULL)`),
     check("findings_snoozed_until", sql`(${table.state} = 'snoozed') = (${table.snoozedUntil} IS NOT NULL)`),
@@ -340,5 +350,30 @@ export const findingsTable = sqliteTable(
       "findings_standing_search_link",
       sql`(${table.standingSearch} IS NOT NULL) = (${table.kind} = 'subscription_price_rise')`,
     ),
+  ],
+);
+
+/**
+ * A Mission: a question the customer sent their agent, which reads only their data and reports back with one
+ * Finding. `read_list` is a JSON array of the tool name and period or item each tool call read. `progress_label` is
+ * what the Mission is doing now, from a fixed list. Its Finding names it through `findings.mission_id`.
+ */
+export const missionsTable = sqliteTable(
+  "missions",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    customerId: integer("customer_id")
+      .notNull()
+      .references(() => customersTable.id),
+    question: text("question").notNull(),
+    state: text("state", { enum: MISSION_STATES }).notNull(),
+    progressLabel: text("progress_label").notNull(),
+    readList: text("read_list", { mode: "json" }).notNull(),
+    startedAtMs: integer("started_at_ms").notNull(),
+    endedAtMs: integer("ended_at_ms"),
+  },
+  (table) => [
+    index("missions_customer_id").on(table.customerId),
+    check("missions_ended", sql`(${table.state} = 'running') = (${table.endedAtMs} IS NULL)`),
   ],
 );

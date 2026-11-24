@@ -10,6 +10,7 @@ import {
   ledgerEntriesTable,
   ledgerEventsTable,
   ledgerTransactionsTable,
+  missionsTable,
   payrollsTable,
   rulesTable,
   ruleVersionsTable,
@@ -29,6 +30,14 @@ import {
   type NewFinding,
 } from "./findings";
 import type { LedgerEvent, LedgerEventDispatcher } from "./ledger-events";
+import {
+  isMissionProgressLabel,
+  MissionError,
+  type Mission,
+  type MissionProgressLabel,
+  type MissionRead,
+  type MissionState,
+} from "./missions";
 import { checkGoalTarget, GoalError } from "./goals";
 import type { Category } from "./categories";
 import { cents, type Cents } from "./money";
@@ -232,6 +241,19 @@ export interface CustomerData {
   markFindingChosen(customer: Customer, findingId: number, option: FindingOptionKey): Finding;
   /** Records why the customer's pick on their open Finding was refused. The Finding stays open. */
   recordFindingRefusal(customer: Customer, findingId: number, refusal: NonNullable<Finding["refusal"]>): Finding;
+  /** Starts a running Mission for the customer, timed by the clock, with nothing read yet. */
+  createMission(customer: Customer, question: string, progressLabel: MissionProgressLabel): Mission;
+  /** The customer's Mission with this id, or undefined if it doesn't exist or isn't theirs. */
+  getMission(customer: Customer, missionId: number): Mission | undefined;
+  /** The customer's Missions, newest first. */
+  listMissions(customer: Customer): Mission[];
+  /**
+   * Records what the customer's running Mission is doing now and adds what it read to its read list. Throws
+   * MissionError if it isn't running.
+   */
+  recordMissionProgress(customer: Customer, missionId: number, progressLabel: MissionProgressLabel, read?: MissionRead): Mission;
+  /** Ends the customer's running Mission, timed by the clock. Throws MissionError if it isn't running. */
+  endMission(customer: Customer, missionId: number, state: Exclude<MissionState, "running">): Mission;
 }
 
 /** A change to a Rule: its switch, its parameters, or both. Whatever is left out stays as it is. */
@@ -670,6 +692,9 @@ export function createCustomerData(deps: {
     if (rule && !getRule(customer, rule.id, rule.version)) {
       throw new RuleNotFoundError(`No Rule ${rule.id} version ${rule.version} for this customer`);
     }
+    if (finding.missionId != null && !getMission(customer, finding.missionId)) {
+      throw new FindingError(`No Mission ${finding.missionId} for this customer`);
+    }
     for (const option of finding.options) {
       if (option.key === "move") cents(option.amount);
       if (option.key === "remind_me") localDate(option.date);
@@ -764,15 +789,66 @@ export function createCustomerData(deps: {
           ledgerTransactionId: row.ledgerTransactionId,
           reversesDecisionId: row.reversesDecisionId,
           reversedByDecisionId,
+          missionId: row.missionId,
+          findingId: row.findingId,
         };
       });
   }
 
+  function selectMissions(customer: Customer, missionId?: number): Mission[] {
+    return db
+      .select({ mission: missionsTable, findingId: findingsTable.id })
+      .from(missionsTable)
+      .leftJoin(findingsTable, eq(findingsTable.missionId, missionsTable.id))
+      .where(
+        and(
+          eq(missionsTable.customerId, customer.id),
+          missionId === undefined ? undefined : eq(missionsTable.id, missionId),
+        ),
+      )
+      .orderBy(desc(missionsTable.startedAtMs), desc(missionsTable.id))
+      .all()
+      .map(({ mission: row, findingId }) => {
+        if (!isMissionProgressLabel(row.progressLabel)) {
+          throw new Error(`Mission ${row.id} has an unknown progress label ${row.progressLabel}`);
+        }
+        return {
+          id: row.id,
+          question: row.question,
+          state: row.state,
+          progressLabel: row.progressLabel,
+          readList: row.readList as MissionRead[],
+          findingId,
+          startedAt: new Date(row.startedAtMs),
+          endedAt: row.endedAtMs === null ? null : new Date(row.endedAtMs),
+        };
+      });
+  }
+
+  function getMission(customer: Customer, missionId: number): Mission | undefined {
+    return selectMissions(customer, missionId)[0];
+  }
+
+  function runningMission(customer: Customer, missionId: number): Mission {
+    const mission = getMission(customer, missionId);
+    if (!mission) throw new MissionError(`No Mission ${missionId} for this customer`);
+    if (mission.state !== "running") throw new MissionError(`Mission ${missionId} is ${mission.state}, not running`);
+    return mission;
+  }
+
   function recordDecision(customer: Customer, decision: NewDecision): Decision {
     if (decision.rule === null) {
-      if (decision.actor === "agent") throw new RuleNotFoundError("Every agent action uses one of the customer's Rules");
+      if (decision.actor === "agent" && decision.missionId === null) {
+        throw new RuleNotFoundError("Every agent action uses one of the customer's Rules, or reports on their Mission");
+      }
     } else if (!getRule(customer, decision.rule.id, decision.rule.version)) {
       throw new RuleNotFoundError(`No Rule ${decision.rule.id} version ${decision.rule.version} for this customer`);
+    }
+    if (decision.missionId !== null && !getMission(customer, decision.missionId)) {
+      throw new MissionError(`No Mission ${decision.missionId} for this customer`);
+    }
+    if (decision.findingId !== null && !getFinding(customer, decision.findingId)) {
+      throw new FindingError(`No Finding ${decision.findingId} for this customer`);
     }
     for (const accountId of [decision.fromAccountId, decision.toAccountId]) {
       if (accountId !== null && !getAccount(customer, accountId)) {
@@ -804,6 +880,8 @@ export function createCustomerData(deps: {
         why: decision.why,
         ledgerTransactionId: decision.ledgerTransactionId,
         reversesDecisionId: decision.reversesDecisionId,
+        missionId: decision.missionId,
+        findingId: decision.findingId,
       })
       .returning({ id: decisionsTable.id })
       .get();
@@ -941,6 +1019,41 @@ export function createCustomerData(deps: {
         .where(and(eq(findingsTable.customerId, customer.id), eq(findingsTable.id, findingId)))
         .run();
       return getFinding(customer, findingId) ?? finding;
+    },
+    createMission(customer, question, progressLabel) {
+      const row = db
+        .insert(missionsTable)
+        .values({
+          customerId: customer.id,
+          question,
+          state: "running",
+          progressLabel,
+          readList: [],
+          startedAtMs: clock.now().getTime(),
+        })
+        .returning({ id: missionsTable.id })
+        .get();
+      const created = getMission(customer, row.id);
+      if (!created) throw new Error(`Mission ${row.id} vanished after it was started`);
+      return created;
+    },
+    getMission,
+    listMissions: (customer) => selectMissions(customer),
+    recordMissionProgress(customer, missionId, progressLabel, read) {
+      const mission = runningMission(customer, missionId);
+      db.update(missionsTable)
+        .set({ progressLabel, readList: read ? [...mission.readList, read] : mission.readList })
+        .where(and(eq(missionsTable.customerId, customer.id), eq(missionsTable.id, missionId)))
+        .run();
+      return getMission(customer, missionId) ?? mission;
+    },
+    endMission(customer, missionId, state) {
+      const mission = runningMission(customer, missionId);
+      db.update(missionsTable)
+        .set({ state, endedAtMs: clock.now().getTime() })
+        .where(and(eq(missionsTable.customerId, customer.id), eq(missionsTable.id, missionId)))
+        .run();
+      return getMission(customer, missionId) ?? mission;
     },
     addPayroll(customer, payroll) {
       if (!getAccount(customer, payroll.accountId)) {
