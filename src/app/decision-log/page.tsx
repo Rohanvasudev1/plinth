@@ -1,23 +1,14 @@
 import Link from "next/link";
-import { DISPLAY_TIME_ZONE } from "@/app-clock";
 import { getAppBank } from "@/app-bank";
 import type { Decision } from "@/decisions";
 import { formatDollars } from "@/money";
 import { requireCustomer } from "@/session";
 import { NavBar } from "../nav-bar";
+import { entryTimeFormat } from "../time-format";
 import { WhyPanel } from "../why-panel";
 
 export const dynamic = "force-dynamic";
 
-const timeFormat = new Intl.DateTimeFormat("en-GB", {
-  weekday: "short",
-  day: "numeric",
-  month: "short",
-  hour: "numeric",
-  minute: "2-digit",
-  hour12: true,
-  timeZone: DISPLAY_TIME_ZONE,
-});
 
 function DecisionEntry({ decision }: { decision: Decision }) {
   const headingId = `decision-${decision.id}`;
@@ -29,7 +20,7 @@ function DecisionEntry({ decision }: { decision: Decision }) {
           <span className={`pill ${decision.result.toLowerCase()}`}>{decision.result}</span>
         </div>
         <p className="muted">
-          <time dateTime={decision.at.toISOString()}>{timeFormat.format(decision.at)}</time> ·{" "}
+          <time dateTime={decision.at.toISOString()}>{entryTimeFormat.format(decision.at)}</time> ·{" "}
           {decision.actor === "agent" ? "Your agent" : "You"}
           {decision.rule && (
             <>

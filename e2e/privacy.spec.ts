@@ -49,6 +49,7 @@ test("Alex, who hasn't finished setup, sees each Data choice as off with a link 
   await expect(choices).toContainText("Keep chat history");
   await expect(choices.getByRole("link", { name: "Set them in the Setup survey" })).toHaveAttribute("href", "/setup");
   await expect(page.getByRole("region", { name: "Access log" })).toContainText("Nothing has read your data yet.");
+  await expectNoHorizontalScroll(page);
 });
 
 test.describe("without JavaScript", () => {

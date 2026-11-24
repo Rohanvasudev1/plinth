@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createBank, type Bank } from "./bank";
 import { fixedClock } from "./clock";
 import type { Customer } from "./customer-data";
@@ -202,11 +202,36 @@ describe("Access log: Subscription price rises", () => {
     expect(accessLogOf(bank, sam)[0]?.what).toBe("Your Card purchases at Subscriptions Merchants");
   });
 
+  it("lists no Card purchases for a ledger transaction that isn't a Card purchase at a Subscriptions Merchant", () => {
+    const bank = bankAt(SAM_PAYDAY_9AM);
+    const sam = signInByName(bank, "Sam Calloway");
+    const reads = vi.spyOn(bank.customerData, "listLedgerTransactions");
+
+    buy(bank, sam, "green-basket-market", "card:test:1");
+    bank.postPaycheck();
+
+    expect(reads).not.toHaveBeenCalled();
+  });
+
+  it("reads no Card purchases while the switch is off, so nothing goes unlogged", () => {
+    const bank = openTestBank();
+    const sam = signInByName(bank, "Sam Calloway");
+    bank.setStandingSearch(sam, "subscription_price_rises", false);
+    const reads = vi.spyOn(bank.customerData, "listLedgerTransactions");
+
+    buy(bank, sam, "tunewell-streaming", "card:test:1");
+
+    expect(reads).not.toHaveBeenCalled();
+  });
+
   it("writes nothing for a customer who hasn't finished setup", () => {
     const bank = openTestBank();
     const alex = signInByName(bank, "Alex Okafor");
+    const reads = vi.spyOn(bank.customerData, "listLedgerTransactions");
 
     buy(bank, alex, "clipreel", "card:test:1");
+
+    expect(reads).not.toHaveBeenCalled();
 
     expect(accessLogOf(bank, alex)).toEqual([]);
   });

@@ -1,4 +1,5 @@
 import { STANDING_SEARCHES, type StandingSearch } from "./findings";
+import { DATA_CHOICE_KEYS } from "./settings";
 import type {
   AdviceSetting,
   AutonomyLevel,
@@ -76,9 +77,7 @@ export function settingsRows(choices: SettingsChoices): { label: string; value: 
     { label: "Advice setting", value: ADVICE_SETTING_TEXT[choices.adviceSetting] },
     { label: "If investments fell 20% in a month", value: MARKET_DROP_TEXT[choices.riskAnswers.marketDrop] },
     { label: "When you'll need invested money", value: TIME_HORIZON_TEXT[choices.riskAnswers.timeHorizon] },
-    { label: DATA_CHOICE_TEXT.trainModels, value: onOff(choices.dataChoices.trainModels) },
-    { label: DATA_CHOICE_TEXT.shareWithPartners, value: onOff(choices.dataChoices.shareWithPartners) },
-    { label: DATA_CHOICE_TEXT.keepChatHistory, value: onOff(choices.dataChoices.keepChatHistory) },
+    ...DATA_CHOICE_KEYS.map((choice) => ({ label: DATA_CHOICE_TEXT[choice], value: onOff(choices.dataChoices[choice]) })),
     { label: "Goals, in order", value: goalsText(choices.goalPreferences) },
     ...STANDING_SEARCHES.map((search) => ({
       label: STANDING_SEARCH_TEXT[search].name,

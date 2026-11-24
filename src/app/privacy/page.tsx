@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { DISPLAY_TIME_ZONE } from "@/app-clock";
 import { getAppBank } from "@/app-bank";
 import { ACCESS_READER_TEXT } from "@/access-log-text";
 import type { AccessLogEntry } from "@/bank";
@@ -7,19 +6,11 @@ import { DATA_CHOICE_KEYS, type DataChoice } from "@/settings";
 import { DATA_CHOICE_TEXT } from "@/settings-text";
 import { requireCustomer } from "@/session";
 import { NavBar } from "../nav-bar";
+import { entryTimeFormat } from "../time-format";
 import { DataChoiceSwitch } from "./privacy-forms";
 
 export const dynamic = "force-dynamic";
 
-const timeFormat = new Intl.DateTimeFormat("en-GB", {
-  weekday: "short",
-  day: "numeric",
-  month: "short",
-  hour: "numeric",
-  minute: "2-digit",
-  hour12: true,
-  timeZone: DISPLAY_TIME_ZONE,
-});
 
 /** A note on what a Data choice means today, where the card's intro doesn't say. */
 const DATA_CHOICE_DETAIL: Partial<Record<DataChoice, string>> = {
@@ -30,7 +21,7 @@ function AccessLogItem({ entry }: { entry: AccessLogEntry }) {
   return (
     <li className="access-entry">
       <p>
-        <strong>{ACCESS_READER_TEXT[entry.who]}</strong> · <time dateTime={entry.at.toISOString()}>{timeFormat.format(entry.at)}</time>
+        <strong>{ACCESS_READER_TEXT[entry.who]}</strong> · <time dateTime={entry.at.toISOString()}>{entryTimeFormat.format(entry.at)}</time>
       </p>
       <dl className="access-detail">
         <div>

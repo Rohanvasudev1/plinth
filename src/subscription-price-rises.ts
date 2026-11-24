@@ -47,11 +47,14 @@ export function startSubscriptionPriceRises(deps: SearchDeps & { ledgerEvents: L
     const customer = systemData.findCustomer(event.customerId);
     if (!customer) return;
     customerData.inOneTransaction(() => {
-      const purchases = subscriptionPurchases(deps, customer);
-      const index = purchases.findIndex((purchase) => purchase.transaction.id === event.ledgerTransactionId);
-      const purchase = purchases[index];
-      if (!purchase || !searchIsOn(deps, customer)) return;
+      // Nothing past the new transaction is read until the search may run on it, so every read it makes is logged.
+      if (!searchIsOn(deps, customer)) return;
+      const posted = customerData.getLedgerTransaction(customer, event.ledgerTransactionId);
+      const purchase = posted && subscriptionPurchase(deps, posted);
+      if (!purchase) return;
       customerData.recordAccess(customer, subscriptionPurchaseAccess(purchase.merchant));
+      const purchases = subscriptionPurchases(deps, customer);
+      const index = purchases.findIndex((each) => each.transaction.id === purchase.transaction.id);
       checkPurchase(deps, customer, purchase, purchases.slice(0, index));
     });
   });
@@ -126,10 +129,16 @@ function fact(label: string, value: string): FindingFact {
 
 /** The customer's Card purchases at Subscriptions Merchants, in the order they posted. */
 function subscriptionPurchases(deps: SearchDeps, customer: Customer): SubscriptionPurchase[] {
-  const merchantClearing = deps.systemData.ensureSystemAccount("merchant");
   return deps.customerData.listLedgerTransactions(customer).flatMap((transaction) => {
-    const paid = transaction.entries.find((entry) => entry.accountId === merchantClearing && entry.amount > 0);
-    if (!paid || transaction.category !== "Subscriptions" || transaction.counterparty === null) return [];
-    return [{ transaction, merchant: transaction.counterparty, amount: cents(paid.amount) }];
+    const purchase = subscriptionPurchase(deps, transaction);
+    return purchase ? [purchase] : [];
   });
+}
+
+/** The ledger transaction as a Card purchase at a Subscriptions Merchant, or undefined if it isn't one. */
+function subscriptionPurchase(deps: SearchDeps, transaction: LedgerTransaction): SubscriptionPurchase | undefined {
+  const merchantClearing = deps.systemData.ensureSystemAccount("merchant");
+  const paid = transaction.entries.find((entry) => entry.accountId === merchantClearing && entry.amount > 0);
+  if (!paid || transaction.category !== "Subscriptions" || transaction.counterparty === null) return undefined;
+  return { transaction, merchant: transaction.counterparty, amount: cents(paid.amount) };
 }
