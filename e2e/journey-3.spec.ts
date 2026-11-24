@@ -12,12 +12,13 @@ test("Journey 3: Sam checks the Forecast, tries the slider, and after payday fin
   await expect(page.getByRole("heading", { name: "Home" })).toBeVisible();
   const nav = page.getByRole("navigation", { name: "Main" });
 
-  // 2. On Forecast, the Usual month is May to October, and November is on pace to spend more.
+  // 2. On Forecast, November is on pace to spend more than the Usual month.
   await nav.getByRole("link", { name: "Forecast", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Forecast", level: 1 })).toBeVisible();
   await expect(page.getByRole("region", { name: "Comes in each month" })).toContainText("$7,020.00");
   await expect(page.getByRole("region", { name: "Usual spending" })).toContainText("$5,108.00");
   await expect(page.getByRole("region", { name: "November, on pace for" })).toContainText("$6,628.47");
+  await expect(page.getByRole("region", { name: "November, on pace for" })).toContainText("$1,520.47 more than usual");
   await expect(page.getByRole("region", { name: "Left to save" })).toContainText("$1,912.00 → $391.53");
 
   // 3. The slider starts at a 20% cut. Moving it to 50% changes the "with your changes" line of the Projection summary.
@@ -33,16 +34,17 @@ test("Journey 3: Sam checks the Forecast, tries the slider, and after payday fin
   await expect(page.getByRole("status")).toContainText("Posted your Acme Corp paycheck of $3,240.00 for 2026-11-20.");
 
   // 5. Activity lists the sweep with the Agent tag, then the paycheck as Income: newest first.
-  await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Activity", exact: true }).click();
+  await nav.getByRole("link", { name: "Activity", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Activity" })).toBeVisible();
   const rows = page.getByRole("table", { name: "Activity" }).getByRole("row");
   const sweep = rows.nth(1);
   const paycheck = rows.nth(2);
   await expect(sweep).toContainText("House fund");
+  await expect(sweep.getByText("Savings", { exact: true })).toBeVisible();
   await expect(sweep).toContainText("-$340.00");
   await expect(sweep.getByText("Agent", { exact: true })).toBeVisible();
   await expect(paycheck).toContainText("Acme Corp");
-  await expect(paycheck).toContainText("Income");
+  await expect(paycheck.getByText("Income", { exact: true })).toBeVisible();
   await expect(paycheck).toContainText("+$3,240.00");
   await expect(paycheck.getByText("Agent", { exact: true })).toHaveCount(0);
 
