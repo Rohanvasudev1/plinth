@@ -9,9 +9,8 @@ import {
   linkDecisionText,
   renewDecisionText,
   unlinkDecisionText,
-  type UnlinkReason,
 } from "./linked-account-text";
-import { consentFrom, hasConsentEnded, LinkedAccountError, type Consent, type LinkedAccount, type LinkedAccountId } from "./linked-accounts";
+import { consentFrom, hasConsentEnded, LinkedAccountError, type Consent, type LinkedAccount, type LinkedAccountId, type UnlinkReason } from "./linked-accounts";
 import { openBankingAdapter, type InstitutionAccount, type InstitutionAccountKey } from "./open-banking";
 
 // Linking, renewing, unlinking and syncing Linked accounts. Link, renew and unlink are customer changes, so they work

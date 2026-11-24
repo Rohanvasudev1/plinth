@@ -11,7 +11,7 @@ import {
 } from "./linked-account-changes";
 import type { LinkedAccount, LinkedAccountId } from "./linked-accounts";
 import type { InstitutionAccountKey } from "./open-banking";
-import { closeAccount, readClosureSummary, type ClosedAccount, type ClosureSummary } from "./closure";
+import { closeAndDelete, readClosureSummary, type ClosureOutcome, type ClosureSummary } from "./closure";
 import { readForecastPage, type ForecastPage } from "./forecast-page";
 import { startBufferAgent } from "./buffer-agent";
 import { localDateOf } from "./calendar";
@@ -65,7 +65,7 @@ export type { Mission } from "./missions";
 export type { AccessLogEntry, AccessReader } from "./access-log";
 export type { LinkableAccount } from "./linked-account-changes";
 export type { AllAccountsView, LinkedAccountOnPage, NetWorthFigures } from "./all-accounts";
-export type { ClosedAccount, ClosureSummary } from "./closure";
+export type { ClosureOutcome, ClosureSummary } from "./closure";
 
 export interface GoalProgress {
   target: Cents;
@@ -262,7 +262,7 @@ export interface Bank extends Simulator, RuleChanges {
    * Goal targets, keeps the Ledger, Decision log and access log, writes "Closed your Plinth account", and marks the
    * customer Closed. Works while the agent is paused. Throws ClosureError, changing nothing, if already Closed.
    */
-  closeAccount(customer: Customer): ClosedAccount;
+  closeAndDelete(customer: Customer): ClosureOutcome;
 }
 
 /**
@@ -347,7 +347,7 @@ export function createBank(deps: {
     },
     isClosed: (customer) => systemData.isClosed(customer),
     readClosureSummary: (customer) => readClosureSummary(closure, customer),
-    closeAccount: (customer) => closeAccount(closure, customer),
+    closeAndDelete: (customer) => closeAndDelete(closure, customer),
     billsBeforePayday,
     readForecast: forecastFor,
     readSettings: (customer) => customerData.getSettings(customer),

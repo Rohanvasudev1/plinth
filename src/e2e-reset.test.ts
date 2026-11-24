@@ -47,7 +47,7 @@ describe("replacing the app database restores the seed", () => {
 
   it("reopens a Closed customer with their seeded balances, so they can sign in again", () => {
     const before = getAppBank();
-    before.closeAccount(signInByName(before, "Alex Okafor"));
+    before.closeAndDelete(signInByName(before, "Alex Okafor"));
     expect(() => signInByName(before, "Alex Okafor")).toThrow("This account is closed");
 
     deleteAppDatabase();

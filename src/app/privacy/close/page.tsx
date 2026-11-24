@@ -3,7 +3,7 @@ import { getAppBank } from "@/app-bank";
 import { CLOSURE_DELETES, CLOSURE_KEEPS, payoutText } from "@/closure-text";
 import { requireCustomer } from "@/session";
 import { NavBar } from "../../nav-bar";
-import { closeAccountAction } from "./actions";
+import { closeAndDeleteAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -49,7 +49,7 @@ export default async function CloseAndDeletePage() {
         </ul>
       </section>
 
-      <form action={closeAccountAction} className="button-row">
+      <form action={closeAndDeleteAction} className="button-row">
         <button type="submit" className="button danger">
           Close and delete my account
         </button>

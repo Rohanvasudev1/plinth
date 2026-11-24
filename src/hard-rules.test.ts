@@ -63,7 +63,7 @@ const RECORDS_AN_ACTION = /customerData\.(recordDecision|createFinding|endMissio
  * Writing the entry itself, or calling `unlinkAccount`, which always writes one. Close and delete writes its own access
  * log entries through unlink.
  */
-const WRITES_ACCESS_LOG = /customerData\.recordAccess\(|\bunlinkAccount\(/;
+const WRITES_ACCESS_LOG = /customerData\.recordAccess\(|(?<!function )\bunlinkAccount\(/;
 const NO_ACCESS_LOG_NEEDED = [
   "settings-changes.ts",
   "goal-changes.ts",

@@ -29,29 +29,29 @@ export interface ClosureSummary {
   payout: Cents;
 }
 
-export interface ClosedAccount {
+/** What came of Close and delete: the amount paid out, and when the customer became Closed. */
+export interface ClosureOutcome {
   payout: Cents;
   closedAt: Date;
 }
 
-/** The entries that pay out each of the customer's Plinth accounts above zero to the account-closure clearing account. */
+/** The customer's Plinth accounts with a balance above zero, which Close and delete pays out. */
+function accountsToPayOut(customerData: CustomerData, customer: Customer) {
+  return customerData.listAccounts(customer).filter((account) => account.balance > 0);
+}
+
+/** The Close and delete confirmation's figures. Reads only. */
+export function readClosureSummary({ customerData }: Pick<ClosureDeps, "customerData">, customer: Customer): ClosureSummary {
+  return { payout: cents(accountsToPayOut(customerData, customer).reduce((sum, account) => sum + account.balance, 0)) };
+}
+
+/** One pair of entries per account, each paying its balance to the account-closure clearing account. */
 function payoutEntries({ customerData, systemData }: ClosureDeps, customer: Customer): LedgerEntryInput[] {
   const clearing = systemData.ensureSystemAccount("accountClosure");
-  return customerData
-    .listAccounts(customer)
-    .filter((account) => account.balance > 0)
-    .flatMap((account) => [
-      { accountId: account.id, amount: cents(-account.balance) },
-      { accountId: clearing, amount: account.balance },
-    ]);
-}
-
-function sumOfPayout(entries: LedgerEntryInput[]): Cents {
-  return cents(entries.reduce((sum, entry) => sum + (entry.amount < 0 ? -entry.amount : 0), 0));
-}
-
-export function readClosureSummary(deps: ClosureDeps, customer: Customer): ClosureSummary {
-  return { payout: sumOfPayout(payoutEntries(deps, customer)) };
+  return accountsToPayOut(customerData, customer).flatMap((account) => [
+    { accountId: account.id, amount: cents(-account.balance) },
+    { accountId: clearing, amount: account.balance },
+  ]);
 }
 
 /**
@@ -61,7 +61,7 @@ export function readClosureSummary(deps: ClosureDeps, customer: Customer): Closu
  * Goal targets; writes "Closed your Plinth account" with the payout; and marks the customer Closed. Throws
  * ClosureError, changing nothing, if they are already Closed.
  */
-export function closeAccount(deps: ClosureDeps, customer: Customer): ClosedAccount {
+export function closeAndDelete(deps: ClosureDeps, customer: Customer): ClosureOutcome {
   const { clock, customerData, systemData } = deps;
   return customerData.inOneTransaction(() => {
     if (systemData.isClosed(customer)) throw new ClosureError("This account is already closed");
@@ -71,8 +71,8 @@ export function closeAccount(deps: ClosureDeps, customer: Customer): ClosedAccou
     }
     customerData.expireLiveFindings(customer);
 
+    const { payout } = readClosureSummary(deps, customer);
     const entries = payoutEntries(deps, customer);
-    const payout = sumOfPayout(entries);
     const posted =
       entries.length === 0
         ? null

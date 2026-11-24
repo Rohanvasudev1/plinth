@@ -39,6 +39,9 @@ export interface LinkedAccount {
 
 export type NewLinkedAccount = Omit<LinkedAccount, "id" | "syncedAt">;
 
+/** Why a Linked account was unlinked: the customer pressed Unlink, or used Close and delete. */
+export type UnlinkReason = "unlink" | "close";
+
 export class LinkedAccountError extends Error {
   override name = "LinkedAccountError";
 }

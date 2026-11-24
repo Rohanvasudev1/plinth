@@ -41,6 +41,8 @@ export interface SystemData {
    */
   listOpenCustomers(): Customer[];
   findCustomer(customerId: number): Customer | undefined;
+  /** The customer with this id unless they are Closed. Agents and Standing searches look customers up this way. */
+  findOpenCustomer(customerId: number): Customer | undefined;
   createCustomer(name: string): Customer;
   /** Whether the customer used Close and delete. */
   isClosed(customer: Customer): boolean;
@@ -67,6 +69,13 @@ export function createSystemData(db: Database): SystemData {
     },
     findCustomer(customerId) {
       return db.select(customerColumns).from(customersTable).where(eq(customersTable.id, customerId)).get();
+    },
+    findOpenCustomer(customerId) {
+      return db
+        .select(customerColumns)
+        .from(customersTable)
+        .where(and(eq(customersTable.id, customerId), isNull(customersTable.closedAtMs)))
+        .get();
     },
     createCustomer(name) {
       return db.insert(customersTable).values({ name }).returning(customerColumns).get();

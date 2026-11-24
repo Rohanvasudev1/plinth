@@ -1,5 +1,5 @@
 import { formatLocalDateWithYear, type LocalDate } from "./calendar";
-import type { Consent, LinkedAccount } from "./linked-accounts";
+import type { Consent, LinkedAccount, UnlinkReason } from "./linked-accounts";
 import type { InstitutionAccount, LinkedAccountType } from "./open-banking";
 
 /** Each Linked account type in words, as All accounts, the Decision log and the access log show it. */
@@ -53,9 +53,6 @@ export function renewDecisionText(linked: LinkedAccount) {
     ],
   };
 }
-
-/** Why a Linked account was unlinked: the customer pressed Unlink, or closed their Plinth account. */
-export type UnlinkReason = "unlink" | "close";
 
 const UNLINK_TRIGGER_TEXT: Record<UnlinkReason, string> = {
   unlink: "You pressed Unlink on All accounts",

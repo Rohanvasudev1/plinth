@@ -1,9 +1,9 @@
 import { formatDollars, type Cents } from "./money";
 
-/** What Close and delete keeps as records, as the confirmation page and the Decision log list them. */
+/** What Close and delete keeps as records, as the confirmation page lists them. */
 export const CLOSURE_KEEPS = ["The Ledger", "The Decision log", "The access log"] as const;
 
-/** What Close and delete deletes, as the confirmation page and the Decision log list them. */
+/** What Close and delete deletes, as the confirmation page lists them. The Decision log entry says the same in a sentence. */
 export const CLOSURE_DELETES = ["Missions", "Findings", "Settings", "Goal targets", "Linked accounts"] as const;
 
 /** The payout's ledger transaction description. */

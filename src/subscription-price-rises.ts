@@ -44,9 +44,9 @@ export function startSubscriptionPriceRises(deps: SearchDeps & { ledgerEvents: L
   const { customerData, systemData, ledgerEvents } = deps;
   for (const customer of systemData.listOpenCustomers()) searchExistingPurchases(deps, customer);
   return ledgerEvents.subscribe((event) => {
-    const customer = systemData.findCustomer(event.customerId);
     // A Closed customer's Standing searches do nothing.
-    if (!customer || systemData.isClosed(customer)) return;
+    const customer = systemData.findOpenCustomer(event.customerId);
+    if (!customer) return;
     customerData.inOneTransaction(() => {
       // Nothing past the new transaction is read until the search may run on it, so every read it makes is logged.
       if (!searchIsOn(deps, customer)) return;

@@ -34,7 +34,7 @@ describe("Close and delete", () => {
     const sam = signInByName(bank, "Sam Calloway");
     expect(bank.readClosureSummary(sam).payout).toBe(12_627_00);
 
-    const closed = bank.closeAccount(sam);
+    const closed = bank.closeAndDelete(sam);
 
     expect(closed.payout).toBe(12_627_00);
     for (const account of bank.customerData.listAccounts(sam)) expect(account.balance).toBe(0);
@@ -58,7 +58,7 @@ describe("Close and delete", () => {
     expect(running).toBeDefined();
     expect(bank.readFindings(sam).map((finding) => finding.state)).toEqual(expect.arrayContaining(["open", "snoozed"]));
 
-    bank.closeAccount(sam);
+    bank.closeAndDelete(sam);
 
     expect(bank.customerData.listMissions(sam)).toEqual([]);
     expect(bank.readFindings(sam)).toEqual([]);
@@ -80,7 +80,7 @@ describe("Close and delete", () => {
     const rulesBefore = bank.customerData.listRules(sam);
     expect(logBefore.some((entry) => entry.missionId !== null && entry.findingId !== null)).toBe(true);
 
-    bank.closeAccount(sam);
+    bank.closeAndDelete(sam);
 
     expect(bank.customerData.listLedgerTransactions(sam).slice(0, ledgerBefore.length)).toEqual(ledgerBefore);
     expect(bank.customerData.listLedgerTransactions(sam)).toHaveLength(ledgerBefore.length + 1);
@@ -103,14 +103,14 @@ describe("Close and delete", () => {
     const bank = openTestBank();
     const sam = signInByName(bank, "Sam Calloway");
 
-    bank.closeAccount(sam);
+    bank.closeAndDelete(sam);
 
     const [latest] = bank.readDecisionLog(sam);
     expect(latest).toMatchObject({ actor: "customer", action: "Closed your Plinth account", amount: 12_627_00, result: "Done" });
     expect(latest?.why).toContainEqual({ label: "Payout", value: "$12,627.00 paid out to you" });
     const ledgerCount = bank.customerData.listLedgerTransactions(sam).length;
     const logCount = bank.readDecisionLog(sam).length;
-    expect(() => bank.closeAccount(sam)).toThrow(ClosureError);
+    expect(() => bank.closeAndDelete(sam)).toThrow(ClosureError);
     expect(bank.customerData.listLedgerTransactions(sam)).toHaveLength(ledgerCount);
     expect(bank.readDecisionLog(sam)).toHaveLength(logCount);
   });
@@ -119,7 +119,7 @@ describe("Close and delete", () => {
     const bank = openTestBank();
     const sam = signInByName(bank, "Sam Calloway");
 
-    bank.closeAccount(sam);
+    bank.closeAndDelete(sam);
 
     expect(bank.listCustomers().map((customer) => customer.name)).toContain("Sam Calloway");
     expect(bank.isClosed(sam)).toBe(true);
@@ -133,7 +133,7 @@ describe("Close and delete", () => {
     const accessBefore = bank.readPrivacy(alex).accessLog;
 
     expect(bank.readClosureSummary(alex).payout).toBe(400_00);
-    expect(bank.closeAccount(alex).payout).toBe(400_00);
+    expect(bank.closeAndDelete(alex).payout).toBe(400_00);
 
     expect(plinthTotal(bank, alex)).toBe(0);
     expect(bank.readPrivacy(alex).accessLog).toEqual(accessBefore);
@@ -145,7 +145,7 @@ describe("Close and delete", () => {
     const sam = signInByName(bank, "Sam Calloway");
     const [checking] = bank.customerData.listAccounts(sam);
     if (!checking) throw new Error("Sam has no checking account");
-    bank.closeAccount(sam);
+    bank.closeAndDelete(sam);
     const ledgerCount = bank.customerData.listLedgerTransactions(sam).length;
     const accessCount = bank.readPrivacy(sam).accessLog.length;
     const logCount = bank.readDecisionLog(sam).length;
@@ -169,7 +169,7 @@ describe("Close and delete", () => {
     const sam = signInByName(bank, "Sam Calloway");
     const [checking] = bank.customerData.listAccounts(sam);
     if (!checking) throw new Error("Sam has no checking account");
-    bank.closeAccount(sam);
+    bank.closeAndDelete(sam);
     const accessCount = bank.readPrivacy(sam).accessLog.length;
     const logCount = bank.readDecisionLog(sam).length;
 
@@ -215,7 +215,7 @@ describe("Close and delete", () => {
     expect(before.linked).toHaveLength(1);
     expect(before.findings.some((finding) => finding.missionId === priyasMission.id)).toBe(true);
 
-    bank.closeAccount(sam);
+    bank.closeAndDelete(sam);
 
     expect(bank.isClosed(priya)).toBe(false);
     expect(bank.signIn(priya.id)).toEqual(priya);
