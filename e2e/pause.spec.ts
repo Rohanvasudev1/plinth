@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { restoreSeed } from "./restore-seed";
+import { expectNoHorizontalScroll } from "./page-checks";
 
 test.use({ viewport: { width: 390, height: 844 } });
 
@@ -18,8 +19,7 @@ test("Sam pauses the agent, a paycheck is refused with Agent paused, and unpausi
   await page.getByRole("link", { name: "Home" }).click();
   const banner = page.getByRole("region", { name: "Your agent is paused" });
   await expect(banner).toBeVisible();
-  const overflows = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
-  expect(overflows).toBe(false);
+  await expectNoHorizontalScroll(page);
 
   // The clock starts on Thursday 19 November. Moving it to Friday 20 November posts Sam's paycheck.
   await page.getByRole("link", { name: "Simulator" }).click();

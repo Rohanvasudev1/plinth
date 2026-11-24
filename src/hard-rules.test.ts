@@ -40,7 +40,17 @@ const rules = [
     pattern: /customerData\.(reviseRule|createRule|saveSettings|savePause|setGoalTarget)\(/,
     allowed: ["rule-changes.ts", "settings-changes.ts", "goal-changes.ts", "pause.ts", "setup.ts", "seed.ts"],
   },
+  {
+    rule: "writes negative amounts with formatDollars, never a hand-typed minus sign (U+2212)",
+    pattern: /\u2212/,
+    allowed: [],
+  },
 ];
+
+const E2E = path.join(__dirname, "..", "e2e");
+const e2eSpecs = readdirSync(E2E)
+  .filter((name) => name.endsWith(".spec.ts"))
+  .map((name) => ({ name, text: readFileSync(path.join(E2E, name), "utf8") }));
 
 describe("hard rules", () => {
   for (const { rule, pattern, allowed } of rules) {
@@ -51,4 +61,8 @@ describe("hard rules", () => {
       expect(offenders).toEqual([]);
     });
   }
+
+  it("checks sideways scrolling in end-to-end tests only through expectNoHorizontalScroll in e2e/page-checks.ts", () => {
+    expect(e2eSpecs.filter((spec) => spec.text.includes("scrollWidth")).map((spec) => spec.name)).toEqual([]);
+  });
 });

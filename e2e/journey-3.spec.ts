@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { restoreSeed } from "./restore-seed";
+import { expectNoHorizontalScroll } from "./page-checks";
 
 test.use({ viewport: { width: 390, height: 844 } });
 
@@ -48,6 +49,5 @@ test("Journey 3: Sam checks the Forecast, tries the slider, and after payday fin
   await expect(paycheck).toContainText("+$3,240.00");
   await expect(paycheck.getByText("Agent", { exact: true })).toHaveCount(0);
 
-  const overflows = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
-  expect(overflows).toBe(false);
+  await expectNoHorizontalScroll(page);
 });

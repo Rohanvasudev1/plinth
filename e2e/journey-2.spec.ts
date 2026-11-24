@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { restoreSeed } from "./restore-seed";
 import { turnOnAgentAskingFirst } from "./setup-survey";
+import { expectNoHorizontalScroll } from "./page-checks";
 
 test.use({ viewport: { width: 390, height: 844 } });
 
@@ -43,8 +44,7 @@ test("Journey 2: Alex sets up the agent to ask first, picks Move on the sweep Fi
   const headings = await page.getByRole("heading", { level: 2 }).allTextContents();
   expect(headings[0]).toBe("$1,000.00 above your Buffer in Checking");
   await expect(page.getByRole("region", { name: "House fund", exact: true })).toContainText("$0.00");
-  const overflows = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
-  expect(overflows).toBe(false);
+  await expectNoHorizontalScroll(page);
   await finding.getByRole("button", { name: /Move \$1,000 to House fund/ }).click();
   await expect(finding).toContainText("You chose: Move $1,000 to House fund");
   await expect(page.getByRole("region", { name: "House fund", exact: true })).toContainText("$1,000.00");

@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { restoreSeed } from "./restore-seed";
+import { expectNoHorizontalScroll } from "./page-checks";
 
 test.use({ viewport: { width: 390, height: 844 } });
 
@@ -23,8 +24,7 @@ test("Priya edits her Rules on Agent & limits at phone width, and each change is
   const limitSwitch = rules.getByRole("switch", { name: "Payment limit Rule" });
   await expect(limitSwitch).toHaveAttribute("aria-checked", "true");
 
-  const overflows = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
-  expect(overflows).toBe(false);
+  await expectNoHorizontalScroll(page);
 
   // An out-of-range value is refused with a message and saves nothing.
   await saveAmount(page, "Payment limit", "10001");

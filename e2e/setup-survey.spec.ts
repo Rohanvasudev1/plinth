@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { restoreSeed } from "./restore-seed";
+import { expectNoHorizontalScroll } from "./page-checks";
 
 test.use({ viewport: { width: 390, height: 844 } });
 
@@ -8,18 +9,13 @@ async function signInAsAlex(page: Page): Promise<void> {
   await page.getByRole("button", { name: "Alex Okafor" }).click();
 }
 
-async function expectNoSideways(page: Page): Promise<void> {
-  const overflows = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
-  expect(overflows).toBe(false);
-}
-
 test("Alex answers the Setup survey on Home at phone width, and gets a Goal account per savings goal", async ({ page }) => {
   await restoreSeed(page);
   await signInAsAlex(page);
   const next = page.getByRole("button", { name: "Next", exact: true });
 
   await expect(page.getByText("Step 1 of 6")).toBeVisible();
-  await expectNoSideways(page);
+  await expectNoHorizontalScroll(page);
   await page.getByRole("checkbox", { name: /Travel/ }).check();
   await page.getByRole("checkbox", { name: /Buy a home/ }).check();
   await next.click();
@@ -54,7 +50,7 @@ test("Alex answers the Setup survey on Home at phone width, and gets a Goal acco
   await expect(summary).toContainText("Suggest everything and wait for my OK.");
   await expect(summary).toContainText("Never let checking fall below $1,000");
   await expect(summary).toContainText("My Payment limit is $250");
-  await expectNoSideways(page);
+  await expectNoHorizontalScroll(page);
   await page.getByRole("button", { name: "Turn on my agent" }).click();
 
   await expect(page.getByRole("heading", { name: "Home" })).toBeVisible();
