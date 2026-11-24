@@ -63,6 +63,7 @@ test("Journey 4: Sam sends a Mission, asks for the Agent's view, is reminded, ke
   await expectNoHorizontalScroll(page);
 
   await advanceClock(page, SEED_DATE, REMINDER_DATE);
+  await expectNoHorizontalScroll(page);
 
   await nav.getByRole("link", { name: /Discoveries/ }).click();
   await expect(finding.getByText("Open", { exact: true })).toBeVisible();
@@ -74,6 +75,7 @@ test("Journey 4: Sam sends a Mission, asks for the Agent's view, is reminded, ke
   await expect(reopened).toBeVisible();
   await reopened.getByText("Why?").click();
   await expect(reopened).toContainText("You asked to be reminded on Mon 1 Feb");
+  await expectNoHorizontalScroll(page);
 
   // 5. Sam keeps paying for Tunewell.
   await nav.getByRole("link", { name: /Discoveries/ }).click();
