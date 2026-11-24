@@ -3,7 +3,7 @@ import { SettingsError } from "./settings";
 import { openTestBank, signInByName } from "./test-bank";
 
 describe("settings record", () => {
-  it("is seeded for Sam at version 1: act within my rules, advice on request, every data choice off", () => {
+  it("is seeded for Sam at version 1: act within my rules, advice on request, every data choice off, Standing searches on", () => {
     const bank = openTestBank();
     const sam = signInByName(bank, "Sam Calloway");
 
@@ -14,6 +14,7 @@ describe("settings record", () => {
       riskAnswers: { marketDrop: "wait", timeHorizon: "over_10_years" },
       dataChoices: { trainModels: false, shareWithPartners: false, keepChatHistory: false },
       goalPreferences: ["buy_home"],
+      standingSearches: { subscription_price_rises: true },
       createdAt: new Date("2026-11-19T14:00:00Z"),
     });
   });

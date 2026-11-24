@@ -1,5 +1,5 @@
 import type { Customer, CustomerData } from "./customer-data";
-import type { Finding } from "./findings";
+import { STANDING_SEARCHES, type Finding, type StandingSearch } from "./findings";
 import type { AdviceSetting } from "./settings";
 
 /** A Finding's Agent's view as the page may show it: behind "What would the agent pick?", or always. */
@@ -17,6 +17,8 @@ export interface DiscoveriesPage {
   /** Every Finding the customer has, newest first. */
   findings: FindingOnPage[];
   openFindingCount: number;
+  /** Each Standing search and whether its switch is on. Empty before setup, when there are no switches yet. */
+  standingSearches: { search: StandingSearch; on: boolean }[];
 }
 
 /**
@@ -24,12 +26,18 @@ export interface DiscoveriesPage {
  * current Advice setting allows. Under "never", or before setup, no Agent's view text is in the page at all.
  */
 export function readDiscoveriesPage(customerData: CustomerData, customer: Customer): DiscoveriesPage {
-  const adviceSetting = customerData.getSettings(customer)?.adviceSetting ?? null;
+  const settings = customerData.getSettings(customer);
+  const adviceSetting = settings?.adviceSetting ?? null;
   const findings = customerData
     .listFindings(customer)
     .sort((a, b) => b.at.getTime() - a.at.getTime() || b.id - a.id)
     .map((finding) => ({ ...finding, agentsView: agentsViewOnPage(finding.agentsView, adviceSetting) }));
-  return { adviceSetting, findings, openFindingCount: countOpenFindings(findings) };
+  return {
+    adviceSetting,
+    findings,
+    openFindingCount: countOpenFindings(findings),
+    standingSearches: settings ? STANDING_SEARCHES.map((search) => ({ search, on: settings.standingSearches[search] })) : [],
+  };
 }
 
 /** How many of these Findings are open, for the nav bar's badge and Home's link card. */

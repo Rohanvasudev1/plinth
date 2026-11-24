@@ -67,3 +67,24 @@ export function reopenedFindingWhy(finding: Pick<Finding, "title">, date: LocalD
 export function expiredReason(finding: Pick<Finding, "kind">): string {
   return finding.kind === "sweep" ? "A newer paycheck changed the numbers" : "Newer facts or your settings closed it";
 }
+
+/** The Source of every fact in a Subscription price rise Finding. */
+export const CARD_CHARGES_SOURCE = "From your card charges";
+
+/** What a Subscription price rise Finding can't know, stated as one of its facts. */
+export const PAY_NOT_USE = "Plinth can see what you pay, not whether you use it";
+
+/** A charge for a Subscription price rise Finding's facts, such as "$18.00 on Thu 15 Oct". */
+export function chargeText(amount: Cents, date: LocalDate): string {
+  return `${formatDollars(amount)} on ${formatLocalDate(date)}`;
+}
+
+/** A Subscription price rise Finding's title when the price went up. */
+export function priceRiseTitle(merchant: string, before: Cents, now: Cents): string {
+  return `${merchant} went up from ${formatDollars(before)} to ${formatDollars(now)}`;
+}
+
+/** A Subscription price rise Finding's title when a free trial turned paid. */
+export function trialTurnedPaidTitle(merchant: string, price: Cents): string {
+  return `Your ${merchant} free trial turned paid at ${formatDollars(price)}`;
+}

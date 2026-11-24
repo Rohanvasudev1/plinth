@@ -2,8 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { getAppBank } from "@/app-bank";
-import { isFindingOptionKey } from "@/findings";
+import { isFindingOptionKey, isStandingSearch } from "@/findings";
 import { requireCustomer } from "@/session";
+import { SettingsError } from "@/settings";
 
 /** What the last Undo press did, shown under the button when it was refused. */
 export interface UndoResult {
@@ -27,6 +28,34 @@ export async function markAgentActionsSeen(decisionIds: number[]): Promise<void>
   const customer = await requireCustomer();
   const ids = Array.isArray(decisionIds) ? decisionIds.filter((id) => Number.isSafeInteger(id)) : [];
   getAppBank().markAgentActionsSeen(customer, ids);
+}
+
+/** What the last Standing search switch press did, shown under it when it was refused. */
+export interface StandingSearchResult {
+  ok: boolean;
+  message: string;
+}
+
+/**
+ * Switches one of the signed-in customer's Standing searches to the state the form asks for: from its switch on
+ * Discoveries, or from "Stop looking" on a Finding it made.
+ */
+export async function setStandingSearchAction(
+  _previous: StandingSearchResult | null,
+  form: FormData,
+): Promise<StandingSearchResult> {
+  const customer = await requireCustomer();
+  const search = String(form.get("search") ?? "");
+  if (!isStandingSearch(search)) return { ok: false, message: "There is no such Standing search." };
+  const on = form.get("on") === "true";
+  try {
+    getAppBank().setStandingSearch(customer, search, on);
+  } catch (error) {
+    if (error instanceof SettingsError) return { ok: false, message: error.message };
+    throw error;
+  }
+  revalidatePath("/", "layout");
+  return { ok: true, message: on ? "Switched on." : "Switched off." };
 }
 
 /**

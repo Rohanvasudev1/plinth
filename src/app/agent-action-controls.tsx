@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useState } from "react";
-import { chooseOptionAction, markAgentActionsSeen, undoAction } from "./agent-actions";
+import { chooseOptionAction, markAgentActionsSeen, setStandingSearchAction, undoAction } from "./agent-actions";
 
 /** The Undo button on one agent action. A refusal shows its reason under the button. */
 export function UndoButton({ decisionId, action }: { decisionId: number; action: string }) {
@@ -46,6 +46,44 @@ export function AgentActionsToast({ actions }: { actions: { id: number; text: st
         ×
       </button>
     </div>
+  );
+}
+
+/** The on/off switch for one Standing search. Pressing it asks for the opposite of the state the page showed. */
+export function StandingSearchSwitch({ search, on, label }: { search: string; on: boolean; label: string }) {
+  const [result, formAction, pending] = useActionState(setStandingSearchAction, null);
+  return (
+    <form action={formAction} className="rule-switch">
+      <input type="hidden" name="search" value={search} />
+      <input type="hidden" name="on" value={String(!on)} />
+      <button type="submit" className="switch" role="switch" aria-checked={on} aria-label={label} disabled={pending}>
+        <span aria-hidden="true">{on ? "On" : "Off"}</span>
+      </button>
+      {result && !result.ok && (
+        <p role="alert" className="result refused">
+          {result.message}
+        </p>
+      )}
+    </form>
+  );
+}
+
+/** "Stop looking" on a Finding a Standing search made: switches that Standing search off. */
+export function StopLookingButton({ search, label }: { search: string; label: string }) {
+  const [result, formAction, pending] = useActionState(setStandingSearchAction, null);
+  return (
+    <form action={formAction}>
+      <input type="hidden" name="search" value={search} />
+      <input type="hidden" name="on" value="false" />
+      <button type="submit" className="link-button" disabled={pending}>
+        {label}
+      </button>
+      {result && !result.ok && (
+        <p role="alert" className="result refused">
+          {result.message}
+        </p>
+      )}
+    </form>
   );
 }
 

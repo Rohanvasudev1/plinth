@@ -17,6 +17,10 @@ export type FindingKind = (typeof FINDING_KINDS)[number];
 export const STANDING_SEARCHES = ["subscription_price_rises"] as const;
 export type StandingSearch = (typeof STANDING_SEARCHES)[number];
 
+export function isStandingSearch(search: string): search is StandingSearch {
+  return (STANDING_SEARCHES as readonly string[]).includes(search);
+}
+
 /** One fact in a Finding, with its Source: where it came from, such as "From your card charges". */
 export interface FindingFact extends WhyRow {
   source: string;
@@ -98,6 +102,11 @@ export interface Finding {
   missionId: number | null;
   /** The Standing search that made the Finding, on a Standing search Finding. */
   standingSearch: StandingSearch | null;
+  /**
+   * The Merchant and new price a Subscription price rise Finding is about. A customer has at most one Finding per
+   * Merchant and price. Null on every other kind.
+   */
+  subscriptionPrice: { merchant: string; price: Cents } | null;
   /** The date a snoozed Finding opens again. Null unless the Finding is snoozed. */
   snoozedUntil: LocalDate | null;
   /** The Option the customer picked. Null unless the Finding is chosen. */
@@ -107,7 +116,9 @@ export interface Finding {
 }
 
 export type NewFinding = Pick<Finding, "kind" | "title" | "facts" | "options"> &
-  Partial<Pick<Finding, "ledgerEventId" | "rule" | "agentsView" | "report" | "missionId" | "standingSearch">>;
+  Partial<
+    Pick<Finding, "ledgerEventId" | "rule" | "agentsView" | "report" | "missionId" | "standingSearch" | "subscriptionPrice">
+  >;
 
 /** The Finding isn't the customer's, or can't take the Option asked for. */
 export class FindingError extends Error {
