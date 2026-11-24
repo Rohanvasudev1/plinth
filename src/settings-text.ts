@@ -2,7 +2,7 @@ import { STANDING_SEARCHES, type StandingSearch } from "./findings";
 import type {
   AdviceSetting,
   AutonomyLevel,
-  DataChoices,
+  DataChoice,
   GoalPreference,
   MarketDropAnswer,
   SettingsChoices,
@@ -12,7 +12,7 @@ import type {
 // Display text for the settings record's choices, shared by the Decision log, the Setup survey and its summary.
 
 /** Each Data choice's name, as the Decision log and Privacy show it. */
-export const DATA_CHOICE_TEXT: Record<keyof DataChoices, string> = {
+export const DATA_CHOICE_TEXT: Record<DataChoice, string> = {
   trainModels: "Train models on my data",
   shareWithPartners: "Share my data with partners",
   keepChatHistory: "Keep chat history",

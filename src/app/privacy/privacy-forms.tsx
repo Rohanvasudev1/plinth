@@ -1,10 +1,11 @@
 "use client";
 
 import { useActionState } from "react";
+import type { DataChoice } from "@/settings";
 import { setDataChoiceAction } from "./actions";
 
 /** The on/off switch for one Data choice. Pressing it asks for the opposite of the state the page showed. */
-export function DataChoiceSwitch({ choice, on, label }: { choice: string; on: boolean; label: string }) {
+export function DataChoiceSwitch({ choice, on, label }: { choice: DataChoice; on: boolean; label: string }) {
   const [result, action, pending] = useActionState(setDataChoiceAction, null);
   return (
     <form action={action} className="rule-switch">

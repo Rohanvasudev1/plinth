@@ -2,20 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { getAppBank } from "@/app-bank";
-import type { DataChoices } from "@/settings";
-import { SettingsError } from "@/settings";
+import { isDataChoice, SettingsError } from "@/settings";
 import { requireCustomer } from "@/session";
 
 /** What the last Data choice switch did, shown under it when it changed nothing. */
 export interface DataChoiceResult {
   ok: boolean;
   message: string;
-}
-
-const DATA_CHOICES: (keyof DataChoices)[] = ["trainModels", "shareWithPartners", "keepChatHistory"];
-
-function isDataChoice(value: string): value is keyof DataChoices {
-  return (DATA_CHOICES as string[]).includes(value);
 }
 
 /** Turns one of the signed-in customer's Data choices to the state the switch was pressed toward. */

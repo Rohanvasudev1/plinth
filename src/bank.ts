@@ -29,7 +29,7 @@ import { bufferRuleFor } from "./rules";
 import { createRuleChanges, type RuleChanges } from "./rule-changes";
 import { setAgentPaused } from "./pause";
 import { seedDemoData } from "./seed";
-import type { DataChoices, Settings } from "./settings";
+import type { DataChoice, DataChoices, Settings } from "./settings";
 import { changeSettings, setDataChoice, type SettingsChange } from "./settings-changes";
 import { applySetup, readSetupAnswers } from "./setup";
 import { STANDARD_SETUP, type SetupAnswers } from "./setup-answers";
@@ -206,7 +206,7 @@ export interface Bank extends Simulator, RuleChanges {
    * Turns one of the customer's Data choices on or off, writing the next settings version and a Decision log entry.
    * Asking for the state it is already in changes nothing. Throws SettingsError, saving nothing, before setup.
    */
-  setDataChoice(customer: Customer, choice: keyof DataChoices, on: boolean): Settings;
+  setDataChoice(customer: Customer, choice: DataChoice, on: boolean): Settings;
 }
 
 /**

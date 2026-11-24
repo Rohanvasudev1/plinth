@@ -1,6 +1,6 @@
 import type { Customer, CustomerData } from "./customer-data";
 import { customerChangeDecision, type WhyRow } from "./decisions";
-import { SettingsError, type DataChoices, type Settings, type SettingsChoices } from "./settings";
+import { SettingsError, type DataChoice, type Settings, type SettingsChoices } from "./settings";
 import { settingsRows } from "./settings-text";
 
 /** A change to some of a settings record's choices. Whatever is left out stays as it is. */
@@ -45,7 +45,7 @@ export function changeSettings(customerData: CustomerData, customer: Customer, c
  * and a Decision log entry in one transaction. Asking for the state it is already in changes nothing. Throws
  * SettingsError, saving nothing, before setup.
  */
-export function setDataChoice(customerData: CustomerData, customer: Customer, choice: keyof DataChoices, on: boolean): Settings {
+export function setDataChoice(customerData: CustomerData, customer: Customer, choice: DataChoice, on: boolean): Settings {
   return customerData.inOneTransaction(() => {
     const current = customerData.getSettings(customer);
     if (!current) throw new SettingsError("This customer hasn't finished setup, so there are no Data choices to change");

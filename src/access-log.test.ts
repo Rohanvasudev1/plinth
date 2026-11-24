@@ -37,7 +37,7 @@ describe("Access log: the buffer agent's sweep check", () => {
 
     const log = accessLogOf(bank, sam);
     expect(log).toHaveLength(before + 1);
-    expect(log[0]).toMatchObject({ who: "Your agent", at: SAM_PAYDAY_9AM });
+    expect(log[0]).toMatchObject({ who: "agent", at: SAM_PAYDAY_9AM });
     expect(log[0]?.what).toBe("Your checking and savings balances, bills before payday and buffer Rule");
     expect(log[0]?.why).toContain("$3,240.00 from Acme Corp");
     expect(bank.readDecisionLog(sam)[0]?.result).toBe("Done");
@@ -52,7 +52,7 @@ describe("Access log: the buffer agent's sweep check", () => {
     bank.postPaycheck();
 
     expect(accessLogOf(bank, sam)).toHaveLength(before + 1);
-    expect(accessLogOf(bank, sam)[0]?.who).toBe("Your agent");
+    expect(accessLogOf(bank, sam)[0]?.who).toBe("agent");
     expect(bank.readDecisionLog(sam)[0]).toMatchObject({ result: "Refused", refusedBy: "agent_paused" });
   });
 
@@ -99,10 +99,17 @@ describe("Access log: the buffer agent's sweep check", () => {
     // Sam is paid on 20 Nov and Priya on 25 Nov.
     for (let day = 0; day < 6; day += 1) bank.advanceClock();
 
-    const samChecks = accessLogOf(bank, sam).filter((entry) => entry.why.includes("paycheck"));
-    const priyaChecks = accessLogOf(bank, priya).filter((entry) => entry.why.includes("paycheck"));
-    expect(samChecks.map((entry) => entry.why)).toEqual([expect.stringContaining("$3,240.00 from Acme Corp")]);
-    expect(priyaChecks.map((entry) => entry.why)).toEqual([expect.stringContaining("$2,480.00 from Acme Corp")]);
+    // Each log holds the bank start's scan of existing purchases, then only that customer's own paycheck check.
+    const scan = "Your Card purchases at Subscriptions Merchants";
+    const paycheckCheck = "Your checking and savings balances, bills before payday and buffer Rule";
+    expect(accessLogOf(bank, sam).map((entry) => [entry.what, entry.why.match(/\$[\d,.]+ from Acme Corp/)?.[0]])).toEqual([
+      [paycheckCheck, "$3,240.00 from Acme Corp"],
+      [scan, undefined],
+    ]);
+    expect(accessLogOf(bank, priya).map((entry) => [entry.what, entry.why.match(/\$[\d,.]+ from Acme Corp/)?.[0]])).toEqual([
+      [paycheckCheck, "$2,480.00 from Acme Corp"],
+      [scan, undefined],
+    ]);
   });
 });
 
@@ -117,7 +124,7 @@ describe("Access log: Missions", () => {
     expect(finished.state).toBe("reported");
     const log = accessLogOf(bank, sam);
     expect(log).toHaveLength(before + 1);
-    expect(log[0]?.who).toBe("Your agent");
+    expect(log[0]?.who).toBe("agent");
     expect(log[0]?.what).toBe(
       "Fri 21 Aug to Thu 19 Nov; Usual month and On pace; Goals; 3-year Projection; 30 days from Thu 19 Nov; Scheduled bills",
     );
@@ -146,7 +153,7 @@ describe("Access log: Missions", () => {
     bank.stopMission(sam, mission.id);
 
     expect(accessLogOf(bank, sam)).toHaveLength(before + 1);
-    expect(accessLogOf(bank, sam)[0]).toMatchObject({ who: "Your agent", what: "Nothing" });
+    expect(accessLogOf(bank, sam)[0]).toMatchObject({ who: "agent", what: "Nothing" });
   });
 });
 
@@ -162,7 +169,7 @@ describe("Access log: Subscription price rises", () => {
 
     for (const name of ["Sam Calloway", "Priya Natarajan"]) {
       expect(accessLogOf(bank, signInByName(bank, name))).toMatchObject([
-        { who: "Your agent", what: "Your Card purchases at Subscriptions Merchants" },
+        { who: "agent", what: "Your Card purchases at Subscriptions Merchants" },
       ]);
     }
     expect(accessLogOf(bank, signInByName(bank, "Alex Okafor"))).toEqual([]);
@@ -178,7 +185,7 @@ describe("Access log: Subscription price rises", () => {
 
     buy(bank, sam, "tunewell-streaming", "card:test:2");
     expect(accessLogOf(bank, sam)).toHaveLength(before + 1);
-    expect(accessLogOf(bank, sam)[0]).toMatchObject({ who: "Your agent", what: "Your Card purchases at Tunewell Streaming" });
+    expect(accessLogOf(bank, sam)[0]).toMatchObject({ who: "agent", what: "Your Card purchases at Tunewell Streaming" });
   });
 
   it("writes nothing while the switch is off, and one entry for the scan when it is switched back on", () => {

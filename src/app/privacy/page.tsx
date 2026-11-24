@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { DISPLAY_TIME_ZONE } from "@/app-clock";
 import { getAppBank } from "@/app-bank";
+import { ACCESS_READER_TEXT } from "@/access-log-text";
 import type { AccessLogEntry } from "@/bank";
-import type { DataChoices } from "@/settings";
+import { DATA_CHOICE_KEYS, type DataChoice } from "@/settings";
 import { DATA_CHOICE_TEXT } from "@/settings-text";
 import { requireCustomer } from "@/session";
 import { NavBar } from "../nav-bar";
@@ -20,18 +21,16 @@ const timeFormat = new Intl.DateTimeFormat("en-GB", {
   timeZone: DISPLAY_TIME_ZONE,
 });
 
-/** Each Data choice in the order Privacy lists them, with a note on what it means today where the card's intro doesn't say. */
-const DATA_CHOICES: { choice: keyof DataChoices; detail?: string }[] = [
-  { choice: "trainModels" },
-  { choice: "shareWithPartners" },
-  { choice: "keepChatHistory", detail: "Applies once Ask Plinth exists. There is no chat to keep yet." },
-];
+/** A note on what a Data choice means today, where the card's intro doesn't say. */
+const DATA_CHOICE_DETAIL: Partial<Record<DataChoice, string>> = {
+  keepChatHistory: "Applies once Ask Plinth exists. There is no chat to keep yet.",
+};
 
 function AccessLogItem({ entry }: { entry: AccessLogEntry }) {
   return (
     <li className="access-entry">
       <p>
-        <strong>{entry.who}</strong> · <time dateTime={entry.at.toISOString()}>{timeFormat.format(entry.at)}</time>
+        <strong>{ACCESS_READER_TEXT[entry.who]}</strong> · <time dateTime={entry.at.toISOString()}>{timeFormat.format(entry.at)}</time>
       </p>
       <dl className="access-detail">
         <div>
@@ -68,11 +67,11 @@ export default async function PrivacyPage() {
           allow. Each change is kept in the Decision log.
         </p>
         <ul className="rules">
-          {DATA_CHOICES.map(({ choice, detail }) => (
+          {DATA_CHOICE_KEYS.map((choice) => (
             <li key={choice} className="rule">
               <div>
                 <b>{DATA_CHOICE_TEXT[choice]}</b>
-                {detail && <p className="muted">{detail}</p>}
+                {DATA_CHOICE_DETAIL[choice] && <p className="muted">{DATA_CHOICE_DETAIL[choice]}</p>}
               </div>
               {dataChoices ? (
                 <DataChoiceSwitch choice={choice} on={dataChoices[choice]} label={DATA_CHOICE_TEXT[choice]} />
