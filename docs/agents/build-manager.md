@@ -60,4 +60,8 @@ Follow `.claude/skills/unslop/SKILL.md` in everything you write.
   - An end-to-end test without `restoreSeed`.
 - A review decision can replace a figure in the spec, as $7,020 replaced the $6,480 Usual month income in milestone 3. Record it on the spec, and leave the new figures on every later ticket that checks them, the journey test above all.
 - Spell out the isolation test in the spec: both customers act, and each one's view holds only their own figures.
+- Before publishing a spec, check each rule in it against the decisions recorded on earlier specs and in this log. In milestone 4 the spec said Pause refuses a Move the customer picked, which contradicted the #31 decision. An implementer caught it, and the spec had to be corrected mid-build.
+- Use the two sub-agent reviews, Standards and Spec, for any diff over about 1,000 lines, even when every test passes. In milestone 4 they found a reused tool call id and a check that rejected every digit. The tests missed both.
+- Implementers ask questions by `send_message` while they work. Answer them at once, and record the answer on the spec if it is a decision.
+- drizzle-kit can generate a table-rebuild `INSERT ... SELECT` that copies columns the old table doesn't have yet. Tell parallel tickets which migration number each will take, and to check the generated SQL by hand.
 - Decision log entries and Findings store their text when written. That is allowed, so don't send it back.

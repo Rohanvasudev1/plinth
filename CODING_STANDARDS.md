@@ -23,4 +23,5 @@ The reviewer applies these during `/code-review`. The hard rules in `CLAUDE.md` 
 
 - Each end-to-end test sets up the state it needs and doesn't depend on another test running first.
 - A test that one customer can't see another's data gives both customers data of their own, then reads each customer's view and checks it holds only their own figures. Checking that one customer's view doesn't change when the other acts is not enough.
+- A migration that rebuilds a table which may already hold rows, or fills a new column from existing data, comes with a test. The test applies it to a database migrated to the previous migration and holding at least one such row, then checks the row after. Running migrations on an empty database only proves the SQL parses.
 - An idempotency key names everything that makes the movement unique for that customer: `payroll:<employer>:<pay date>`, `bill:<bill id>:<due date>`, `sweep:<ledger event id>`, `finding:<finding id>`, `undo:<decision id>`.
