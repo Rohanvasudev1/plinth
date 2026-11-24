@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { restoreSeed } from "./restore-seed";
+import { turnOnAgentAskingFirst } from "./setup-survey";
 
 test.use({ viewport: { width: 390, height: 844 } });
 
@@ -26,18 +27,9 @@ test("Journey 2: Alex sets up the agent to ask first, picks Move on the sweep Fi
   // 1. Alex signs in and completes the survey with Ask me before everything and Buy a home as the only goal.
   await page.goto("/sign-in");
   await page.getByRole("button", { name: "Alex Okafor" }).click();
-  const next = page.getByRole("button", { name: "Next", exact: true });
   await expect(page.getByText("Step 1 of 6")).toBeVisible();
   await page.getByRole("checkbox", { name: /Buy a home/ }).check();
-  await next.click();
-  await page.getByRole("radio", { name: /Ask me before everything/ }).check();
-  for (let step = 1; step < 6; step++) await next.click();
-  const summary = page.getByRole("list", { name: "Summary" });
-  await expect(summary).toContainText("Put spare money toward: Buy a home.");
-  await expect(summary).toContainText("Suggest everything and wait for my OK.");
-  await expect(summary).toContainText("Never let checking fall below $1,500");
-  await page.getByRole("button", { name: "Turn on my agent" }).click();
-  await expect(page.getByRole("heading", { name: "Home" })).toBeVisible();
+  await turnOnAgentAskingFirst(page);
   await expect(page.getByRole("region", { name: "House fund", exact: true })).toContainText("$0.00");
 
   // 2. Advance the clock from Thursday 19 Nov to Friday 27 Nov, Alex's first payday.

@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { restoreSeed } from "./restore-seed";
+import { turnOnAgentAskingFirst } from "./setup-survey";
 
 test.use({ viewport: { width: 390, height: 844 } });
 
@@ -9,13 +10,7 @@ async function signInAsSamAskingFirst(page: Page): Promise<void> {
   await page.getByRole("button", { name: "Sam Calloway" }).click();
   await page.getByRole("link", { name: "Agent & limits" }).click();
   await page.getByRole("link", { name: "Run setup again" }).click();
-  const next = page.getByRole("button", { name: "Next", exact: true });
-  await next.click();
-  await page.getByRole("radio", { name: /Ask me before everything/ }).check();
-  for (let step = 1; step < 6; step++) await next.click();
-  await expect(page.getByRole("list", { name: "Summary" })).toContainText("Suggest everything and wait for my OK.");
-  await page.getByRole("button", { name: "Turn on my agent" }).click();
-  await expect(page.getByRole("heading", { name: "Home" })).toBeVisible();
+  await turnOnAgentAskingFirst(page);
 }
 
 test("with Ask me before everything, Sam's sweep becomes a Finding on Home, and picking Move sweeps", async ({ page }) => {

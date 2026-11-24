@@ -5,6 +5,7 @@ import { fixedClock } from "./clock";
 import type { Customer } from "./customer-data";
 import { openTestDatabase } from "./db/database";
 import { cents } from "./money";
+import { STANDARD_SETUP } from "./setup-answers";
 import { agentEntriesIn, openTestBank, signInByName } from "./test-bank";
 
 /** Friday 20 November 2026, 9am in New York: Acme Corp's first payday, when Sam's sweep would be $340. */
@@ -252,22 +253,29 @@ describe("Sweep Findings over time", () => {
   it("Alex can't see Sam's Findings, settings or Rules", () => {
     const { bank, sam, findingId } = samAskedAboutSweep();
     const alex = signInByName(bank, "Alex Okafor");
-    const samsRuleIds = bank.customerData.listRules(sam).map((rule) => rule.id);
+    bank.finishSetup(alex, { ...STANDARD_SETUP, goalPreferences: ["travel"], autonomyLevel: "within_rules" });
+    const [samsBuffer] = bank.customerData.listRules(sam);
+    if (!samsBuffer) throw new Error("Sam's buffer Rule is missing");
 
-    // Alex hasn't finished setup, so Alex has no settings and no Rules of their own to see.
     expect(bank.readFindings(alex)).toEqual([]);
-    expect(bank.readSettings(alex)).toBeUndefined();
-    expect(bank.customerData.listRules(alex)).toEqual([]);
-    for (const ruleId of samsRuleIds) expect(bank.customerData.getRule(alex, ruleId)).toBeUndefined();
     expect(bank.chooseOption(alex, findingId, "move")).toEqual({
       ok: false,
       reason: "There is no such Finding.",
       finding: undefined,
     });
+    // Alex sees Alex's own settings and Rules, never Sam's.
+    expect(bank.readSettings(alex)).toMatchObject({ autonomyLevel: "within_rules", goalPreferences: ["travel"] });
+    const samsRuleIds = bank.customerData.listRules(sam).map((rule) => rule.id);
+    const alexsRules = bank.customerData.listRules(alex);
+    expect(alexsRules.map((rule) => rule.kind)).toEqual(["buffer", "payment_limit"]);
+    for (const rule of alexsRules) expect(samsRuleIds).not.toContain(rule.id);
+    expect(bank.customerData.getRule(alex, samsBuffer.id)).toBeUndefined();
+    expect(() => bank.setBuffer(alex, samsBuffer.id, cents(0))).toThrow();
 
     expect(balancesOf(bank, sam)).toEqual({ checking: 3_467_00, savings: 12_400_00 });
     expect(bank.readFindings(sam)).toEqual([expect.objectContaining({ state: "open" })]);
-    expect(bank.readSettings(sam)).toMatchObject({ autonomyLevel: "ask_first" });
+    expect(bank.readSettings(sam)).toMatchObject({ autonomyLevel: "ask_first", goalPreferences: ["buy_home"] });
+    expect(bank.customerData.getRule(sam, samsBuffer.id)?.parameters).toMatchObject({ buffer: 1_500_00 });
   });
 
   it("Home shows open Findings first, then chosen and expired ones", () => {
