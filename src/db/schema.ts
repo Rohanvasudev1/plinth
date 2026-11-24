@@ -1,4 +1,5 @@
 import { sql } from "drizzle-orm";
+import { FINDING_KINDS, FINDING_STATES } from "../findings";
 import { check, index, integer, sqliteTable, text, uniqueIndex, type AnySQLiteColumn } from "drizzle-orm/sqlite-core";
 
 /** The app's simulated time. It holds at most one row, with id 1. */
@@ -267,4 +268,44 @@ export const pauseChangesTable = sqliteTable(
     createdAtMs: integer("created_at_ms").notNull(),
   },
   (table) => [index("pause_changes_customer_id").on(table.customerId)],
+);
+
+/**
+ * A Finding: facts the agent reports to a customer with Options, where nothing happens until the customer picks
+ * one. `facts` is a JSON array of label and value pairs, and `options` a JSON array of typed Options whose amounts
+ * are fixed when the Finding is made. `state` moves from open to chosen or expired, never back. A refused pick
+ * leaves it open and records the guardrail and reason, so the customer can see why nothing moved.
+ */
+export const findingsTable = sqliteTable(
+  "findings",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    customerId: integer("customer_id")
+      .notNull()
+      .references(() => customersTable.id),
+    kind: text("kind", { enum: FINDING_KINDS }).notNull(),
+    createdAtMs: integer("created_at_ms").notNull(),
+    /** The ledger event that caused the Finding, such as the paycheck behind a sweep Finding. */
+    ledgerEventId: integer("ledger_event_id")
+      .notNull()
+      .references(() => ledgerEventsTable.id),
+    ruleId: integer("rule_id")
+      .notNull()
+      .references(() => rulesTable.id),
+    ruleVersion: integer("rule_version").notNull(),
+    facts: text("facts", { mode: "json" }).notNull(),
+    options: text("options", { mode: "json" }).notNull(),
+    state: text("state", { enum: FINDING_STATES }).notNull(),
+    /** The key of the Option the customer picked, once the Finding is chosen. */
+    chosenOption: text("chosen_option"),
+    /** The guardrail that refused the customer's last pick, while the Finding is still open. */
+    refusedBy: text("refused_by"),
+    refusalReason: text("refusal_reason"),
+  },
+  (table) => [
+    index("findings_customer_id").on(table.customerId),
+    uniqueIndex("findings_customer_event_kind").on(table.customerId, table.ledgerEventId, table.kind),
+    check("findings_chosen_option", sql`(${table.state} = 'chosen') = (${table.chosenOption} IS NOT NULL)`),
+    check("findings_refusal", sql`(${table.refusedBy} IS NULL) = (${table.refusalReason} IS NULL)`),
+  ],
 );

@@ -3,10 +3,12 @@ import { cents, type Cents } from "./money";
 export type DecisionResult = "Done" | "Refused" | "Reversed";
 
 /**
- * The guardrails checked before every agent action that moves money, in the order they run. Pause comes first,
- * so a paused agent is refused before anything else is judged.
+ * The guardrails checked before an agent action that moves money, in the order they run. Pause comes first, so a
+ * paused agent is refused before anything else is judged; it doesn't run on an Option the customer picked, since
+ * Pause stops only automatic actions. The Payment limit runs only when the agent sweeps alone under "handle small
+ * things"; the Autonomy level has already chosen whether the agent acts or asks with a Finding.
  */
-export const GUARDRAILS = ["agent_paused", "ownership", "positive amount", "Rule on", "Buffer kept"] as const;
+export const GUARDRAILS = ["agent_paused", "ownership", "positive amount", "Rule on", "Buffer kept", "Payment limit"] as const;
 export type Guardrail = (typeof GUARDRAILS)[number];
 
 /** A guardrail's name in Decision log copy. */

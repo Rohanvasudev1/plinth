@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getAppBank } from "@/app-bank";
+import { isFindingOptionKey } from "@/findings";
 import { requireCustomer } from "@/session";
 
 /** What the last Undo press did, shown under the button when it was refused. */
@@ -26,4 +27,29 @@ export async function markAgentActionsSeen(decisionIds: number[]): Promise<void>
   const customer = await requireCustomer();
   const ids = Array.isArray(decisionIds) ? decisionIds.filter((id) => Number.isSafeInteger(id)) : [];
   getAppBank().markAgentActionsSeen(customer, ids);
+}
+
+/**
+ * What the last Option pick on a Finding did. `message` explains a pick that changed nothing, such as one on an
+ * expired Finding. It is null when the pick worked, or when a guardrail refused it: the Finding itself shows that.
+ */
+export interface ChooseOptionResult {
+  message: string | null;
+}
+
+/** Carries out the Option the signed-in customer picked on one of their Findings. */
+export async function chooseOptionAction(
+  _previous: ChooseOptionResult | null,
+  form: FormData,
+): Promise<ChooseOptionResult> {
+  const customer = await requireCustomer();
+  const findingId = Number(form.get("findingId"));
+  const option = String(form.get("option") ?? "");
+  if (!Number.isSafeInteger(findingId) || !isFindingOptionKey(option)) {
+    return { message: "There is no such Option." };
+  }
+  const outcome = getAppBank().chooseOption(customer, findingId, option);
+  revalidatePath("/", "layout");
+  if (outcome.ok || outcome.finding?.refusal) return { message: null };
+  return { message: outcome.reason };
 }

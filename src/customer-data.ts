@@ -6,6 +6,7 @@ import type { Database } from "./db/database";
 import {
   accountsTable,
   decisionsTable,
+  findingsTable,
   ledgerEntriesTable,
   ledgerEventsTable,
   ledgerTransactionsTable,
@@ -17,6 +18,15 @@ import {
   settingsVersionsTable,
 } from "./db/schema";
 import { isGuardrail, type Decision, type NewDecision, type WhyRow } from "./decisions";
+import {
+  FindingError,
+  isFindingOptionKey,
+  type Finding,
+  type FindingKind,
+  type FindingOption,
+  type FindingOptionKey,
+  type NewFinding,
+} from "./findings";
 import type { LedgerEvent, LedgerEventDispatcher } from "./ledger-events";
 import { cents, type Cents } from "./money";
 import { isRuleKind, parseRuleContent, type NewRule, type Rule } from "./rules";
@@ -177,6 +187,24 @@ export interface CustomerData {
   listUnseenAgentActions(customer: Customer): Decision[];
   /** Marks these agent actions of the customer's as seen now. Ids that aren't theirs are ignored. */
   markAgentActionsSeen(customer: Customer, decisionIds: number[]): void;
+  /**
+   * Makes an open Finding, timed by the clock. Its Rule and the accounts its Options name must be the
+   * customer's. Throws FindingError if the customer already has a Finding of this kind for this ledger event.
+   */
+  createFinding(customer: Customer, finding: NewFinding): Finding;
+  /** The customer's Findings, open ones first, each group newest first. */
+  listFindings(customer: Customer): Finding[];
+  /** The customer's Finding with this id, or undefined if it doesn't exist or isn't theirs. */
+  getFinding(customer: Customer, findingId: number): Finding | undefined;
+  /** Expires every open Finding of this kind of the customer's. Returns how many it expired. */
+  expireOpenFindings(customer: Customer, kind: FindingKind): number;
+  /**
+   * Marks the customer's open Finding chosen with this Option, clearing any earlier refusal. Throws
+   * FindingError if it isn't theirs, isn't open, or has no such Option.
+   */
+  markFindingChosen(customer: Customer, findingId: number, option: FindingOptionKey): Finding;
+  /** Records why the customer's pick on their open Finding was refused. The Finding stays open. */
+  recordFindingRefusal(customer: Customer, findingId: number, refusal: NonNullable<Finding["refusal"]>): Finding;
 }
 
 /** A change to a Rule: its switch, its parameters, or both. Whatever is left out stays as it is. */
@@ -544,6 +572,105 @@ export function createCustomerData(deps: {
     return saved;
   }
 
+  function selectFindings(customer: Customer, findingId?: number): Finding[] {
+    return db
+      .select()
+      .from(findingsTable)
+      .where(
+        and(
+          eq(findingsTable.customerId, customer.id),
+          findingId === undefined ? undefined : eq(findingsTable.id, findingId),
+        ),
+      )
+      .orderBy(
+        sql`case when ${findingsTable.state} = 'open' then 0 else 1 end`,
+        desc(findingsTable.createdAtMs),
+        desc(findingsTable.id),
+      )
+      .all()
+      .map((row) => {
+        if (row.refusedBy !== null && !isGuardrail(row.refusedBy)) {
+          throw new Error(`Finding ${row.id} names an unknown guardrail ${row.refusedBy}`);
+        }
+        if (row.chosenOption !== null && !isFindingOptionKey(row.chosenOption)) {
+          throw new Error(`Finding ${row.id} names an unknown Option ${row.chosenOption}`);
+        }
+        return {
+          id: row.id,
+          kind: row.kind,
+          at: new Date(row.createdAtMs),
+          state: row.state,
+          ledgerEventId: row.ledgerEventId,
+          rule: { id: row.ruleId, version: row.ruleVersion },
+          facts: row.facts as WhyRow[],
+          options: (row.options as FindingOption[]).map((option) =>
+            option.key === "move"
+              ? { ...option, amount: cents(option.amount) }
+              : option,
+          ),
+          chosenOption: row.chosenOption,
+          refusal:
+            row.refusedBy === null || row.refusalReason === null
+              ? null
+              : { guardrail: row.refusedBy, reason: row.refusalReason },
+        };
+      });
+  }
+
+  function getFinding(customer: Customer, findingId: number): Finding | undefined {
+    return selectFindings(customer, findingId)[0];
+  }
+
+  function openFinding(customer: Customer, findingId: number): Finding {
+    const finding = getFinding(customer, findingId);
+    if (!finding) throw new FindingError(`No Finding ${findingId} for this customer`);
+    if (finding.state !== "open") throw new FindingError(`Finding ${findingId} is ${finding.state}, not open`);
+    return finding;
+  }
+
+  function createFinding(customer: Customer, finding: NewFinding): Finding {
+    if (!getRule(customer, finding.rule.id, finding.rule.version)) {
+      throw new RuleNotFoundError(`No Rule ${finding.rule.id} version ${finding.rule.version} for this customer`);
+    }
+    for (const option of finding.options) {
+      const accountIds = option.key === "move" ? [option.fromAccountId, option.toAccountId] : [option.accountId];
+      if (option.key === "move") cents(option.amount);
+      if (accountIds.some((accountId) => !getAccount(customer, accountId))) {
+        throw new FindingError("A Finding's Options can only name the customer's own accounts");
+      }
+    }
+    const already = db
+      .select({ id: findingsTable.id })
+      .from(findingsTable)
+      .where(
+        and(
+          eq(findingsTable.customerId, customer.id),
+          eq(findingsTable.ledgerEventId, finding.ledgerEventId),
+          eq(findingsTable.kind, finding.kind),
+        ),
+      )
+      .get();
+    if (already) throw new FindingError(`This customer already has a ${finding.kind} Finding for that ledger event`);
+    const row = db
+      .insert(findingsTable)
+      .values({
+        customerId: customer.id,
+        kind: finding.kind,
+        createdAtMs: clock.now().getTime(),
+        ledgerEventId: finding.ledgerEventId,
+        ruleId: finding.rule.id,
+        ruleVersion: finding.rule.version,
+        facts: finding.facts,
+        options: finding.options,
+        state: "open",
+      })
+      .returning({ id: findingsTable.id })
+      .get();
+    const created = getFinding(customer, row.id);
+    if (!created) throw new Error(`Finding ${row.id} vanished after it was made`);
+    return created;
+  }
+
   const reversals = alias(decisionsTable, "reversals");
 
   function selectDecisions(customer: Customer, only: { id?: number; unseenAgentActions?: boolean } = {}): Decision[] {
@@ -686,6 +813,37 @@ export function createCustomerData(deps: {
           ),
         )
         .run();
+    },
+    createFinding,
+    listFindings: (customer) => selectFindings(customer),
+    getFinding,
+    expireOpenFindings(customer, kind) {
+      return db
+        .update(findingsTable)
+        .set({ state: "expired", refusedBy: null, refusalReason: null })
+        .where(
+          and(eq(findingsTable.customerId, customer.id), eq(findingsTable.kind, kind), eq(findingsTable.state, "open")),
+        )
+        .run().changes;
+    },
+    markFindingChosen(customer, findingId, option) {
+      const finding = openFinding(customer, findingId);
+      if (!finding.options.some((candidate) => candidate.key === option)) {
+        throw new FindingError(`Finding ${findingId} has no ${option} Option`);
+      }
+      db.update(findingsTable)
+        .set({ state: "chosen", chosenOption: option, refusedBy: null, refusalReason: null })
+        .where(and(eq(findingsTable.customerId, customer.id), eq(findingsTable.id, findingId)))
+        .run();
+      return getFinding(customer, findingId) ?? finding;
+    },
+    recordFindingRefusal(customer, findingId, refusal) {
+      const finding = openFinding(customer, findingId);
+      db.update(findingsTable)
+        .set({ refusedBy: refusal.guardrail, refusalReason: refusal.reason })
+        .where(and(eq(findingsTable.customerId, customer.id), eq(findingsTable.id, findingId)))
+        .run();
+      return getFinding(customer, findingId) ?? finding;
     },
     addPayroll(customer, payroll) {
       if (!getAccount(customer, payroll.accountId)) {
