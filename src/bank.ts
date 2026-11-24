@@ -14,6 +14,7 @@ import {
 } from "./safe-to-spend";
 import { bufferRuleFor } from "./rules";
 import { createRuleChanges, type RuleChanges } from "./rule-changes";
+import { pauseAgent } from "./pause";
 import { seedDemoData } from "./seed";
 import type { Settings } from "./settings";
 import { changeSettings, type SettingsChange } from "./settings-changes";
@@ -45,6 +46,8 @@ export interface AgentActionOnHome {
 export interface HomeView {
   customerName: string;
   today: Date;
+  /** True while the customer has paused their agent. */
+  agentPaused: boolean;
   checking: HomeAccount | null;
   savings: (HomeAccount & { goal: GoalProgress | null })[];
   billsBeforePayday: BillsBeforePayday;
@@ -84,6 +87,13 @@ export interface Bank extends Simulator, RuleChanges {
    * Throws SettingsError, saving nothing, if they have no settings record or the change doesn't fit its schema.
    */
   changeSettings(customer: Customer, change: SettingsChange): Settings;
+  /** Whether the customer's agent is paused. */
+  isAgentPaused(customer: Customer): boolean;
+  /**
+   * Pauses or unpauses the customer's agent, writing a Decision log entry with them as actor. Asking for the
+   * state it is already in changes nothing. Returns whether the agent is now paused.
+   */
+  pauseAgent(customer: Customer, paused: boolean): boolean;
   /** Marks agent actions as shown to the customer, so the toast shows them only once. */
   markAgentActionsSeen(customer: Customer, decisionIds: number[]): void;
 }
@@ -122,6 +132,8 @@ export function createBank(deps: { db: Database; clock: SettableClock }): Bank {
     billsBeforePayday,
     readSettings: (customer) => customerData.getSettings(customer),
     changeSettings: (customer, change) => changeSettings(customerData, customer, change),
+    isAgentPaused: (customer) => customerData.isAgentPaused(customer),
+    pauseAgent: (customer, paused) => pauseAgent(customerData, customer, paused),
     readDecisionLog: (customer) => customerData.listDecisions(customer),
     undo: (customer, decisionId) => undoAgentAction(customerData, customer, decisionId),
     markAgentActionsSeen: (customer, decisionIds) => customerData.markAgentActionsSeen(customer, decisionIds),
@@ -132,6 +144,7 @@ export function createBank(deps: { db: Database; clock: SettableClock }): Bank {
       return {
         customerName: customer.name,
         today: clock.now(),
+        agentPaused: customerData.isAgentPaused(customer),
         checking: checking ? homeAccount(checking) : null,
         savings: accounts
           .filter((account) => account.kind === "savings")

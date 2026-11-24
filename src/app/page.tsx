@@ -150,6 +150,15 @@ export default async function HomePage() {
         </p>
       </header>
 
+      {home.agentPaused && (
+        <section className="card paused-banner" aria-labelledby="agent-paused">
+          <h2 id="agent-paused">Your agent is paused</h2>
+          <p className="muted">
+            It takes no automatic actions until you unpause it on <Link href="/agent">Agent &amp; limits</Link>.
+          </p>
+        </section>
+      )}
+
       {home.checking && (
         <AccountCard account={home.checking}>
           {home.safeToSpend && <SafeToSpendLine safe={home.safeToSpend} nextPayday={home.billsBeforePayday.nextPayday} />}
