@@ -131,7 +131,7 @@ describe("Export", () => {
     for (const [, value] of times) {
       if (value !== null) expect(value).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
     }
-    expect(text.split("Sam Calloway")).toHaveLength(2);
+    expect(text.split("Sam")).toHaveLength(2);
     expect(Object.keys(JSON.parse(text))[0]).toBe("customer");
   });
 
@@ -161,6 +161,25 @@ describe("Export", () => {
       expect(ids.length, `Priya has ${section}`).toBeGreaterThan(0);
       expect(samIds[section]?.filter((id) => ids.includes(id)), section).toEqual([]);
     }
+    // Nested ids too: none of Priya's own accounts, ledger transactions, Missions or Findings is named anywhere in Sam's file.
+    const priyaIdsNamedBy: Record<string, number[]> = {
+      accountId: priyaIds.plinthAccounts!,
+      fromAccountId: priyaIds.plinthAccounts!,
+      toAccountId: priyaIds.plinthAccounts!,
+      ledgerTransactionId: priyaIds.ledgerTransactions!,
+      missionId: priyaIds.missions!,
+      findingId: priyaIds.findings!,
+    };
+    const samNestedIds = keysIn(samFile).filter(([key]) => key in priyaIdsNamedBy);
+    expect(samNestedIds.length).toBeGreaterThan(0);
+    expect(samNestedIds.filter(([key, value]) => priyaIdsNamedBy[key]?.includes(value as number))).toEqual([]);
+    // Figures: no balance of Priya's Plinth accounts appears as an amount in Sam's file, and the reverse.
+    const amountsIn = (file: CustomerExport) =>
+      new Set(keysIn(file).filter(([key]) => key.endsWith("Cents")).map(([, value]) => value));
+    const samAmounts = amountsIn(samFile);
+    const priyaAmounts = amountsIn(priyaFile);
+    expect(priyaFile.plinthAccounts.map((account) => account.balanceCents).filter((balance) => samAmounts.has(balance))).toEqual([]);
+    expect(samFile.plinthAccounts.map((account) => account.balanceCents).filter((balance) => priyaAmounts.has(balance))).toEqual([]);
     expect(samFile.plinthAccounts.map((account) => account.balanceCents)).toEqual(
       bank.customerData.listAccounts(sam).map((account) => account.balance),
     );
