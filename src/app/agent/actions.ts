@@ -71,9 +71,9 @@ async function setAmount(
 }
 
 /** Pauses or unpauses the signed-in customer's agent, toward the state the button was pressed for. */
-export async function pauseAgent(_previous: AgentFormResult | null, form: FormData): Promise<AgentFormResult> {
+export async function setAgentPaused(_previous: AgentFormResult | null, form: FormData): Promise<AgentFormResult> {
   const customer = await requireCustomer();
-  const paused = getAppBank().pauseAgent(customer, form.get("paused") === "true");
+  const paused = getAppBank().setAgentPaused(customer, form.get("paused") === "true");
   revalidatePath("/", "layout");
   return {
     ok: true,

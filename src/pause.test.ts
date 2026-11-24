@@ -22,9 +22,9 @@ describe("Pause", () => {
     const bank = bankAt(FIRST_PAYDAY_9AM);
     const sam = signInByName(bank, "Sam Calloway");
 
-    bank.pauseAgent(sam, true);
+    bank.setAgentPaused(sam, true);
     expect(bank.isAgentPaused(sam)).toBe(true);
-    bank.pauseAgent(sam, false);
+    bank.setAgentPaused(sam, false);
     expect(bank.isAgentPaused(sam)).toBe(false);
 
     const [unpaused, paused] = bank.readDecisionLog(sam);
@@ -35,7 +35,7 @@ describe("Pause", () => {
   it("refuses the sweep with the agent_paused guardrail and moves nothing when a paycheck lands while paused", () => {
     const bank = bankAt(FIRST_PAYDAY_9AM);
     const sam = signInByName(bank, "Sam Calloway");
-    bank.pauseAgent(sam, true);
+    bank.setAgentPaused(sam, true);
 
     bank.postPaycheck();
 
@@ -57,10 +57,10 @@ describe("Pause", () => {
   it("doesn't rerun the sweep missed while paused when the customer unpauses", () => {
     const bank = bankAt(FIRST_PAYDAY_9AM);
     const sam = signInByName(bank, "Sam Calloway");
-    bank.pauseAgent(sam, true);
+    bank.setAgentPaused(sam, true);
     bank.postPaycheck();
 
-    bank.pauseAgent(sam, false);
+    bank.setAgentPaused(sam, false);
 
     expect(balancesOf(bank, sam)).toEqual({ checking: 3_467_00, savings: 12_400_00 });
     expect(agentEntriesIn(bank, sam).map((entry) => entry.result)).toEqual(["Refused"]);
@@ -69,9 +69,9 @@ describe("Pause", () => {
   it("sweeps again on the first paycheck after the customer unpauses", () => {
     const bank = openTestBank();
     const sam = signInByName(bank, "Sam Calloway");
-    bank.pauseAgent(sam, true);
+    bank.setAgentPaused(sam, true);
     bank.advanceClock();
-    bank.pauseAgent(sam, false);
+    bank.setAgentPaused(sam, false);
 
     // Acme Corp pays every 14 days: on to the next payday.
     for (let day = 0; day < 14; day++) bank.advanceClock();
@@ -84,7 +84,7 @@ describe("Pause", () => {
     const sam = signInByName(bank, "Sam Calloway");
     const priya = signInByName(bank, "Priya Natarajan");
 
-    bank.pauseAgent(priya, true);
+    bank.setAgentPaused(priya, true);
     bank.postPaycheck();
 
     expect(bank.isAgentPaused(sam)).toBe(false);
@@ -97,7 +97,7 @@ describe("Pause", () => {
     const sam = signInByName(bank, "Sam Calloway");
     expect(bank.readHome(sam).agentPaused).toBe(false);
 
-    bank.pauseAgent(sam, true);
+    bank.setAgentPaused(sam, true);
 
     expect(bank.readHome(sam).agentPaused).toBe(true);
   });
@@ -105,9 +105,9 @@ describe("Pause", () => {
   it("writes no entry when the customer asks for the state the agent is already in", () => {
     const bank = openTestBank();
     const sam = signInByName(bank, "Sam Calloway");
-    bank.pauseAgent(sam, true);
+    bank.setAgentPaused(sam, true);
 
-    bank.pauseAgent(sam, true);
+    bank.setAgentPaused(sam, true);
 
     expect(bank.readDecisionLog(sam).map((entry) => entry.action)).toEqual(["Paused your agent"]);
   });

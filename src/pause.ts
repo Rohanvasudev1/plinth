@@ -6,7 +6,7 @@ import { customerChangeDecision } from "./decisions";
  * database transaction. Asking for the state the agent is already in changes nothing and writes no entry.
  * Unpausing doesn't rerun anything the agent missed while paused. Returns whether the agent is now paused.
  */
-export function pauseAgent(customerData: CustomerData, customer: Customer, paused: boolean): boolean {
+export function setAgentPaused(customerData: CustomerData, customer: Customer, paused: boolean): boolean {
   return customerData.inOneTransaction(() => {
     if (customerData.isAgentPaused(customer) === paused) return paused;
     customerData.savePause(customer, paused);

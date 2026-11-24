@@ -1,0 +1,3 @@
+# Pause is its own state, not a Rule or a setting
+
+Pause is an on/off switch for the whole agent. It isn't a limit on one kind of action, so it isn't a Rule, and it isn't a preference that shapes how the agent acts, so it isn't in the settings record. We keep it apart from both (ADR 0007), in an append-only list of pause changes per customer whose latest row is the current state. The `agent_paused` guardrail reads it, and it runs before every other guardrail, so this is the one guardrail that reads something other than a Rule. Pausing and unpausing each write a Decision log entry with the customer as actor. Neither writes a Rule version, so those entries name no Rule.

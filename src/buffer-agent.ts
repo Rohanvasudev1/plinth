@@ -88,9 +88,9 @@ export function startBufferAgent(deps: {
       const amount = cents(safe && safe.amount >= 100 ? safe.amount - (safe.amount % 100) : 0);
       const proposed: ProposedSweep = { customer, rule, checking, savings, amount, bills };
       const refusal = checkGuardrails(proposed);
-      // With nothing above the Buffer there is no action to take, so nothing is logged. Any other refusal is,
-      // and so is every paycheck while paused, so the customer can see why the agent did nothing.
-      if (amount <= 0 && refusal?.guardrail !== "ownership" && refusal?.guardrail !== "agent_paused") return;
+      // With nothing above the Buffer there is no action to take, so nothing is logged, paused or not. Any other
+      // refusal is, including Pause, so the customer can see why a sweep didn't happen.
+      if (amount <= 0 && refusal?.guardrail !== "ownership") return;
 
       const checkingName = checking?.name ?? "checking";
       const savingsName = savings?.name ?? "savings";
