@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 import type { RuleKind } from "@/rules";
-import { setBuffer, setGoalTarget, setPaymentLimit, switchRule, type AgentFormResult } from "./actions";
+import { setAgentPaused, setBuffer, setGoalTarget, setPaymentLimit, switchRule, type AgentFormResult } from "./actions";
 
 function Result({ result }: { result: AgentFormResult | null }) {
   if (!result) return null;
@@ -67,6 +67,20 @@ export function GoalTargetForm(props: { accountId: number; label: string; hint: 
       </label>
       <button type="submit" className="button" disabled={pending}>
         Save
+      </button>
+      <Result result={result} />
+    </form>
+  );
+}
+
+/** Pause or Unpause, depending on whether the page showed the agent paused. */
+export function PauseForm(props: { paused: boolean }) {
+  const [result, action, pending] = useActionState(setAgentPaused, null);
+  return (
+    <form action={action} className="stack">
+      <input type="hidden" name="paused" value={String(!props.paused)} />
+      <button type="submit" className={props.paused ? "button" : "button danger"} disabled={pending}>
+        {props.paused ? "Unpause agent" : "Pause agent"}
       </button>
       <Result result={result} />
     </form>

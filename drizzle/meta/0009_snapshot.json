@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "9ccb7033-a72d-4109-9251-3e2535417975",
+  "id": "42f11034-5989-412b-bb55-1423df288ec0",
   "prevId": "b7e5b83b-0350-4c75-be59-f3d2f168bfbf",
   "tables": {
     "accounts": {
@@ -48,13 +48,6 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
-        },
-        "goal": {
-          "name": "goal",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
         }
       },
       "indexes": {
@@ -71,14 +64,6 @@
             "customer_id"
           ],
           "isUnique": false
-        },
-        "accounts_customer_goal": {
-          "name": "accounts_customer_goal",
-          "columns": [
-            "customer_id",
-            "goal"
-          ],
-          "isUnique": true
         }
       },
       "foreignKeys": {
@@ -106,10 +91,6 @@
         "accounts_goal_on_savings": {
           "name": "accounts_goal_on_savings",
           "value": "\"accounts\".\"goal_cents\" IS NULL OR (\"accounts\".\"kind\" = 'savings' AND \"accounts\".\"goal_cents\" > 0)"
-        },
-        "accounts_savings_goal_on_savings": {
-          "name": "accounts_savings_goal_on_savings",
-          "value": "\"accounts\".\"goal\" IS NULL OR \"accounts\".\"kind\" = 'savings'"
         }
       }
     },
@@ -614,6 +595,66 @@
         "ledger_transactions_customer_id_customers_id_fk": {
           "name": "ledger_transactions_customer_id_customers_id_fk",
           "tableFrom": "ledger_transactions",
+          "tableTo": "customers",
+          "columnsFrom": [
+            "customer_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "pause_changes": {
+      "name": "pause_changes",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "customer_id": {
+          "name": "customer_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "paused": {
+          "name": "paused",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at_ms": {
+          "name": "created_at_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "pause_changes_customer_id": {
+          "name": "pause_changes_customer_id",
+          "columns": [
+            "customer_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "pause_changes_customer_id_customers_id_fk": {
+          "name": "pause_changes_customer_id_customers_id_fk",
+          "tableFrom": "pause_changes",
           "tableTo": "customers",
           "columnsFrom": [
             "customer_id"

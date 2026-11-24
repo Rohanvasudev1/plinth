@@ -6,6 +6,7 @@
   --line: #cfd8d5;
   --soft: #e4eae8;
   --good: #2f8a57;
+  --bad: #c2423b;
   --focus: #4b55b5;
   color-scheme: light;
 }
@@ -19,6 +20,7 @@
     --line: #2c3836;
     --soft: #1f2a28;
     --good: #5cc287;
+    --bad: #f07a70;
     --focus: #8f97ee;
     color-scheme: dark;
   }
@@ -94,6 +96,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   padding: 10px 14px;
   font-weight: 600;
 }
+.button.danger { background: none; color: var(--bad); border: 1px solid var(--bad); }
 .button:disabled { opacity: 0.6; cursor: progress; }
 .stack { display: flex; flex-direction: column; gap: 10px; }
 .field { display: flex; flex-direction: column; gap: 4px; }
@@ -234,3 +237,5 @@ a.button { display: inline-block; text-decoration: none; }
 /* Goals on Agent & limits */
 .goal { border-top: 1px solid var(--soft); padding-top: 12px; display: flex; flex-direction: column; gap: 6px; }
 .goal h3 { margin: 0; font-size: 1rem; }
+
+.paused-banner { border-color: var(--bad); border-left-width: 4px; display: flex; flex-direction: column; gap: 4px; }

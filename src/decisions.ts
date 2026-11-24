@@ -2,9 +2,17 @@ import { cents, type Cents } from "./money";
 
 export type DecisionResult = "Done" | "Refused" | "Reversed";
 
-/** The guardrails checked before every agent action that moves money, in the order they run. */
-export const GUARDRAILS = ["ownership", "positive amount", "Rule on", "Buffer kept"] as const;
+/**
+ * The guardrails checked before every agent action that moves money, in the order they run. Pause comes first,
+ * so a paused agent is refused before anything else is judged.
+ */
+export const GUARDRAILS = ["agent_paused", "ownership", "positive amount", "Rule on", "Buffer kept"] as const;
 export type Guardrail = (typeof GUARDRAILS)[number];
+
+/** A guardrail's name in Decision log copy. */
+export function guardrailName(guardrail: Guardrail): string {
+  return guardrail === "agent_paused" ? "Pause" : guardrail;
+}
 
 /** One row of a Decision log entry's Why panel. */
 export interface WhyRow {

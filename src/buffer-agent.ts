@@ -1,7 +1,7 @@
 import { formatLocalDate, localDateOf } from "./calendar";
 import type { Clock } from "./clock";
 import type { Account, Customer, CustomerData, LedgerTransaction } from "./customer-data";
-import { GUARDRAILS, type Guardrail, type WhyRow } from "./decisions";
+import { GUARDRAILS, guardrailName, type Guardrail, type WhyRow } from "./decisions";
 import type { LedgerEvent, LedgerEventDispatcher } from "./ledger-events";
 import { cents, formatDollars, formatDollarsBriefly, type Cents } from "./money";
 import { describeRule } from "./rule-changes";
@@ -58,6 +58,7 @@ export function startBufferAgent(deps: {
   function checkGuardrails(sweep: ProposedSweep): { guardrail: Guardrail; reason: string } | null {
     const { customer, rule, checking, savings, amount, bills } = sweep;
     const checks: Record<Guardrail, () => string | null> = {
+      agent_paused: () => (customerData.isAgentPaused(customer) ? "Agent paused until you unpause it" : null),
       ownership: () =>
         checking?.kind === "checking" && savings?.kind === "savings"
           ? null
@@ -88,7 +89,8 @@ export function startBufferAgent(deps: {
       const amount = cents(safe && safe.amount >= 100 ? safe.amount - (safe.amount % 100) : 0);
       const proposed: ProposedSweep = { customer, rule, checking, savings, amount, bills };
       const refusal = checkGuardrails(proposed);
-      // With nothing above the Buffer there is no action to take, so nothing is logged. Any other refusal is.
+      // With nothing above the Buffer there is no action to take, so nothing is logged, paused or not. Any other
+      // refusal is, including Pause, so the customer can see why a sweep didn't happen.
       if (amount <= 0 && refusal?.guardrail !== "ownership") return;
 
       const checkingName = checking?.name ?? "checking";
@@ -111,8 +113,8 @@ export function startBufferAgent(deps: {
         {
           label: "Checked by",
           value: refusal
-            ? `Refused by the ${refusal.guardrail} guardrail: ${refusal.reason}`
-            : `Guardrails passed: ${GUARDRAILS.join(", ")}`,
+            ? `Refused by the ${guardrailName(refusal.guardrail)} guardrail: ${refusal.reason}`
+            : `Guardrails passed: ${GUARDRAILS.map(guardrailName).join(", ")}`,
         },
       ];
       const decision = {

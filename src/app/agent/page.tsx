@@ -5,7 +5,7 @@ import { GOAL_TARGET_RANGE } from "@/goals";
 import { formatDollarRange, formatDollarsBriefly, formatDollarsForInput } from "@/money";
 import { isSavingsGoal } from "@/settings";
 import { requireCustomer } from "@/session";
-import { GoalTargetForm, RuleAmountForm, RuleSwitch } from "./agent-forms";
+import { GoalTargetForm, PauseForm, RuleAmountForm, RuleSwitch } from "./agent-forms";
 
 export const dynamic = "force-dynamic";
 
@@ -41,6 +41,7 @@ export default async function AgentAndLimitsPage() {
   const paymentLimitRule = rules.find((rule) => rule.kind === "payment_limit");
   const sweepOrder = (bank.readSettings(customer)?.goalPreferences ?? []).filter(isSavingsGoal);
   const savings = accounts.filter((account) => account.kind === "savings");
+  const paused = bank.isAgentPaused(customer);
 
   return (
     <main className="page">
@@ -138,6 +139,18 @@ export default async function AgentAndLimitsPage() {
             Run setup again
           </Link>
         </p>
+      </section>
+
+      <section className="card stack" aria-labelledby="pause-agent">
+        <div>
+          <h2 id="pause-agent">{paused ? "Your agent is paused" : "Pause my agent"}</h2>
+          <p className="muted">
+            {paused
+              ? "Your agent takes no automatic actions until you unpause it. Unpausing doesn't rerun anything it missed."
+              : "Stops every automatic action straight away. You can unpause any time."}
+          </p>
+        </div>
+        <PauseForm paused={paused} />
       </section>
 
       <section className="card" aria-labelledby="decision-log-link">

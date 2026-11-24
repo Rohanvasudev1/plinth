@@ -256,3 +256,20 @@ export const settingsVersionsTable = sqliteTable(
     check("settings_versions_version_positive", sql`${table.version} > 0`),
   ],
 );
+
+/**
+ * Each time a customer pauses or unpauses their agent. Rows are never updated: the latest row is the current
+ * state, and a customer with no row has never paused.
+ */
+export const pauseChangesTable = sqliteTable(
+  "pause_changes",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    customerId: integer("customer_id")
+      .notNull()
+      .references(() => customersTable.id),
+    paused: integer("paused", { mode: "boolean" }).notNull(),
+    createdAtMs: integer("created_at_ms").notNull(),
+  },
+  (table) => [index("pause_changes_customer_id").on(table.customerId)],
+);

@@ -89,3 +89,14 @@ async function setAmount(
   revalidatePath("/", "layout");
   return { ok: true, message: `${name} set to ${formatDollarsBriefly(amount)}.` };
 }
+
+/** Pauses or unpauses the signed-in customer's agent, toward the state the button was pressed for. */
+export async function setAgentPaused(_previous: AgentFormResult | null, form: FormData): Promise<AgentFormResult> {
+  const customer = await requireCustomer();
+  const paused = getAppBank().setAgentPaused(customer, form.get("paused") === "true");
+  revalidatePath("/", "layout");
+  return {
+    ok: true,
+    message: paused ? "Agent paused. Nothing will happen automatically." : "Agent unpaused.",
+  };
+}

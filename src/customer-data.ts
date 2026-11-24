@@ -13,6 +13,7 @@ import {
   rulesTable,
   ruleVersionsTable,
   scheduledBillsTable,
+  pauseChangesTable,
   settingsVersionsTable,
 } from "./db/schema";
 import { isGuardrail, type Decision, type NewDecision, type WhyRow } from "./decisions";
@@ -169,6 +170,10 @@ export interface CustomerData {
    * SettingsError if the choices don't match the settings record's schema. Writes no Decision log entry.
    */
   saveSettings(customer: Customer, choices: SettingsChoices): Settings;
+  /** Whether the customer's agent is paused. A customer who has never paused isn't. */
+  isAgentPaused(customer: Customer): boolean;
+  /** Records the customer pausing or unpausing their agent. Writes no Decision log entry. */
+  savePause(customer: Customer, paused: boolean): void;
   /**
    * Writes a Decision log entry, timed by the clock. A Reversed entry must name an agent action of the
    * customer's that no other entry reverses yet.
@@ -682,6 +687,19 @@ export function createCustomerData(deps: {
     reviseRule,
     getSettings,
     saveSettings,
+    isAgentPaused(customer) {
+      const latest = db
+        .select({ paused: pauseChangesTable.paused })
+        .from(pauseChangesTable)
+        .where(eq(pauseChangesTable.customerId, customer.id))
+        .orderBy(desc(pauseChangesTable.id))
+        .limit(1)
+        .get();
+      return latest?.paused ?? false;
+    },
+    savePause(customer, paused) {
+      db.insert(pauseChangesTable).values({ customerId: customer.id, paused, createdAtMs: clock.now().getTime() }).run();
+    },
     recordDecision,
     listDecisions: (customer) => selectDecisions(customer),
     getDecision: (customer, decisionId) => selectDecisions(customer, { id: decisionId })[0],
