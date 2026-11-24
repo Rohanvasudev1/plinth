@@ -3,7 +3,14 @@ import type { Clock } from "./clock";
 import type { Account, Customer, CustomerData } from "./customer-data";
 import { readForecast } from "./forecast";
 import { readForecastPage } from "./forecast-page";
-import { MISSION_PROGRESS, MISSION_READ_ITEMS, missionToolSource, type MissionProgressLabel } from "./mission-text";
+import { hasConsentEnded } from "./linked-accounts";
+import {
+  linkedAccountsSource,
+  MISSION_PROGRESS,
+  MISSION_READ_ITEMS,
+  missionToolSource,
+  type MissionProgressLabel,
+} from "./mission-text";
 import { MissionError, type MissionRead } from "./missions";
 import { projectionLines } from "./projection";
 
@@ -28,6 +35,7 @@ export const MISSION_TOOL_NAMES = [
   "read_projection",
   "read_goals",
   "read_scheduled_bills",
+  "read_linked_accounts",
 ] as const;
 export type MissionToolName = (typeof MISSION_TOOL_NAMES)[number];
 
@@ -90,6 +98,14 @@ const TOOLS: Record<
     inputSchema: NO_INPUT,
     progress: MISSION_PROGRESS.forecastAndGoals,
   },
+  read_linked_accounts: {
+    description:
+      "The customer's Linked accounts at other Institutions whose Consent hasn't ended: each one's Institution, type " +
+      "and balance. balanceCents is below zero for money owed. Plinth only sees these balances: no money can move to " +
+      "or from a Linked account, so a move Option can't name one.",
+    inputSchema: NO_INPUT,
+    progress: MISSION_PROGRESS.linkedAccounts,
+  },
 };
 
 export const MISSION_TOOL_DEFINITIONS: MissionToolDefinition[] = MISSION_TOOL_NAMES.map((name) => ({
@@ -124,8 +140,8 @@ export function runMissionTool(
   input: unknown,
 ): MissionToolOutcome {
   if (!isMissionToolName(tool)) throw new MissionError(`No Mission tool ${tool}`);
-  const { result, read } = readWith(deps, customer, tool, input);
-  return { result, read, source: missionToolSource(tool, read.item), progress: TOOLS[tool].progress };
+  const { result, read, source } = readWith(deps, customer, tool, input);
+  return { result, read, source: source ?? missionToolSource(tool, read.item), progress: TOOLS[tool].progress };
 }
 
 function readWith(
@@ -133,7 +149,7 @@ function readWith(
   customer: Customer,
   tool: MissionToolName,
   input: unknown,
-): Pick<MissionToolOutcome, "result" | "read"> {
+): Pick<MissionToolOutcome, "result" | "read"> & { source?: string } {
   const { clock, customerData } = deps;
   const today = localDateOf(clock.now());
   const accounts = customerData.listAccounts(customer);
@@ -249,6 +265,21 @@ function readWith(
         },
         read: { tool, item: MISSION_READ_ITEMS.scheduledBills },
       };
+    case "read_linked_accounts": {
+      // Only the Institution, type and balance reach the model: never the Linked account's id or its Consent.
+      const live = customerData.listLinkedAccounts(customer).filter((linked) => !hasConsentEnded(linked.consent, today));
+      return {
+        result: {
+          linkedAccounts: live.map((linked) => ({
+            institution: linked.institution,
+            type: linked.type,
+            balanceCents: linked.balance,
+          })),
+        },
+        read: { tool, item: MISSION_READ_ITEMS.linkedAccounts },
+        source: linkedAccountsSource(live),
+      };
+    }
   }
 }
 
