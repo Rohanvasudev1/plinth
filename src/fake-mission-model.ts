@@ -41,7 +41,7 @@ export function createFakeMissionModel(deps: {
       const session = new ScriptSession(request, localDateOf(clock.now()), toolCallDelayMs);
       const testScript = testScripts ? testScriptFor(request.question) : undefined;
       if (testScript) return testScript(session);
-      if (/\bowe\b|\bowing\b|\bdebts?\b/i.test(request.question)) return owed(session);
+      if (/\b(?:what|how much) do i owe\b|\bhow much debt\b|\bmy debts?\b/i.test(request.question)) return owed(session);
       const transactions = await session.call<TransactionsResult>("read_transactions", {
         from: addDays(session.today, -RECENT_DAYS),
         to: session.today,
@@ -371,7 +371,7 @@ async function owed(session: ScriptSession): Promise<ModelFinding> {
       title,
       facts,
       options: [{ key: "read_report" }, { key: "not_now" }],
-      agentsView: "I would pick Not now: link the accounts you owe on with Link another bank, then ask again.",
+      agentsView: "I would pick Not now: with no Linked accounts, there is nothing to read yet.",
       cantKnow: null,
       report: report(title, facts, "Your agent can only read accounts you have linked, while their Consent lasts."),
     };

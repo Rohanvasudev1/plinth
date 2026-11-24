@@ -277,10 +277,7 @@ function readWith(
           })),
         },
         read: { tool, item: MISSION_READ_ITEMS.linkedAccounts },
-        source: linkedAccountsSource(
-          live.map((linked) => linked.institution),
-          live.length === 0 ? null : localDateOf(new Date(Math.max(...live.map((linked) => linked.syncedAt.getTime())))),
-        ),
+        source: linkedAccountsSource(live),
       };
     }
   }

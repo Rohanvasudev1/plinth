@@ -1,6 +1,7 @@
-import { formatLocalDate, type LocalDate } from "./calendar";
+import { formatLocalDate, localDateOf, type LocalDate } from "./calendar";
 import type { WhyRow } from "./decisions";
 import type { FindingFact } from "./findings";
+import type { LinkedAccount } from "./linked-accounts";
 import type { MissionToolName } from "./mission-tools";
 import type { MissionRead } from "./missions";
 
@@ -45,10 +46,11 @@ export function missionToolSource(tool: MissionToolName, item: string): string {
  * The Source of a fact citing a read of the Linked accounts: the Institutions read and the date of the latest Sync
  * among them, such as "From your Linked accounts at Summit Card and Northwind, last synced Thu 19 Nov".
  */
-export function linkedAccountsSource(institutions: string[], lastSynced: LocalDate | null): string {
+export function linkedAccountsSource(read: Pick<LinkedAccount, "institution" | "syncedAt">[]): string {
   const source = MISSION_TOOL_SOURCES.read_linked_accounts;
-  if (institutions.length === 0 || lastSynced === null) return `${source}: none with a Consent that lasts`;
-  return `${source} at ${inWords(institutions)}, last synced ${formatLocalDate(lastSynced)}`;
+  if (read.length === 0) return `${source}: none with a Consent that lasts`;
+  const lastSynced = localDateOf(new Date(Math.max(...read.map((linked) => linked.syncedAt.getTime()))));
+  return `${source} at ${inWords(read.map((linked) => linked.institution))}, last synced ${formatLocalDate(lastSynced)}`;
 }
 
 /** Names as a list in words, such as "A, B and C". */

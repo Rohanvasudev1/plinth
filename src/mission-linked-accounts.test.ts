@@ -147,7 +147,8 @@ describe("The Linked accounts Mission tool", () => {
     bank.linkAccount(sam, "lakeside-bank");
     bank.linkAccount(priya, "harbor-credit-union");
 
-    const [samsMission, priyasMission] = await Promise.all([ask(bank, sam), ask(bank, priya)]);
+    const samsMission = await ask(bank, sam);
+    const priyasMission = await ask(bank, priya);
 
     const institutionsIn = (answer: MissionToolAnswer | undefined) =>
       answer && "result" in answer
