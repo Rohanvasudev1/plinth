@@ -141,7 +141,10 @@ export function createBank(deps: { db: Database; clock: SettableClock }): Bank {
   const ledgerEvents = createLedgerEventDispatcher();
   const customerData = createCustomerData({ db, clock, ledgerEvents });
   const systemData = createSystemData(db);
-  seedDemoData(systemData, customerData);
+  // The seed's history posts on its own clock and its own dispatcher, so no agent reacts to it.
+  seedDemoData(systemData, customerData, (seedClock) =>
+    createCustomerData({ db, clock: seedClock, ledgerEvents: createLedgerEventDispatcher() }),
+  );
   const simulator = createSimulator({ clock, systemData, customerData });
   startBufferAgent({ clock, customerData, systemData, ledgerEvents });
 

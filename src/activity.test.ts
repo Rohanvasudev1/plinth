@@ -65,12 +65,17 @@ describe("Activity", () => {
     if (!sweep) throw new Error("The agent didn't sweep");
     bank.undo(sam, sweep.id);
 
-    expect(agentTags(bank, sam)).toEqual([
+    const tags = agentTags(bank, sam);
+    expect(tags.slice(0, 5)).toEqual([
       ["Checking", false],
       ["House fund", true],
       ["Acme Corp", false],
       ["Checking", false],
       ["Cityline Transit", false],
+    ]);
+    // The rest is the seeded history and opening balances, none of it the agent's.
+    expect(tags.slice(5).filter(([, byAgent]) => byAgent)).toEqual([]);
+    expect(tags.slice(-2)).toEqual([
       ["Opening balance of House fund", false],
       ["Opening balance of Checking", false],
     ]);
@@ -107,7 +112,7 @@ describe("Activity", () => {
 
     expect(priyasActivity.length).toBeGreaterThan(0);
     expect(priyasActivity.filter((row) => samsTransactionIds.includes(row.ledgerTransactionId))).toEqual([]);
-    expect(priyasActivity.map((row) => row.counterparty)).not.toContain("Bright Reel Cinema");
+    expect(priyasActivity.filter((row) => row.counterparty === "Bright Reel Cinema" && row.date === "2026-11-19")).toEqual([]);
     expect(priyasActivity.filter((row) => row.byAgent)).toEqual([]);
   });
 });

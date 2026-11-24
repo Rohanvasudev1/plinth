@@ -70,6 +70,21 @@ describe("the end-to-end reset route", () => {
     expect(samsBalances()).toEqual(["Checking $227.00", "House fund $12,400.00"]);
   });
 
+  it("restores the seeded history, without what posted after the simulation start", async () => {
+    vi.stubEnv("PLINTH_E2E", "1");
+    const samsLedgerKeys = () => {
+      const bank = getAppBank();
+      return bank.customerData.listLedgerTransactions(signInByName(bank, "Sam Calloway")).map((t) => t.idempotencyKey);
+    };
+    const seeded = samsLedgerKeys();
+    getAppBank().advanceClock();
+
+    await POST();
+
+    expect(seeded).toContain("payroll:acme-corp:2026-05-08");
+    expect(samsLedgerKeys()).toEqual(seeded);
+  });
+
   it("isn't there in a normal run, and changes nothing", async () => {
     getAppBank().advanceClock();
 

@@ -12,7 +12,7 @@ export interface SettableClock extends Clock {
   setTo(at: Date): void;
 }
 
-/** A clock for tests that reports `at` until `setTo` moves it. */
+/** A clock held in memory that reports `at` until `setTo` moves it: for tests, and for posting the seed's history. */
 export function fixedClock(at: Date): SettableClock {
   let millis = at.getTime();
   return {

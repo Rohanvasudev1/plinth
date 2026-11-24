@@ -120,13 +120,14 @@ describe("Advance clock one day", () => {
   it("pays every 14 days and pays bills as they fall due, in date order across several pay cycles", () => {
     const bank = withoutSweeps(openTestBank());
     const sam = signInByName(bank, "Sam Calloway");
+    const seeded = bank.customerData.listLedgerTransactions(sam).length;
 
     for (let day = 0; day < 30; day++) bank.advanceClock();
 
     const keys = bank.customerData
       .listLedgerTransactions(sam)
-      .map((transaction) => transaction.idempotencyKey)
-      .filter((key) => !key.startsWith("opening:"));
+      .slice(seeded)
+      .map((transaction) => transaction.idempotencyKey);
     const [rent, internet, phone, power] = bank.customerData.listScheduledBills(sam).map((bill) => bill.id);
     expect(keys).toEqual([
       "payroll:acme-corp:2026-11-20",
