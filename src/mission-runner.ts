@@ -18,8 +18,8 @@ import { MISSION_TOOL_DEFINITIONS, runMissionTool, type MissionToolDeps } from "
 import {
   MAX_MISSIONS_PER_DAY,
   MAX_QUESTION_LENGTH,
-  MAX_TOOL_CALLS,
   MISSION_PROGRESS,
+  MISSION_TOOL_CALL_LIMIT,
   MissionError,
   type Mission,
 } from "./missions";
@@ -117,9 +117,9 @@ export function createMissionRunner(deps: MissionDeps): MissionRunner {
     async function callTool(name: string, input: unknown): Promise<MissionToolAnswer> {
       if (settled) throw new MissionEndedError(`Mission ${missionId} has ended`);
       callCount += 1;
-      if (callCount > MAX_TOOL_CALLS) {
-        finish(() => fail(MISSION_FAILURES.toolCallLimit(MAX_TOOL_CALLS)));
-        throw new MissionEndedError(`Mission ${missionId} reached its limit of ${MAX_TOOL_CALLS} tool calls`);
+      if (callCount > MISSION_TOOL_CALL_LIMIT) {
+        finish(() => fail(MISSION_FAILURES.toolCallLimit(MISSION_TOOL_CALL_LIMIT)));
+        throw new MissionEndedError(`Mission ${missionId} reached its limit of ${MISSION_TOOL_CALL_LIMIT} tool calls`);
       }
       const toolCallId = `m${missionId}_call_${callCount}`;
       try {

@@ -3,6 +3,7 @@ import type { Clock } from "./clock";
 import { createFakeMissionModel } from "./fake-mission-model";
 import { MISSION_OPTION_KEYS } from "./mission-finding";
 import type { MissionModel, MissionModelRequest, ModelFinding } from "./mission-model";
+import { MISSION_TOOL_CALL_LIMIT } from "./missions";
 
 // The Anthropic SDK adapter behind the language model interface (ADR 0005, ADR 0009). It runs the tool-use loop
 // itself: each tool the model asks for runs through the request's `callTool`, and the result goes back with the
@@ -99,8 +100,8 @@ const SUBMIT_FINDING_TOOL: Anthropic.Tool = {
   },
 };
 
-/** The most tool calls one Mission may make (#53). Calls past it are answered with an error, not run. */
-export const MISSION_TOOL_CALL_LIMIT = 8;
+// The most tool calls one Mission may make (#53). Calls past it are answered with an error, not run.
+export { MISSION_TOOL_CALL_LIMIT };
 
 /** The most output tokens one Mission may spend across all its requests, including the thinking the model does by default. */
 export const MISSION_OUTPUT_TOKEN_LIMIT = 32_000;

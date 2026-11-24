@@ -35,8 +35,8 @@ export const MAX_QUESTION_LENGTH = 500;
 /** How many Missions a customer may send in one simulated day. */
 export const MAX_MISSIONS_PER_DAY = 10;
 
-/** How many tool calls one Mission may make. The next one fails it. */
-export const MAX_TOOL_CALLS = 8;
+/** The most tool calls one Mission may make (#53). The next one fails it; the Anthropic adapter also tells its model so. */
+export const MISSION_TOOL_CALL_LIMIT = 8;
 
 /** How long a Mission may run, by the wall clock, before it fails. */
 export const MISSION_TIME_LIMIT_MS = 3 * 60 * 1000;
