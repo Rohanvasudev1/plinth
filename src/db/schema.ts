@@ -14,10 +14,11 @@ export const simulatedClockTable = sqliteTable("simulated_clock", {
   nowMs: integer("now_ms").notNull(),
 });
 
-/** A seeded customer. Sign-in picks one of these. */
+/** A seeded customer. Sign-in picks one of these. A Closed customer has the time they closed their account. */
 export const customersTable = sqliteTable("customers", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull().unique(),
+  closedAtMs: integer("closed_at_ms"),
 });
 
 /**
@@ -239,9 +240,11 @@ export const decisionsTable = sqliteTable(
     uniqueIndex("decisions_reverses_decision_id").on(table.reversesDecisionId),
     check("decisions_refused_by", sql`(${table.result} = 'Refused') = (${table.refusedBy} IS NOT NULL)`),
     check("decisions_rule_version", sql`(${table.ruleId} IS NULL) = (${table.ruleVersion} IS NULL)`),
+    // A Mission's entry (Reported, Stopped or Failed, moving no money) loses its link when Close and delete deletes the
+    // Mission. Any agent entry that moved money still names its Rule or Mission.
     check(
       "decisions_agent_uses_rule",
-      sql`${table.actor} = 'customer' OR ${table.ruleId} IS NOT NULL OR ${table.missionId} IS NOT NULL`,
+      sql`${table.actor} = 'customer' OR ${table.ruleId} IS NOT NULL OR ${table.missionId} IS NOT NULL OR (${table.result} IN ('Reported', 'Stopped', 'Failed') AND ${table.ledgerTransactionId} IS NULL)`,
     ),
   ],
 );

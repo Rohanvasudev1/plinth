@@ -11,6 +11,7 @@ import {
 } from "./linked-account-changes";
 import type { LinkedAccount, LinkedAccountId } from "./linked-accounts";
 import type { InstitutionAccountKey } from "./open-banking";
+import { closeAndDelete, readClosureSummary, type ClosureOutcome, type ClosureSummary } from "./closure";
 import { buildExport, type CustomerExport } from "./export";
 import { readForecastPage, type ForecastPage } from "./forecast-page";
 import { startBufferAgent } from "./buffer-agent";
@@ -29,7 +30,8 @@ import { createLedgerEventDispatcher, type LedgerEventDispatcher } from "./ledge
 import { createFakeMissionModel } from "./fake-mission-model";
 import type { MissionModel } from "./mission-model";
 import { createMissionRunner, type StartedMission } from "./mission-runner";
-import { MISSION_TIME_LIMIT_MS, type Mission } from "./missions";
+import { QUESTION_REFUSALS } from "./mission-text";
+import { MISSION_TIME_LIMIT_MS, MissionError, type Mission } from "./missions";
 import { cents, type Cents } from "./money";
 import {
   billsBeforePayday as billsBeforePaydayOf,
@@ -65,6 +67,7 @@ export type { AccessLogEntry, AccessReader } from "./access-log";
 export type { LinkableAccount } from "./linked-account-changes";
 export type { CustomerExport } from "./export";
 export type { AllAccountsView, LinkedAccountOnPage, NetWorthFigures } from "./all-accounts";
+export type { ClosureOutcome, ClosureSummary } from "./closure";
 
 export interface GoalProgress {
   target: Cents;
@@ -121,6 +124,11 @@ export class UnknownCustomerError extends Error {
   override name = "UnknownCustomerError";
 }
 
+/** Sign-in refused because the customer used Close and delete. */
+export class ClosedCustomerError extends Error {
+  override name = "ClosedCustomerError";
+}
+
 /** The server-side domain API the pages call. */
 export interface Bank extends Simulator, RuleChanges {
   clock: SettableClock;
@@ -130,8 +138,10 @@ export interface Bank extends Simulator, RuleChanges {
   listCustomers(): Customer[];
   /** The customer with this id, or undefined if there is none. */
   findCustomer(customerId: number): Customer | undefined;
-  /** The customer to sign in as, or throws UnknownCustomerError. */
+  /** The customer to sign in as. Throws UnknownCustomerError, or ClosedCustomerError for a Closed customer. */
   signIn(customerId: number): Customer;
+  /** Whether the customer used Close and delete. A session open for them goes to Sign in as. */
+  isClosed(customer: Customer): boolean;
   readHome(customer: Customer): HomeView;
   /**
    * All accounts: Cash, Investments, Debt and Net worth across Plinth accounts and every Linked account whose Consent
@@ -246,6 +256,16 @@ export interface Bank extends Simulator, RuleChanges {
    * Asking for the state it is already in changes nothing. Throws SettingsError, saving nothing, before setup.
    */
   setDataChoice(customer: Customer, choice: DataChoice, on: boolean): Settings;
+  /** The Close and delete confirmation: how much Plinth would pay out. Reading it writes nothing. */
+  readClosureSummary(customer: Customer): ClosureSummary;
+  /**
+   * Close and delete, in one transaction: stops a running Mission, expires open and snoozed Findings, pays out every
+   * Plinth balance, one ledger transaction per account under `closure:<customer id>:<account id>`, writes an access
+   * log entry for reading the balances, unlinks every Linked account, deletes Missions, Findings, settings and
+   * Goal targets, keeps the Ledger, Decision log and access log, writes "Closed your Plinth account", and marks the
+   * customer Closed. Works while the agent is paused. Throws ClosureError, changing nothing, if already Closed.
+   */
+  closeAndDelete(customer: Customer): ClosureOutcome;
   /**
    * Export: writes an access log entry with the customer as reader, then builds one file of everything Plinth holds
    * about them, including that entry, in one transaction. Works while the agent is paused.
@@ -286,6 +306,13 @@ export function createBank(deps: {
     timeLimitMs: deps.missionTimeLimitMs ?? MISSION_TIME_LIMIT_MS,
   });
 
+  const closure = {
+    clock,
+    customerData,
+    systemData,
+    stopMission: (customer: Customer, missionId: number) => missions.stop(customer, missionId),
+  };
+
   function billsBeforePayday(customer: Customer): BillsBeforePayday {
     return billsBeforePaydayOf(customerData, customer, localDateOf(clock.now()));
   }
@@ -323,8 +350,12 @@ export function createBank(deps: {
     signIn(customerId) {
       const customer = systemData.findCustomer(customerId);
       if (!customer) throw new UnknownCustomerError(`No customer with id ${customerId}`);
+      if (systemData.isClosed(customer)) throw new ClosedCustomerError("This account is closed");
       return customer;
     },
+    isClosed: (customer) => systemData.isClosed(customer),
+    readClosureSummary: (customer) => readClosureSummary(closure, customer),
+    closeAndDelete: (customer) => closeAndDelete(closure, customer),
     billsBeforePayday,
     readForecast: forecastFor,
     readSettings: (customer) => customerData.getSettings(customer),
@@ -351,7 +382,10 @@ export function createBank(deps: {
     chooseOption: (customer, findingId, option) => chooseOption({ clock, customerData }, customer, findingId, option),
     undo: (customer, decisionId) => undoAgentAction(customerData, customer, decisionId),
     markAgentActionsSeen: (customer, decisionIds) => customerData.markAgentActionsSeen(customer, decisionIds),
-    startMission: (customer, question) => missions.start(customer, question),
+    startMission(customer, question) {
+      if (systemData.isClosed(customer)) throw new MissionError(QUESTION_REFUSALS.closed);
+      return missions.start(customer, question);
+    },
     stopMission: (customer, missionId) => missions.stop(customer, missionId),
     readMission: (customer, missionId) => customerData.getMission(customer, missionId),
     setDataChoice: (customer, choice, on) => setDataChoice(customerData, customer, choice, on),

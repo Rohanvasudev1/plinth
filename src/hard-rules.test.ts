@@ -56,7 +56,7 @@ const rules = [
  * ADR 0010: an action that writes a Decision log entry, a Finding or a Mission ending also writes its own access log
  * entry. The exceptions record only a change the customer made, which is not a read by someone else; the seed; and
  * the sweep module, which both the buffer agent and a picked Move call, so the buffer agent writes the sweep check's
- * entry.
+ * entry. The closure module is not an exception.
  */
 const RECORDS_AN_ACTION = /customerData\.(recordDecision|createFinding|endMission)\(/;
 const WRITES_ACCESS_LOG = /customerData\.recordAccess\(/;

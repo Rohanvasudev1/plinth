@@ -88,6 +88,7 @@ export const QUESTION_REFUSALS = {
   tooLong: (max: number) => `Keep the question under ${max} characters`,
   oneRunning: "Your agent looks into one question at a time. Wait for this one to finish, or stop it, then ask again",
   dailyLimit: (max: number) => `You've sent ${max} Missions today, the most in one day. Ask again tomorrow`,
+  closed: "This account is closed, so your agent takes no Missions",
 } as const;
 
 /** The label of the fact saying what Plinth can't know, when a question needs outside facts. */

@@ -173,6 +173,11 @@ export interface CustomerData {
    * ledger transactions posted inside go to subscribers only after the whole block commits.
    */
   inOneTransaction<T>(work: () => T): T;
+  /**
+   * Runs `effect` once the outermost `inOneTransaction` block commits, or at once outside one. If the block throws,
+   * `effect` never runs. For in-memory effects that must match what the database kept.
+   */
+  afterCommit(effect: () => void): void;
   /** The customer's ledger transaction posted under this idempotency key, if there is one. */
   findLedgerTransaction(customer: Customer, idempotencyKey: string): LedgerTransaction | undefined;
   /** Sets up a payroll into one of the customer's own accounts. */
@@ -245,6 +250,8 @@ export interface CustomerData {
   getFinding(customer: Customer, findingId: number): Finding | undefined;
   /** Expires every open Finding of this kind of the customer's. Returns how many it expired. */
   expireOpenFindings(customer: Customer, kind: FindingKind): number;
+  /** Expires every open or snoozed Finding of the customer's, whatever made it. Returns how many. */
+  expireLiveFindings(customer: Customer): number;
   /** Expires every open or snoozed Finding of the customer's that this Standing search made. Returns how many. */
   expireStandingSearchFindings(customer: Customer, standingSearch: StandingSearch): number;
   /** Snoozes the customer's open Finding until `until`, clearing any earlier refusal. Throws FindingError if it isn't open. */
@@ -273,6 +280,13 @@ export interface CustomerData {
   recordMissionProgress(customer: Customer, missionId: number, progressLabel: MissionProgressLabel, read?: MissionRead): Mission;
   /** Ends the customer's running Mission, timed by the clock. Throws MissionError if it isn't running. */
   endMission(customer: Customer, missionId: number, state: Exclude<MissionState, "running">): Mission;
+  /**
+   * Close and delete's deletion of the customer's working data: every Mission, Finding and settings version, and each
+   * Goal's target. Their Decision log entries keep their stored text, and lose their links to the deleted Missions
+   * and Findings. The Ledger, Decision log, access log, Rules, payrolls, Scheduled bills and Pause history stay.
+   * Linked accounts are unlinked one by one first, each with its own entries.
+   */
+  deleteWorkingData(customer: Customer): void;
   /**
    * Writes one access log entry, timed by the clock (ADR 0010). Call it in the same transaction as the action that
    * read the customer's data. Entries are never changed or removed.
@@ -324,6 +338,13 @@ export function createCustomerData(deps: {
 
   /** Events posted inside an open `inOneTransaction` block, waiting for it to commit. Null outside one. */
   let heldEvents: LedgerEvent[] | null = null;
+  /** Effects from `afterCommit` inside an open `inOneTransaction` block, waiting for it to commit. */
+  let heldEffects: (() => void)[] = [];
+
+  function afterCommit(effect: () => void): void {
+    if (heldEvents) heldEffects.push(effect);
+    else effect();
+  }
 
   function dispatchAfterCommit(event: LedgerEvent): void {
     if (heldEvents) heldEvents.push(event);
@@ -333,14 +354,19 @@ export function createCustomerData(deps: {
   function inOneTransaction<T>(work: () => T): T {
     if (heldEvents) return work();
     heldEvents = [];
+    heldEffects = [];
     let result: T;
     let events: LedgerEvent[];
+    let effects: (() => void)[];
     try {
       result = db.transaction(() => work(), { behavior: "immediate" });
     } finally {
       events = heldEvents;
+      effects = heldEffects;
       heldEvents = null;
+      heldEffects = [];
     }
+    for (const effect of effects) effect();
     for (const event of events) ledgerEvents.dispatch(event);
     return result;
   }
@@ -1095,6 +1121,7 @@ export function createCustomerData(deps: {
     },
     postLedgerTransaction,
     inOneTransaction,
+    afterCommit,
     findLedgerTransaction(customer, idempotencyKey) {
       return selectLedgerTransactions(customer, { idempotencyKey })[0];
     },
@@ -1150,6 +1177,25 @@ export function createCustomerData(deps: {
           and(eq(findingsTable.customerId, customer.id), eq(findingsTable.kind, kind), eq(findingsTable.state, "open")),
         )
         .run().changes;
+    },
+    expireLiveFindings(customer) {
+      return db
+        .update(findingsTable)
+        .set({ state: "expired", snoozedUntil: null, refusedBy: null, refusalReason: null })
+        .where(and(eq(findingsTable.customerId, customer.id), inArray(findingsTable.state, [...LIVE_FINDING_STATES])))
+        .run().changes;
+    },
+    deleteWorkingData(customer) {
+      inOneTransaction(() => {
+        db.update(decisionsTable)
+          .set({ missionId: null, findingId: null })
+          .where(eq(decisionsTable.customerId, customer.id))
+          .run();
+        db.delete(findingsTable).where(eq(findingsTable.customerId, customer.id)).run();
+        db.delete(missionsTable).where(eq(missionsTable.customerId, customer.id)).run();
+        db.delete(settingsVersionsTable).where(eq(settingsVersionsTable.customerId, customer.id)).run();
+        db.update(accountsTable).set({ goalCents: null }).where(eq(accountsTable.customerId, customer.id)).run();
+      });
     },
     expireStandingSearchFindings(customer, standingSearch) {
       return db

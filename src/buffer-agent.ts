@@ -132,7 +132,8 @@ export function startBufferAgent(deps: {
   }
 
   return ledgerEvents.subscribe((event) => {
-    const customer = systemData.findCustomer(event.customerId);
+    // A Closed customer's agent does nothing.
+    const customer = systemData.findOpenCustomer(event.customerId);
     if (!customer) return;
     const transaction = customerData.getLedgerTransaction(customer, event.ledgerTransactionId);
     const deposit = transaction && payrollDeposit(transaction);

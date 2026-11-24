@@ -1,5 +1,5 @@
 import { formatLocalDateWithYear, type LocalDate } from "./calendar";
-import type { Consent, LinkedAccount } from "./linked-accounts";
+import type { Consent, LinkedAccount, UnlinkReason } from "./linked-accounts";
 import type { InstitutionAccount, LinkedAccountType } from "./open-banking";
 
 /** Each Linked account type in words, as All accounts, the Decision log and the access log show it. */
@@ -54,14 +54,19 @@ export function renewDecisionText(linked: LinkedAccount) {
   };
 }
 
+const UNLINK_TRIGGER_TEXT: Record<UnlinkReason, string> = {
+  unlink: "You pressed Unlink on All accounts",
+  close: "You closed your Plinth account",
+};
+
 /** The Decision log entry's text for the customer unlinking an account. */
-export function unlinkDecisionText(linked: LinkedAccount) {
+export function unlinkDecisionText(linked: LinkedAccount, reason: UnlinkReason) {
   const name = institutionAccountName(linked);
   return {
     trigger: "You unlinked an account",
     action: `Unlinked ${name}`,
     why: [
-      { label: "Trigger", value: "You pressed Unlink on All accounts" },
+      { label: "Trigger", value: UNLINK_TRIGGER_TEXT[reason] },
       { label: "Account", value: name },
       { label: "What Plinth kept", value: "Nothing. Plinth deleted its copy of that data" },
     ],

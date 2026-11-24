@@ -163,7 +163,7 @@ A check that runs before any agent action and refuses it if it breaks a Rule or 
 _Avoid_: Validation, safety check
 
 **Decision log**:
-The customer-visible record of every agent action, with its trigger, the Rule it used, and its result, plus each change the customer makes to the agent: Undo, a picked Option, a Rule or setting edit, a Goal's target, and Pause. A Mission's entry names no Rule, because the customer asked for it, and its result is Reported, with a link to its Finding, Stopped, when the customer stopped it, or Failed.
+The customer-visible record of every agent action, with its trigger, the Rule it used, and its result, plus each change the customer makes to the agent: Undo, a picked Option, a Rule or setting edit, a Goal's target, and Pause. A Mission's entry names no Rule, because the customer asked for it, and its result is Reported, with a link to its Finding, Stopped, when the customer stopped it, or Failed. After Close and delete, entries keep their text but lose their links to the deleted Missions and Findings.
 _Avoid_: Audit trail, history
 
 **Why**:
@@ -265,3 +265,7 @@ _Avoid_: Data dump, backup
 **Closed customer**:
 A customer who used Close and delete. Plinth has paid out their balances, deleted their working data, and kept the Ledger, Decision log and Access log as records. They can no longer sign in.
 _Avoid_: Deleted customer, deactivated account
+
+**Account-closure clearing account**:
+The Clearing account that takes a Closed customer's Plinth balances when Close and delete pays them out, one ledger transaction per account under `closure:<customer id>:<account id>`.
+_Avoid_: Closure account, exit account

@@ -107,6 +107,17 @@ export default async function PrivacyPage() {
           </button>
         </form>
       </section>
+
+      <section className="card" aria-labelledby="close-and-delete">
+        <h2 id="close-and-delete">Close and delete</h2>
+        <p className="muted">
+          Pay out your balances, delete your working data and stop signing in. You&rsquo;ll see what Plinth keeps and
+          deletes before anything happens.
+        </p>
+        <Link href="/privacy/close" className="button danger">
+          Close and delete
+        </Link>
+      </section>
     </main>
   );
 }

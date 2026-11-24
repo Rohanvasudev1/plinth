@@ -14,7 +14,7 @@ export function reopenDueFindings(deps: { clock: Clock; customerData: CustomerDa
   const today = localDateOf(clock.now());
   return customerData.inOneTransaction(() => {
     let reopened = 0;
-    for (const customer of systemData.listCustomers()) {
+    for (const customer of systemData.listOpenCustomers()) {
       for (const finding of customerData.listSnoozedFindingsDue(customer, today)) {
         const date = finding.snoozedUntil;
         if (date === null) continue; // Only for the type: listSnoozedFindingsDue returns Findings with a date.
