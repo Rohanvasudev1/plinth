@@ -32,7 +32,16 @@ export interface Mission {
 /** The longest question the customer can send. */
 export const MAX_QUESTION_LENGTH = 500;
 
-/** The Mission's question isn't one it can run with, or the Mission isn't the customer's. */
+/** How many Missions a customer may send in one simulated day. */
+export const MAX_MISSIONS_PER_DAY = 10;
+
+/** How many tool calls one Mission may make. The next one fails it. */
+export const MAX_TOOL_CALLS = 8;
+
+/** How long a Mission may run, by the wall clock, before it fails. */
+export const MISSION_TIME_LIMIT_MS = 3 * 60 * 1000;
+
+/** The Mission's question isn't one it can run with, a limit refuses it, or the Mission isn't the customer's. */
 export class MissionError extends Error {
   override name = "MissionError";
 }

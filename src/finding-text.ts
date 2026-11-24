@@ -88,3 +88,8 @@ export function priceRiseTitle(merchant: string, before: Cents, now: Cents): str
 export function trialTurnedPaidTitle(merchant: string, price: Cents): string {
   return `Your ${merchant} free trial turned paid at ${formatDollars(price)}`;
 }
+
+/** Why a Mission Move is refused when no buffer Rule covers the account it moves from. */
+export function noBufferRuleReason(accountName: string): string {
+  return `no buffer Rule lets your agent move money from ${accountName}`;
+}

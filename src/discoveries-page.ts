@@ -1,3 +1,4 @@
+import { localDateOf, type LocalDate } from "./calendar";
 import type { Customer, CustomerData } from "./customer-data";
 import { STANDING_SEARCHES, type Finding, type StandingSearch } from "./findings";
 import type { Mission } from "./missions";
@@ -17,6 +18,11 @@ export interface DiscoveriesPage {
   adviceSetting: AdviceSetting | null;
   /** The customer's running Missions, newest first, each with what it is doing now. */
   runningMissions: Mission[];
+  /**
+   * Today's Missions that ended without a Finding, stopped or failed, newest first, leaving out any whose question
+   * was asked again later. A failed one offers Try again.
+   */
+  unfinishedMissions: Mission[];
   /** Every Finding the customer has, newest first. */
   findings: FindingOnPage[];
   openFindingCount: number;
@@ -29,21 +35,32 @@ export interface DiscoveriesPage {
  * Agent's view shown as the current Advice setting allows. Under "never", or before setup, no Agent's view text is in
  * the page at all.
  */
-export function readDiscoveriesPage(customerData: CustomerData, customer: Customer): DiscoveriesPage {
+export function readDiscoveriesPage(customerData: CustomerData, customer: Customer, today: LocalDate): DiscoveriesPage {
   const settings = customerData.getSettings(customer);
   const adviceSetting = settings?.adviceSetting ?? null;
   const findings = customerData
     .listFindings(customer)
     .sort((a, b) => b.at.getTime() - a.at.getTime() || b.id - a.id)
     .map((finding) => ({ ...finding, agentsView: agentsViewOnPage(finding.agentsView, adviceSetting) }));
-  const runningMissions = customerData.listMissions(customer).filter((mission) => mission.state === "running");
+  const missions = customerData.listMissions(customer);
   return {
     adviceSetting,
-    runningMissions,
+    runningMissions: missions.filter((mission) => mission.state === "running"),
+    unfinishedMissions: unfinishedMissions(missions, today),
     findings,
     openFindingCount: countOpenFindings(findings),
     standingSearches: settings ? STANDING_SEARCHES.map((search) => ({ search, on: settings.standingSearches[search] })) : [],
   };
+}
+
+/** Today's stopped and failed Missions, newest first, each only while no later Mission asked its question again. */
+function unfinishedMissions(newestFirst: Mission[], today: LocalDate): Mission[] {
+  return newestFirst.filter(
+    (mission, index) =>
+      (mission.state === "stopped" || mission.state === "failed") &&
+      localDateOf(mission.startedAt) === today &&
+      !newestFirst.slice(0, index).some((later) => later.question === mission.question),
+  );
 }
 
 /** How many of these Findings are open, for the nav bar's badge and Home's link card. */

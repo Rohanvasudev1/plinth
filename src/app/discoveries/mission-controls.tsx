@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect } from "react";
-import { askAction } from "./mission-actions";
+import { askAction, stopAction } from "./mission-actions";
 
 /**
  * The question box: a question the customer types, or one of the suggested questions, each sent as a Mission with
@@ -54,4 +54,34 @@ export function RefreshWhileRunning({ everyMs }: { everyMs: number }) {
     return () => clearInterval(timer);
   }, [router, everyMs]);
   return null;
+}
+
+/** Stops a running Mission. */
+export function StopButton({ missionId }: { missionId: number }) {
+  return (
+    <form action={stopAction}>
+      <input type="hidden" name="missionId" value={missionId} />
+      <button type="submit" className="button small secondary">
+        Stop
+      </button>
+    </form>
+  );
+}
+
+/** Starts a new Mission with a failed one's question, showing why if a limit refuses it. */
+export function TryAgainButton({ question }: { question: string }) {
+  const [result, formAction, pending] = useActionState(askAction, null);
+  return (
+    <form action={formAction}>
+      <input type="hidden" name="question" value={question} />
+      <button type="submit" className="button" disabled={pending}>
+        Try again
+      </button>
+      {result?.message && (
+        <p role="alert" className="result refused">
+          {result.message}
+        </p>
+      )}
+    </form>
+  );
 }

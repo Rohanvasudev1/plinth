@@ -10,6 +10,21 @@ import { cents, formatDollars, type Cents } from "./money";
 /** How many days back the scripts read transactions for. */
 const RECENT_DAYS = 90;
 
+/**
+ * Questions that run the fake's test scripts, for tests and the end-to-end suite: one fails with a model error, one
+ * runs long, reading once a minute until it is stopped or reaches a limit, one reads more often than a Mission may,
+ * and one returns a fact that cites no tool call.
+ */
+export const FAKE_TEST_QUESTIONS = {
+  modelError: "Test: fail with a model error",
+  runLong: "Test: run long",
+  tooManyReads: "Test: read too often",
+  uncitedFact: "Test: cite nothing",
+} as const;
+
+/** How long the run-long script waits between reads. */
+const RUN_LONG_STEP_MS = 60_000;
+
 export function createFakeMissionModel(deps: {
   clock: Clock;
   /** How long to wait before each tool call, so the app shows a running Mission's progress. Zero in tests. */
@@ -19,6 +34,8 @@ export function createFakeMissionModel(deps: {
   return {
     async runMission(request) {
       const session = new ScriptSession(request, localDateOf(clock.now()), toolCallDelayMs);
+      const testScript = testScriptFor(request.question);
+      if (testScript) return testScript(session);
       const transactions = await session.call<TransactionsResult>("read_transactions", {
         from: addDays(session.today, -RECENT_DAYS),
         to: session.today,
@@ -35,6 +52,53 @@ export function createFakeMissionModel(deps: {
       return fallback(session, transactions, usualFigures);
     },
   };
+}
+
+function testScriptFor(question: string): ((session: ScriptSession) => Promise<ModelFinding>) | undefined {
+  switch (question.trim().toLowerCase()) {
+    case FAKE_TEST_QUESTIONS.modelError.toLowerCase():
+      return async (session) => {
+        await session.call("read_usual_month", {});
+        throw new Error("The fake model failed, as its test script asks");
+      };
+    case FAKE_TEST_QUESTIONS.runLong.toLowerCase():
+      return async (session) => {
+        for (;;) {
+          await session.call("read_goals", {});
+          await sleep(RUN_LONG_STEP_MS);
+        }
+      };
+    case FAKE_TEST_QUESTIONS.tooManyReads.toLowerCase():
+      return async (session) => {
+        const calls: Called<unknown>[] = [];
+        for (let count = 0; count < 9; count += 1) calls.push(await session.call("read_goals", {}));
+        return citing(calls[0] as Called<unknown>);
+      };
+    case FAKE_TEST_QUESTIONS.uncitedFact.toLowerCase():
+      return async (session) => {
+        const goals = await session.call("read_goals", {});
+        const finding = citing(goals);
+        return { ...finding, facts: [...finding.facts, { label: "Rents nearby", value: "Higher", toolCallId: "call_99" }] };
+      };
+    default:
+      return undefined;
+  }
+}
+
+/** A plain Finding with one fact citing `call`, for the test scripts. */
+function citing(call: Called<unknown>): ModelFinding {
+  return {
+    title: "Your Goals",
+    facts: [fact("Goals read", "Yes", call)],
+    options: [{ key: "not_now" }],
+    agentsView: null,
+    cantKnow: null,
+    report: null,
+  };
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 // The parts of each tool's result the scripts read.
@@ -55,8 +119,11 @@ interface GoalsResult {
   goals: { account: string; balanceCents: number; targetCents: number | null }[];
 }
 interface BillsResult {
-  bills: { payee: string; amountCents: number }[];
+  bills: { payee: string; amountCents: number; account?: string }[];
 }
+type ForecastResult =
+  | { kind: "no_checking_account" }
+  | { kind: "forecast"; account: string; today: { balanceCents: number }; bufferCents: number };
 type ProjectionResult =
   | { kind: "not_enough_history" | "no_sweep_target" }
   | { kind: "projection"; account: string; balanceCents: number; usualMonth: { after36MonthsCents: number } };
@@ -240,12 +307,36 @@ async function onTrack(session: ScriptSession, usual: Called<UsualFigures>, ques
   if (projection.result.kind === "projection" && projection.result.account === goal.account) {
     facts.push(fact("In 3 years at your Usual month", dollars(projection.result.usualMonth.after36MonthsCents), projection));
   }
+  // Offer to move what checking holds today above its Buffer and a month of the Scheduled bills paid from it, in
+  // whole dollars, up to what the Goal still needs.
+  const forecast = await session.call<ForecastResult>("read_forecast", {});
+  const bills = await session.call<BillsResult>("read_scheduled_bills", {});
+  let move: { key: "move"; amountCents: number; from: string; to: string } | undefined;
+  if (forecast.result.kind === "forecast") {
+    const checking = forecast.result;
+    const billsEachMonth = bills.result.bills
+      .filter((bill) => bill.account === checking.account)
+      .reduce((sum, bill) => sum + bill.amountCents, 0);
+    const spare = checking.today.balanceCents - checking.bufferCents - billsEachMonth;
+    const amountCents = Math.min(toGo, Math.floor(spare / 100) * 100);
+    facts.push(
+      fact(`${checking.account} today`, `${dollars(checking.today.balanceCents)}, with a ${dollars(checking.bufferCents)} Buffer`, forecast),
+      fact(`Scheduled bills from ${checking.account} each month`, dollars(billsEachMonth), bills),
+    );
+    if (amountCents > 0) move = { key: "move", amountCents, from: checking.account, to: goal.account };
+  }
   return {
     title,
     facts,
-    options: [{ key: "read_report" }, { key: "remind_me", date: inAboutThreeMonths(session.today) }, { key: "not_now" }],
-    agentsView:
-      months === null
+    options: [
+      ...(move ? [move] : []),
+      { key: "read_report" },
+      { key: "remind_me", date: inAboutThreeMonths(session.today) },
+      { key: "not_now" },
+    ],
+    agentsView: move
+      ? `I would pick Move ${dollars(move.amountCents)} to ${goal.account}: ${move.from} keeps its Buffer and a month of bills, and the Goal grows now.`
+      : months === null
         ? "I would pick Read the full report: it shows which Categories take up the money you'd save."
         : `I would pick Remind me: checking again in three months shows whether you're keeping the Usual month's pace.`,
     cantKnow: null,

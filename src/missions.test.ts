@@ -212,15 +212,23 @@ describe("What Plinth can't know", () => {
 });
 
 describe("Mission Finding Options", () => {
-  it("drop an Option not on the list, any Move (the Move Option comes later), a repeat and a past reminder", async () => {
-    const priyasAccounts: number[] = [];
+  it("drop an Option not on the list, a Move that isn't between two of the customer's own accounts or isn't a positive amount in cents, a repeat and a past reminder", async () => {
     const bank = bankWith(
       modelReturning((callId) =>
         finding({
           facts: [{ label: "Usual month", value: "$7,020.00 in", toolCallId: callId }],
           options: [
             { key: "cancel_subscription" },
-            { key: "move", amount: 100_00, fromAccountId: priyasAccounts[0], toAccountId: priyasAccounts[1] },
+            // Travel fund is Priya's account, not Sam's.
+            { key: "move", amountCents: 100_00, from: "Checking", to: "Travel fund" },
+            { key: "move", amountCents: 100_00, from: "Checking", to: "Checking" },
+            { key: "move", amountCents: 0, from: "Checking", to: "House fund" },
+            { key: "move", amountCents: -100_00, from: "Checking", to: "House fund" },
+            { key: "move", amountCents: 100.5, from: "Checking", to: "House fund" },
+            { key: "move", amountCents: "10000", from: "Checking", to: "House fund" },
+            { key: "move", amountCents: 100_00, fromAccountId: 1, toAccountId: 2 },
+            { key: "move", amountCents: 150_00, from: "Checking", to: "House fund" },
+            { key: "move", amountCents: 200_00, from: "Checking", to: "House fund" },
             { key: "remind_me", date: "2026-11-01" },
             { key: "remind_me", date: "2027-02-01" },
             { key: "not_now" },
@@ -230,12 +238,13 @@ describe("Mission Finding Options", () => {
       ),
     );
     const sam = signInByName(bank, "Sam Calloway");
-    priyasAccounts.push(...bank.customerData.listAccounts(signInByName(bank, "Priya Natarajan")).map((each) => each.id));
+    const accountId = (name: string) => bank.customerData.listAccounts(sam).find((each) => each.name === name)?.id;
 
     const finished = await bank.startMission(sam, "What's my Usual month?").ended;
 
     expect(finished.state).toBe("reported");
     expect(bank.customerData.getFinding(sam, finished.findingId ?? -1)?.options).toEqual([
+      { key: "move", amount: 150_00, fromAccountId: accountId("Checking"), toAccountId: accountId("House fund") },
       { key: "remind_me", date: "2027-02-01" },
       { key: "not_now" },
     ]);
@@ -290,6 +299,8 @@ describe("Mission tools", () => {
       "read_usual_month",
       "read_goals",
       "read_projection",
+      "read_forecast",
+      "read_scheduled_bills",
     ]);
     expect(JSON.stringify(samsMission.readList)).not.toMatch(/Travel fund|Priya/);
     expect(JSON.stringify(priyasMission.readList)).not.toMatch(/House fund|Sam/);

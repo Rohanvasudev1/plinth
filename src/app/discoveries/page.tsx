@@ -1,13 +1,13 @@
 import Link from "next/link";
 import { getAppBank } from "@/app-bank";
-import { PROVIDER_NOTICE } from "@/mission-text";
+import { PROVIDER_NOTICE, UNFINISHED_MISSION_TEXT } from "@/mission-text";
 import { MAX_QUESTION_LENGTH, SUGGESTED_QUESTIONS } from "@/missions";
 import { requireCustomer } from "@/session";
 import { ADVICE_SETTING_TEXT, STANDING_SEARCH_TEXT } from "@/settings-text";
 import { StandingSearchSwitch } from "../agent-action-controls";
 import { FindingCard } from "../finding-card";
 import { NavBar } from "../nav-bar";
-import { QuestionBox, RefreshWhileRunning } from "./mission-controls";
+import { QuestionBox, RefreshWhileRunning, StopButton, TryAgainButton } from "./mission-controls";
 
 export const dynamic = "force-dynamic";
 
@@ -45,10 +45,26 @@ export default async function DiscoveriesPage() {
                 <span className="muted" role="status">
                   {mission.progressLabel}…
                 </span>
+                <StopButton missionId={mission.id} />
               </li>
             ))}
           </ul>
           <RefreshWhileRunning everyMs={2000} />
+        </section>
+      )}
+
+      {page.unfinishedMissions.length > 0 && (
+        <section className="card" aria-labelledby="unfinished">
+          <h2 id="unfinished">Ended without a Finding</h2>
+          <ul className="missions">
+            {page.unfinishedMissions.map((mission) => (
+              <li key={mission.id} className="mission" aria-label={mission.question}>
+                <b>{mission.question}</b>
+                <span className="muted">{UNFINISHED_MISSION_TEXT[mission.state === "stopped" ? "stopped" : "failed"]}</span>
+                {mission.state === "failed" && <TryAgainButton question={mission.question} />}
+              </li>
+            ))}
+          </ul>
         </section>
       )}
 
