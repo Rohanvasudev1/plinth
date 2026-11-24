@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { Clock } from "./clock";
 import { createFakeMissionModel } from "./fake-mission-model";
+import { MISSION_OPTION_KEYS } from "./mission-finding";
 import type { MissionModel, MissionModelRequest, ModelFinding } from "./mission-model";
 
 // The Anthropic SDK adapter behind the language model interface (ADR 0005, ADR 0009). It runs the tool-use loop
@@ -21,7 +22,8 @@ export type ChosenMissionModel = { provider: "fake"; model: MissionModel } | { p
 
 /**
  * The adapter when `ANTHROPIC_API_KEY` is set, on `PLINTH_MODEL` or the default model, and the scripted fake
- * otherwise. The end-to-end suite (`PLINTH_E2E=1`) always gets the fake, even with a key in the environment.
+ * otherwise. Unit tests (Vitest sets `VITEST`) and the end-to-end suite (`PLINTH_E2E=1`) always get the fake, even
+ * with a key in the environment.
  */
 export function chooseMissionModel(deps: {
   env: Record<string, string | undefined>;
@@ -33,7 +35,7 @@ export function chooseMissionModel(deps: {
 }): ChosenMissionModel {
   const { env, clock, fakeToolCallDelayMs, transportFor = sdkTransport } = deps;
   const apiKey = env.ANTHROPIC_API_KEY;
-  if (!apiKey || env.PLINTH_E2E === "1") {
+  if (!apiKey || env.PLINTH_E2E === "1" || env.VITEST) {
     return { provider: "fake", model: createFakeMissionModel({ clock, toolCallDelayMs: fakeToolCallDelayMs }) };
   }
   return {
@@ -76,7 +78,7 @@ const SUBMIT_FINDING_TOOL: Anthropic.Tool = {
         items: {
           type: "object",
           properties: {
-            key: { type: "string", enum: ["read_report", "remind_me", "not_now"] },
+            key: { type: "string", enum: [...MISSION_OPTION_KEYS] },
             date: { ...NULLABLE_TEXT, description: "YYYY-MM-DD for remind_me, otherwise null." },
           },
           required: ["key", "date"],
@@ -93,16 +95,16 @@ const SUBMIT_FINDING_TOOL: Anthropic.Tool = {
 };
 
 /** The most tool calls one Mission may make (#53). Calls past it are answered with an error, not run. */
-export const MISSION_TOOL_CALL_CAP = 8;
+export const MISSION_TOOL_CALL_LIMIT = 8;
 
-/** The most output tokens one Mission may spend across all its requests, thinking included. */
-export const MISSION_OUTPUT_TOKEN_CAP = 32_000;
+/** The most output tokens one Mission may spend across all its requests, including the thinking the model does by default. */
+export const MISSION_OUTPUT_TOKEN_LIMIT = 32_000;
 
 /** The most output tokens one request may ask for. Larger non-streaming requests risk the SDK's HTTP timeout. */
 const MAX_TOKENS_PER_REQUEST = 16_000;
 
-/** What a tool call past the cap gets back instead of a result. */
-const TOOL_CALL_CAP_REACHED = `This Mission has used its ${MISSION_TOOL_CALL_CAP} tool calls. Call submit_finding now.`;
+/** What a tool call past the limit gets back instead of a result. */
+const TOOL_CALL_LIMIT_REACHED = `This Mission has used its ${MISSION_TOOL_CALL_LIMIT} tool calls. Call submit_finding now.`;
 
 export function createAnthropicMissionModel(deps: { transport: MessagesTransport; model: string }): MissionModel {
   const { transport, model } = deps;
@@ -114,8 +116,8 @@ export function createAnthropicMissionModel(deps: { transport: MessagesTransport
       let outputTokens = 0;
       let toldToSubmit = false;
       for (;;) {
-        const remaining = MISSION_OUTPUT_TOKEN_CAP - outputTokens;
-        if (remaining <= 0) throw new Error(`The Mission used its ${MISSION_OUTPUT_TOKEN_CAP} output tokens`);
+        const remaining = MISSION_OUTPUT_TOKEN_LIMIT - outputTokens;
+        if (remaining <= 0) throw new Error(`The Mission used its ${MISSION_OUTPUT_TOKEN_LIMIT} output tokens`);
         const response = await transport.create({
           model,
           max_tokens: Math.min(MAX_TOKENS_PER_REQUEST, remaining),
@@ -130,13 +132,13 @@ export function createAnthropicMissionModel(deps: { transport: MessagesTransport
         if (response.stop_reason !== "tool_use") {
           throw new Error(`The model stopped (${response.stop_reason}) without submitting a Finding`);
         }
-        if (toldToSubmit) throw new Error("The model kept calling tools after the tool-call cap");
+        if (toldToSubmit) throw new Error("The model kept calling tools after the tool-call limit");
         messages.push({ role: "assistant", content: response.content });
         const results: Anthropic.ToolResultBlockParam[] = [];
         for (const use of uses) {
-          if (toolCalls >= MISSION_TOOL_CALL_CAP) {
+          if (toolCalls >= MISSION_TOOL_CALL_LIMIT) {
             toldToSubmit = true;
-            results.push({ type: "tool_result", tool_use_id: use.id, is_error: true, content: TOOL_CALL_CAP_REACHED });
+            results.push({ type: "tool_result", tool_use_id: use.id, is_error: true, content: TOOL_CALL_LIMIT_REACHED });
             continue;
           }
           toolCalls += 1;
@@ -167,34 +169,17 @@ function toolsFor(request: MissionModelRequest): Anthropic.Tool[] {
 }
 
 /**
- * The submitted Finding, if it has the shape the tool asks for, or throws so the Mission fails. Strict tool use
- * should guarantee the shape, but the adapter checks rather than trusts it. Code checks the content afterwards.
+ * The submitted Finding as the interface carries it, with any missing text as null. Its shape and content are
+ * checked by `checkMissionFinding`, which fails the Mission on a malformed one, so the adapter doesn't check twice.
  */
 function modelFindingFrom(input: unknown): ModelFinding {
-  const finding = (typeof input === "object" && input !== null ? input : {}) as Record<string, unknown>;
-  const { title, facts, options, agentsView, cantKnow, report } = finding;
-  const isFact = (fact: unknown) =>
-    typeof fact === "object" &&
-    fact !== null &&
-    ["label", "value", "toolCallId"].every((key) => typeof (fact as Record<string, unknown>)[key] === "string");
-  const isNullableText = (value: unknown) => value === null || value === undefined || typeof value === "string";
-  if (
-    typeof title !== "string" ||
-    !Array.isArray(facts) ||
-    !facts.every(isFact) ||
-    !Array.isArray(options) ||
-    !isNullableText(agentsView) ||
-    !isNullableText(cantKnow) ||
-    !isNullableText(report)
-  ) {
-    throw new Error("The model submitted a malformed Finding");
-  }
+  const submitted = (typeof input === "object" && input !== null ? input : {}) as Partial<ModelFinding>;
   return {
-    title,
-    facts: facts as ModelFinding["facts"],
-    options,
-    agentsView: (agentsView as string | null | undefined) ?? null,
-    cantKnow: (cantKnow as string | null | undefined) ?? null,
-    report: (report as string | null | undefined) ?? null,
+    title: submitted.title as string,
+    facts: submitted.facts as ModelFinding["facts"],
+    options: submitted.options as unknown[],
+    agentsView: submitted.agentsView ?? null,
+    cantKnow: submitted.cantKnow ?? null,
+    report: submitted.report ?? null,
   };
 }

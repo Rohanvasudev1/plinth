@@ -168,8 +168,10 @@ describe("Choosing the Mission model", () => {
     expect(chooseMissionModel({ env: { ANTHROPIC_API_KEY: "", PLINTH_MODEL: "claude-other" }, clock }).provider).toBe("fake");
   });
 
-  it("uses the fake in the end-to-end suite even with an API key", () => {
+  it("uses the fake in the end-to-end suite and the unit tests even with an API key", () => {
     expect(chooseMissionModel({ env: { ANTHROPIC_API_KEY: "sk-test", PLINTH_E2E: "1" }, clock }).provider).toBe("fake");
+    expect(chooseMissionModel({ env: { ANTHROPIC_API_KEY: "sk-test", VITEST: "true" }, clock }).provider).toBe("fake");
+    expect(chooseMissionModel({ env: { ...process.env, ANTHROPIC_API_KEY: "sk-test" }, clock }).provider).toBe("fake");
   });
 
   it("uses claude-opus-5-5 with an API key, or PLINTH_MODEL when it is set", async () => {
@@ -217,9 +219,9 @@ describe("A Mission on the Anthropic model", () => {
   it.each([
     ["a Finding with no facts list", reply([toolUse("tu_1", "submit_finding", { ...SUBMITTED, facts: "none" })])],
     ["a Finding with no title", reply([toolUse("tu_1", "submit_finding", { ...SUBMITTED, title: undefined })])],
-    ["a fact missing its citation", reply([toolUse("tu_1", "submit_finding", { ...SUBMITTED, facts: [{ label: "A", value: "B" }] })])],
+    ["a fact that names no tool call", reply([toolUse("tu_1", "submit_finding", { ...SUBMITTED, facts: [{ label: "A", value: "B" }] })])],
     ["a plain text answer with no Finding", reply([text("You're doing fine.")], "end_turn")],
-    ["a reply cut off at the token cap", reply([text("You're doing")], "max_tokens")],
+    ["a reply cut off at the token limit", reply([text("You're doing")], "max_tokens")],
     ["a refusal", reply([], "refusal")],
   ])("fails, keeping nothing, on %s", async (_, malformed) => {
     // A good Finding follows, so an adapter that carried on past the malformed reply would report it.
