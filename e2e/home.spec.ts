@@ -37,3 +37,25 @@ test("Signing in as Priya shows her balances, not Sam's", async ({ page }) => {
   await expect(page.getByRole("region", { name: "Travel fund" })).toContainText("$2,150.00");
   await expect(page.getByText("House fund")).toHaveCount(0);
 });
+
+test("Home shows the 30-day Forecast with the Buffer and its lowest point, above what the agent did", async ({ page }) => {
+  await restoreSeed(page);
+  await page.goto("/sign-in");
+  await page.getByRole("button", { name: "Sam Calloway" }).click();
+
+  const forecast = page.getByRole("region", { name: "30-day Forecast" });
+  await expect(forecast.getByRole("img")).toBeVisible();
+  await expect(forecast).toContainText("Buffer $1,500");
+  await expect(forecast).toContainText(
+    "Lowest balance in the next 30 days: -$321.82 on Thu 3 Dec. That is $1,821.82 below your $1,500.00 Buffer.",
+  );
+  await expect(forecast).toContainText("$130.13 a day of usual spending");
+
+  const headings = await page.getByRole("heading", { level: 2 }).allTextContents();
+  expect(headings.indexOf("30-day Forecast")).toBe(headings.indexOf("What your agent did") - 1);
+
+  const chartWidth = await forecast.getByRole("img").evaluate((svg) => svg.getBoundingClientRect().width);
+  expect(chartWidth).toBeLessThanOrEqual(390);
+  const overflows = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
+  expect(overflows).toBe(false);
+});

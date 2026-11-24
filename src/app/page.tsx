@@ -11,6 +11,7 @@ import { requireCustomer } from "@/session";
 import { STANDARD_SETUP } from "@/setup-answers";
 import { SetupSurvey } from "./setup/setup-survey";
 import { AgentActionsToast, FindingOptions, UndoButton } from "./agent-action-controls";
+import { ForecastChart } from "./forecast-chart";
 import { NavBar } from "./nav-bar";
 import { WhyPanel } from "./why-panel";
 
@@ -260,6 +261,8 @@ export default async function HomePage() {
           )}
         </AccountCard>
       ))}
+
+      {home.forecast && <ForecastChart forecast={home.forecast} />}
 
       <AgentActionsCard actions={home.agentActions} />
 
