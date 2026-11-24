@@ -4,7 +4,7 @@ import { fixedClock } from "./clock";
 import { openTestDatabase } from "./db/database";
 import { cents } from "./money";
 import { CardDeclinedError } from "./simulator";
-import { openTestBank, signInByName } from "./test-bank";
+import { openTestBank, signInByName, withoutSweeps } from "./test-bank";
 
 /** Friday 20 November 2026, 9am in New York: Acme Corp's first payday. */
 const FIRST_PAYDAY_9AM = new Date("2026-11-20T14:00:00Z");
@@ -12,13 +12,6 @@ const FIRST_PAYDAY_9AM = new Date("2026-11-20T14:00:00Z");
 /** A seeded bank with every buffer Rule switched off, so balances show only what the Simulator posted. */
 function bankAt(at: Date): Bank {
   return withoutSweeps(createBank({ db: openTestDatabase(), clock: fixedClock(at) }));
-}
-
-function withoutSweeps(bank: Bank): Bank {
-  for (const customer of bank.listCustomers()) {
-    for (const rule of bank.customerData.listRules(customer)) bank.switchRule(customer, rule.id, false);
-  }
-  return bank;
 }
 
 function samsBalances(bank: Bank) {

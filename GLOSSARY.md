@@ -145,7 +145,7 @@ _Avoid_: Rollback, cancel
 ## Forecast
 
 **Category**:
-The kind of spending a merchant or Scheduled bill belongs to, such as Groceries or Housing.
+The kind of spending, income or saving a ledger transaction is, such as Groceries, Housing, Income or Savings. A Merchant or Scheduled bill gives its spending one Category.
 _Avoid_: Tag, label, bucket
 
 **Counterparty**:

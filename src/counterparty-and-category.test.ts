@@ -2,21 +2,13 @@ import { describe, expect, it } from "vitest";
 import type { Bank } from "./bank";
 import { cents } from "./money";
 import { CardDeclinedError, type MerchantKey } from "./simulator";
-import { openTestBank, signInByName } from "./test-bank";
+import { openTestBank, signInByName, withoutSweeps } from "./test-bank";
 
 function samWithAccounts(bank: Bank) {
   const sam = signInByName(bank, "Sam Calloway");
   const [checking, houseFund] = bank.customerData.listAccounts(sam);
   if (!checking || !houseFund) throw new Error("Sam's seeded accounts are missing");
   return { sam, checking, houseFund };
-}
-
-/** Switches every buffer Rule off, so the ledger holds only what the Simulator posted. */
-function withoutSweeps(bank: Bank): Bank {
-  for (const customer of bank.listCustomers()) {
-    for (const rule of bank.customerData.listRules(customer)) bank.switchRule(customer, rule.id, false);
-  }
-  return bank;
 }
 
 /** Sam's newest ledger transaction. */
