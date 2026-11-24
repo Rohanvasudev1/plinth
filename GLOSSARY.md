@@ -141,3 +141,33 @@ _Avoid_: Reason, rationale
 **Undo**:
 Reversing an agent action with a new, opposite ledger transaction.
 _Avoid_: Rollback, cancel
+
+## Forecast
+
+**Category**:
+The kind of spending a merchant or Scheduled bill belongs to, such as Groceries or Housing.
+_Avoid_: Tag, label, bucket
+
+**Merchant**:
+A simulated business the customer pays by Card purchase, with a fixed Category.
+_Avoid_: Vendor, payee, shop
+
+**Usual month**:
+The average income and spending, per Category and in total, over the last six full calendar months.
+_Avoid_: Average month, baseline, normal month
+
+**On pace**:
+This month's spending so far, scaled up to the whole month.
+_Avoid_: Run rate, projected spend
+
+**Forecast**:
+The expected Checking balance over the next 30 days, worked out from known paychecks, Scheduled bills, sweeps and usual daily spending.
+_Avoid_: Prediction, projection (that word is for Goals)
+
+**Projection**:
+Where a Goal's balance would be after three years at a given pace of saving, with no interest.
+_Avoid_: Forecast, plan
+
+**Activity**:
+The customer's list of posted ledger transactions, newest first.
+_Avoid_: Statement, history, transactions page
