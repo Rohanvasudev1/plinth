@@ -4,7 +4,8 @@ import type { Account, Customer, CustomerData, LedgerTransaction } from "./custo
 import { GUARDRAILS, type Guardrail, type WhyRow } from "./decisions";
 import type { LedgerEvent, LedgerEventDispatcher } from "./ledger-events";
 import { cents, formatDollars, formatDollarsBriefly, type Cents } from "./money";
-import { bufferRuleFor, type Rule } from "./rules";
+import { describeRule } from "./rule-changes";
+import { bufferRuleFor, type BufferRule } from "./rules";
 import { billsBeforePayday, safeToSpend, type BillsBeforePayday } from "./safe-to-spend";
 import { EMPLOYERS, type SystemData } from "./system-data";
 
@@ -18,7 +19,7 @@ interface PayrollDeposit {
 /** Everything the guardrails need to judge one Sweep. */
 interface ProposedSweep {
   customer: Customer;
-  rule: Rule;
+  rule: BufferRule;
   /** Undefined when the Rule's account isn't one of the customer's. */
   checking: Account | undefined;
   savings: Account | undefined;
@@ -75,7 +76,7 @@ export function startBufferAgent(deps: {
     return null;
   }
 
-  function sweep(customer: Customer, rule: Rule, event: LedgerEvent, deposit: PayrollDeposit): void {
+  function sweep(customer: Customer, rule: BufferRule, event: LedgerEvent, deposit: PayrollDeposit): void {
     customerData.inOneTransaction(() => {
       // Only the customer's own accounts come back, so an account that isn't theirs reads as missing.
       const checking = customerData.getAccount(customer, rule.parameters.checkingAccountId);
@@ -96,7 +97,9 @@ export function startBufferAgent(deps: {
         { label: "Bills before payday", value: describeBills(bills) },
         {
           label: "Rule",
-          value: `Buffer Rule v${rule.version}: keep ${formatDollarsBriefly(rule.parameters.buffer)} in ${checkingName}, move the rest to ${savingsName}`,
+          value: describeRule(rule, (accountId) =>
+            accountId === rule.parameters.checkingAccountId ? checkingName : savingsName,
+          ),
         },
         {
           label: "Amount",

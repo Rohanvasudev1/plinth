@@ -179,7 +179,8 @@ export const ruleVersionsTable = sqliteTable(
 
 /**
  * The Decision log: one row per agent action, with what triggered it, the Rule version it used, and its result,
- * plus one Reversed row, written by the customer, for each agent action they undo.
+ * plus one row, written by the customer, for each agent action they undo and each change they make to a Rule or
+ * their settings record. Only a settings change has no Rule.
  * `why` is a JSON array of label and value pairs.
  */
 export const decisionsTable = sqliteTable(
@@ -193,10 +194,8 @@ export const decisionsTable = sqliteTable(
     actor: text("actor", { enum: ["agent", "customer"] }).notNull(),
     triggerLedgerEventId: integer("trigger_ledger_event_id").references(() => ledgerEventsTable.id),
     triggerDescription: text("trigger_description").notNull(),
-    ruleId: integer("rule_id")
-      .notNull()
-      .references(() => rulesTable.id),
-    ruleVersion: integer("rule_version").notNull(),
+    ruleId: integer("rule_id").references(() => rulesTable.id),
+    ruleVersion: integer("rule_version"),
     action: text("action").notNull(),
     /** Only ever one of the customer's own accounts, or null. */
     fromAccountId: integer("from_account_id").references(() => accountsTable.id),
@@ -218,5 +217,37 @@ export const decisionsTable = sqliteTable(
     index("decisions_trigger_ledger_event_id").on(table.triggerLedgerEventId),
     uniqueIndex("decisions_reverses_decision_id").on(table.reversesDecisionId),
     check("decisions_refused_by", sql`(${table.result} = 'Refused') = (${table.refusedBy} IS NOT NULL)`),
+    check("decisions_rule_version", sql`(${table.ruleId} IS NULL) = (${table.ruleVersion} IS NULL)`),
+    check("decisions_agent_uses_rule", sql`${table.actor} = 'customer' OR ${table.ruleId} IS NOT NULL`),
+  ],
+);
+
+/**
+ * One version of a customer's settings record (ADR 0007): the Autonomy level, the Advice setting, the raw risk
+ * answers, the data choices and the ordered goal preferences. Rows are never updated: a change writes the next
+ * version. A customer with no row has not finished setup.
+ */
+export const settingsVersionsTable = sqliteTable(
+  "settings_versions",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    customerId: integer("customer_id")
+      .notNull()
+      .references(() => customersTable.id),
+    version: integer("version").notNull(),
+    autonomyLevel: text("autonomy_level", { enum: ["ask_first", "small_things", "within_rules"] }).notNull(),
+    adviceSetting: text("advice_setting", { enum: ["never", "on_request", "always"] }).notNull(),
+    riskMarketDrop: text("risk_market_drop", { enum: ["sell", "wait", "buy_more", "ask_me"] }).notNull(),
+    riskTimeHorizon: text("risk_time_horizon", { enum: ["under_3_years", "3_to_10_years", "over_10_years"] }).notNull(),
+    trainModels: integer("train_models", { mode: "boolean" }).notNull(),
+    shareWithPartners: integer("share_with_partners", { mode: "boolean" }).notNull(),
+    keepChatHistory: integer("keep_chat_history", { mode: "boolean" }).notNull(),
+    /** A JSON array of goal keys, most important first. */
+    goalPreferences: text("goal_preferences", { mode: "json" }).notNull(),
+    createdAtMs: integer("created_at_ms").notNull(),
+  },
+  (table) => [
+    uniqueIndex("settings_versions_customer_version").on(table.customerId, table.version),
+    check("settings_versions_version_positive", sql`${table.version} > 0`),
   ],
 );

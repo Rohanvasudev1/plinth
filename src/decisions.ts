@@ -12,12 +12,15 @@ export interface WhyRow {
   value: string;
 }
 
-/** Who took a Decision log entry's action: the customer's agent, or the customer undoing one of its actions. */
+/**
+ * Who took a Decision log entry's action: the customer's agent, or the customer undoing one of its actions or
+ * changing a Rule, their settings record or Pause.
+ */
 export type DecisionActor = "agent" | "customer";
 
 /**
- * One entry in the customer's Decision log: an action their agent took or tried to take, or the customer's
- * Undo of one of those actions.
+ * One entry in the customer's Decision log: an action their agent took or tried to take, or a change the
+ * customer made: an Undo, or an edit to a Rule or their settings record.
  */
 export interface Decision {
   id: number;
@@ -28,7 +31,8 @@ export interface Decision {
     ledgerEventId: number | null;
     description: string;
   };
-  rule: { id: number; version: number };
+  /** The Rule version the action used or the customer's change wrote. Null only on a settings change. */
+  rule: { id: number; version: number } | null;
   /** What the agent did or tried to do, such as "Moved $340 to House fund". */
   action: string;
   /** The customer's account the money moved or would move from. Null when the Rule names one that isn't theirs. */

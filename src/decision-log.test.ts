@@ -123,7 +123,7 @@ describe("Decision log", () => {
     const priya = signInByName(bank, "Priya Natarajan");
     const [checking, travelFund] = bank.customerData.listAccounts(priya);
     const [seeded] = bank.customerData.listRules(priya);
-    if (!checking || !travelFund || !seeded) throw new Error("Seed data is missing");
+    if (!checking || !travelFund || seeded?.kind !== "buffer") throw new Error("Seed data is missing");
     bank.customerData.switchRule(priya, seeded.id, false);
     const swapped = bank.customerData.createRule(priya, {
       kind: "buffer",
