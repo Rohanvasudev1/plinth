@@ -15,7 +15,8 @@ The reviewer applies these during `/code-review`. The hard rules in `CLAUDE.md` 
 ## Shapes
 
 - A status with several values, such as Done, Refused or Reversed, is worked out in one function that every page and module calls. Pages don't re-derive it from raw fields.
-- Display text lives in pages and formatters. Domain records store typed values, and pages turn them into copy.
+- Display text lives in pages and in `*-text.ts` formatter modules. One exception: a Decision log entry or a Finding stores its action, trigger and Why text when it is written, so the record shows what the customer was told at the time. Build that text with a formatter, not inline.
+- A customer change, such as a Rule, a setting, a Goal target or Pause, goes through its change module (`rule-changes.ts`, `settings-changes.ts`, `goal-changes.ts`, `pause.ts` or `setup.ts`), which writes the Decision log entry in the same transaction. `src/hard-rules.test.ts` checks this.
 - Ids that are easy to swap get a branded type, as `Cents` and `LocalDate` already do.
 
 ## Tests

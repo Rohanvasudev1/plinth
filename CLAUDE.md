@@ -21,6 +21,8 @@ Plinth is a consumer bank web app built around one agent per customer. The agent
 - End-to-end tests: `pnpm test:e2e` (Playwright, `e2e/`). It starts its own dev server on port 3100 with a fresh database and `PLINTH_E2E=1`. Every test calls `restoreSeed(page)` from `e2e/restore-seed.ts` first, which posts to the test-only `/e2e/reset` route to restore the seed and the simulated clock, so tests pass in any order. Without `PLINTH_E2E=1`, or in a production build, that route answers 404.
 - New migration after editing `src/db/schema.ts`: `pnpm db:generate --name <change>`. Migrations in `drizzle/` apply automatically whenever a database opens.
 
+If `pnpm typecheck` reports a missing module under `.next/`, delete `.next` and run it again. Next.js keeps type stubs for deleted routes there.
+
 Tests get a fresh, migrated in-memory database from `openTestDatabase()` and a pinned time from `fixedClock()`. The app reads time from the simulated clock stored in the database (`getAppClock()`).
 
 ## Implementer sessions
@@ -29,7 +31,7 @@ An implementer session works one ticket:
 
 1. Read the issue, its comments, and the comments on its parent spec. Review decisions are recorded there. If any issue blocking it is still open, stop and say which one.
 2. Work on the branch this session created. Don't touch other tickets.
-3. When `/code-review` passes, push the branch and open a pull request whose body starts with `Closes #<issue>`.
+3. When `/code-review` passes, merge `origin/main` into the branch. Other sessions merge while you work. If both sides added a migration, regenerate yours with the next free number. Then push and open a pull request whose body starts with `Closes #<issue>`.
 4. Comment on the issue with the pull request link.
 
 ## Where things live
