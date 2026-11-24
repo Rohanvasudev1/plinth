@@ -5,14 +5,17 @@ import { customerChangeDecision, type Decision } from "./decisions";
 import {
   expiredReason,
   findingWhyRows,
+  fixedAmountText,
   leftMoneyAction,
+  noBufferRuleReason,
   PICK_CHANGES,
   pickedOptionAction,
+  refusedMoveAction,
 } from "./finding-text";
 import { describeOption, FindingError, type Finding, type FindingOptionKey, type MoveOption } from "./findings";
-import { formatDollars } from "./money";
+import { bufferRuleFor, type BufferRule } from "./rules";
 import { billsBeforePayday } from "./safe-to-spend";
-import { bufferRuleRow, checkSweepGuardrails, recordSweep, type ProposedSweep } from "./sweep";
+import { bufferRuleRow, checkedByRow, checkSweepGuardrails, recordSweep, type ProposedSweep } from "./sweep";
 
 /** What picking an Option did: the Finding and its Decision log entry, or the reason nothing happened. */
 export type ChooseOptionOutcome =
@@ -22,7 +25,8 @@ export type ChooseOptionOutcome =
 /**
  * Carries out the Option the customer picked on one of their Findings, in one database transaction.
  *
- * - "Move" re-runs the sweep guardrails as they stand now, with the Payment limit passed because the customer
+ * - "Move" re-runs the sweep guardrails as they stand now, under the Finding's Rule or, on a Mission Finding, the
+ *   customer's buffer Rule for the account it moves from, with the Payment limit passed because the customer
  *   chose it. If they pass, it posts the Option's fixed amount under the key `finding:<finding id>`, writes a
  *   Done entry whose trigger is "You chose this Option", and marks the Finding chosen. If one fails, it writes a
  *   Refused entry naming the guardrail and records the reason on the Finding, which stays open.
@@ -96,8 +100,8 @@ export function chooseOption(
   }
 
   function move(finding: Finding, option: MoveOption, picked: string): ChooseOptionOutcome {
-    const rule = finding.rule && customerData.getRule(customer, finding.rule.id);
-    if (rule?.kind !== "buffer") throw new FindingError(`Finding ${finding.id} names no buffer Rule to move under`);
+    const rule = ruleToMoveUnder(finding, option);
+    if (!rule) return refuseWithoutRule(finding, option, picked);
     const checking = customerData.getAccount(customer, option.fromAccountId);
     const savings = customerData.getAccount(customer, option.toAccountId);
     const proposed: ProposedSweep = {
@@ -116,7 +120,7 @@ export function chooseOption(
       why: [
         { label: "Trigger", value: picked },
         bufferRuleRow(rule, checking, savings),
-        { label: "Amount", value: `${formatDollars(option.amount)}, fixed when your agent asked you` },
+        { label: "Amount", value: fixedAmountText(option.amount) },
       ],
     });
     if (!decision) return { ok: false, reason: ALREADY_CHOSEN, finding };
@@ -129,6 +133,55 @@ export function chooseOption(
       return { ok: false, reason, finding: refused };
     }
     return { ok: true, finding: customerData.markFindingChosen(customer, finding.id, "move"), decision };
+  }
+
+  /**
+   * The buffer Rule a Move goes under: a sweep Finding's own Rule, or for a Mission Finding, which has none, the
+   * customer's buffer Rule that moves money between the same two accounts. Undefined when a Mission Finding's
+   * accounts have no such Rule.
+   */
+  function ruleToMoveUnder(finding: Finding, option: MoveOption): BufferRule | undefined {
+    if (finding.rule) {
+      const rule = customerData.getRule(customer, finding.rule.id);
+      if (rule?.kind !== "buffer") throw new FindingError(`Finding ${finding.id} names no buffer Rule to move under`);
+      return rule;
+    }
+    const rule = bufferRuleFor(customerData.listRules(customer), option.fromAccountId);
+    return rule?.parameters.savingsAccountId === option.toAccountId ? rule : undefined;
+  }
+
+  /**
+   * A Mission Move between accounts no buffer Rule moves money between: no Rule lets the agent make it, so the Rule
+   * on guardrail refuses it. The entry names the Mission and its Finding, since it has no Rule.
+   */
+  function refuseWithoutRule(finding: Finding, option: MoveOption, picked: string): ChooseOptionOutcome {
+    const from = customerData.getAccount(customer, option.fromAccountId);
+    const to = customerData.getAccount(customer, option.toAccountId);
+    const refusal = {
+      guardrail: "Rule on" as const,
+      reason: noBufferRuleReason(from?.name ?? "that account", to?.name ?? "that account"),
+    };
+    customerData.recordDecision(customer, {
+      actor: "agent",
+      trigger: { ledgerEventId: null, description: "You chose this Option" },
+      rule: null,
+      action: refusedMoveAction(option.amount, to?.name ?? "an account"),
+      fromAccountId: from?.id ?? null,
+      toAccountId: to?.id ?? null,
+      amount: option.amount,
+      result: "Refused",
+      refusedBy: refusal.guardrail,
+      why: [
+        { label: "Trigger", value: picked },
+        { label: "Amount", value: fixedAmountText(option.amount) },
+        checkedByRow({ ran: [refusal.guardrail], refusal }),
+      ],
+      ledgerTransactionId: null,
+      reversesDecisionId: null,
+      missionId: finding.missionId,
+      findingId: finding.id,
+    });
+    return { ok: false, reason: refusal.reason, finding: customerData.recordFindingRefusal(customer, finding.id, refusal) };
   }
 }
 

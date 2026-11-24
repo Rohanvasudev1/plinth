@@ -57,6 +57,8 @@ export const MISSION_FAILURES = {
   uncited: (label: string) => `The fact “${label}” cites no tool call from this Mission`,
   cantKnowMoney: "What Plinth can't know may not state a money amount or a rate",
   modelError: "The language model couldn't finish",
+  timeLimit: "Your agent ran out of time",
+  toolCallLimit: (max: number) => `Your agent reached its limit of ${max} reads`,
   notSaved: "Your agent couldn't save what it found",
 } as const;
 
@@ -64,6 +66,8 @@ export const MISSION_FAILURES = {
 export const QUESTION_REFUSALS = {
   blank: "Type a question for your agent to look into",
   tooLong: (max: number) => `Keep the question under ${max} characters`,
+  oneRunning: "Your agent looks into one question at a time. Wait for this one to finish, or stop it, then ask again",
+  dailyLimit: (max: number) => `You've sent ${max} Missions today, the most in one day. Ask again tomorrow`,
 } as const;
 
 /** The label of the fact saying what Plinth can't know, when a question needs outside facts. */
@@ -91,6 +95,11 @@ export function failedMissionAction(question: string): string {
   return `Couldn't finish looking into “${question}”`;
 }
 
+/** The Decision log action when the customer stops a Mission. */
+export function stoppedMissionAction(question: string): string {
+  return `Stopped looking into “${question}”`;
+}
+
 /** What a Mission read, as one line for its Why panel, such as "Goals; Usual month and On pace". */
 export function readListText(readList: MissionRead[]): string {
   const items = [...new Set(readList.map((read) => read.item))];
@@ -116,6 +125,22 @@ export function failedMissionWhy(question: string, readList: MissionRead[], reas
     { label: "What changes", value: "Nothing. Nothing was kept" },
   ];
 }
+
+/** The Why rows of a Mission's Decision log entry when the customer stopped it. */
+export function stoppedMissionWhy(question: string, readList: MissionRead[]): WhyRow[] {
+  return [
+    { label: "Trigger", value: missionTrigger(question) },
+    { label: "Read", value: readListText(readList) },
+    { label: "Why it stopped", value: "You stopped it" },
+    { label: "What changes", value: "Nothing. Nothing was kept" },
+  ];
+}
+
+/** What Discoveries says about a Mission that ended without a Finding. */
+export const UNFINISHED_MISSION_TEXT = {
+  stopped: "Stopped. Nothing was kept.",
+  failed: "Couldn't finish this",
+} as const;
 
 /** A Mission's full report, written from its Finding's facts when the model didn't write one. */
 export function missionReportFromFacts(title: string, facts: FindingFact[]): string {

@@ -15,8 +15,8 @@ import { readForecast, type Forecast } from "./forecast";
 import { createLedgerEventDispatcher, type LedgerEventDispatcher } from "./ledger-events";
 import { createFakeMissionModel } from "./fake-mission-model";
 import type { MissionModel } from "./mission-model";
-import { startMission, type StartedMission } from "./mission-runner";
-import type { Mission } from "./missions";
+import { createMissionRunner, type StartedMission } from "./mission-runner";
+import { MISSION_TIME_LIMIT_MS, type Mission } from "./missions";
 import { cents, type Cents } from "./money";
 import {
   billsBeforePayday as billsBeforePaydayOf,
@@ -178,10 +178,16 @@ export interface Bank extends Simulator, RuleChanges {
   markAgentActionsSeen(customer: Customer, decisionIds: number[]): void;
   /**
    * Starts a Mission for the customer's question and returns it with a promise that settles once it ends, reported
-   * with one Finding or failed keeping nothing. Pages don't await it: the Mission runs on after the response. Throws
-   * MissionError, starting nothing, for a blank or overlong question.
+   * with one Finding, or stopped or failed keeping nothing. Pages don't await it: the Mission runs on after the
+   * response. Throws MissionError, starting nothing, for a blank or overlong question, while another of the
+   * customer's Missions runs, or once they have sent the day's most Missions.
    */
   startMission(customer: Customer, question: string): StartedMission;
+  /**
+   * Stops the customer's running Mission, keeping nothing it found, and writes one Decision log entry. A Mission that
+   * has already ended is returned unchanged. Throws MissionError if it isn't the customer's.
+   */
+  stopMission(customer: Customer, missionId: number): Mission;
   /** The customer's Mission with this id, or undefined if it doesn't exist or isn't theirs. */
   readMission(customer: Customer, missionId: number): Mission | undefined;
 }
@@ -193,11 +199,13 @@ export interface Bank extends Simulator, RuleChanges {
 export function createBank(deps: {
   db: Database;
   clock: SettableClock;
-  /** The language model Missions run on. The scripted fake when left out. */
+  /** The language model Missions run on. The scripted fake, with its test scripts, when left out. */
   missionModel?: MissionModel;
+  /** How long a Mission may run, by the wall clock, before it fails. Three minutes when left out. */
+  missionTimeLimitMs?: number;
 }): Bank {
   const { db, clock } = deps;
-  const missionModel = deps.missionModel ?? createFakeMissionModel({ clock });
+  const missionModel = deps.missionModel ?? createFakeMissionModel({ clock, testScripts: true });
   const ledgerEvents = createLedgerEventDispatcher();
   const customerData = createCustomerData({ db, clock, ledgerEvents });
   const systemData = createSystemData(db);
@@ -209,6 +217,13 @@ export function createBank(deps: {
   const merchantClearingAccountId = systemData.ensureSystemAccount("merchant");
   startBufferAgent({ clock, customerData, systemData, ledgerEvents });
   startSubscriptionPriceRises({ clock, customerData, systemData, ledgerEvents });
+  const missions = createMissionRunner({
+    clock,
+    customerData,
+    merchantClearingAccountId,
+    model: missionModel,
+    timeLimitMs: deps.missionTimeLimitMs ?? MISSION_TIME_LIMIT_MS,
+  });
 
   function billsBeforePayday(customer: Customer): BillsBeforePayday {
     return billsBeforePaydayOf(customerData, customer, localDateOf(clock.now()));
@@ -261,15 +276,15 @@ export function createBank(deps: {
     readActivity: (customer) => readActivity(customerData, customer),
     readForecastPage: (customer) => readForecastPage(customerData, customer, localDateOf(clock.now())),
     readFindings: (customer) => customerData.listFindings(customer),
-    readDiscoveries: (customer) => readDiscoveriesPage(customerData, customer),
+    readDiscoveries: (customer) => readDiscoveriesPage(customerData, customer, localDateOf(clock.now())),
     setStandingSearch: (customer, search, on) =>
       setStandingSearch({ clock, customerData, systemData }, customer, search, on),
     countOpenFindings: (customer) => countOpenFindings(customerData.listFindings(customer)),
     chooseOption: (customer, findingId, option) => chooseOption({ clock, customerData }, customer, findingId, option),
     undo: (customer, decisionId) => undoAgentAction(customerData, customer, decisionId),
     markAgentActionsSeen: (customer, decisionIds) => customerData.markAgentActionsSeen(customer, decisionIds),
-    startMission: (customer, question) =>
-      startMission({ clock, customerData, merchantClearingAccountId, model: missionModel }, customer, question),
+    startMission: (customer, question) => missions.start(customer, question),
+    stopMission: (customer, missionId) => missions.stop(customer, missionId),
     readMission: (customer, missionId) => customerData.getMission(customer, missionId),
     readHome(customer) {
       const accounts = customerData.listAccounts(customer);

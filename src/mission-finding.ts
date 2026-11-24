@@ -1,16 +1,24 @@
 import { localDate, type LocalDate } from "./calendar";
 import type { FindingFact, FindingOption, NewFinding } from "./findings";
+import { cents } from "./money";
 import type { ModelFinding } from "./mission-model";
 import { CANT_KNOW_LABEL, CANT_KNOW_SOURCE, MISSION_FAILURES, missionReportFromFacts } from "./mission-text";
 
-/** The Options a Mission's Finding may offer (ADR 0009). Move comes with its guardrail checks in a later ticket. */
-export const MISSION_OPTION_KEYS = ["read_report", "remind_me", "not_now"] as const;
+/** The Options a Mission's Finding may offer (ADR 0009). */
+export const MISSION_OPTION_KEYS = ["move", "read_report", "remind_me", "not_now"] as const;
 
 /** The Options a Mission's Finding gets when none of the model's survive the checks. */
 const DEFAULT_OPTIONS: FindingOption[] = [{ key: "read_report" }, { key: "not_now" }];
 
 /** The parts of a Mission's Finding the model wrote, checked and ready to store. */
 export type MissionFindingToStore = Pick<NewFinding, "title" | "facts" | "options" | "agentsView" | "report">;
+
+/** What the checks know beyond the Finding: today, and the asking customer's own accounts, which a Move must name. */
+export interface MissionFindingContext {
+  sourceOf: (toolCallId: string) => string | undefined;
+  today: LocalDate;
+  accounts: { id: number; name: string }[];
+}
 
 /** The checked Finding, or why the Mission fails. */
 export type CheckedMissionFinding = { ok: true; finding: MissionFindingToStore } | { ok: false; reason: string };
@@ -43,12 +51,13 @@ const MONEY_OR_RATE = new RegExp(
  *   could have read it. It may state no money amount or rate, so outside prices and rates can't slip in uncited;
  *   one that does fails the Mission.
  * - An Option not on the Mission list, a repeat, or one whose details don't check is dropped. Remind me needs a
- *   real date after today. With no Options left, the Finding gets Read the full report and Not now.
+ *   real date after today. Move names its accounts by their Plinth names, as the tools do, and needs two different
+ *   accounts of the customer's own and a positive whole number of cents. The guardrails run again when it is picked. With no Options left, the Finding gets Read the full report and Not now.
  * - With no report from the model, code writes one from the facts.
  */
 export function checkMissionFinding(
   model: ModelFinding,
-  context: { sourceOf: (toolCallId: string) => string | undefined; today: LocalDate },
+  context: MissionFindingContext,
 ): CheckedMissionFinding {
   const title = trimmedText(model.title);
   if (!title) return { ok: false, reason: MISSION_FAILURES.noTitle };
@@ -69,7 +78,7 @@ export function checkMissionFinding(
 
   const options: FindingOption[] = [];
   for (const candidate of Array.isArray(model.options) ? model.options : []) {
-    const option = checkedOption(candidate, context.today);
+    const option = checkedOption(candidate, context);
     if (option && !options.some((kept) => kept.key === option.key)) options.push(option);
   }
 
@@ -86,13 +95,24 @@ export function checkMissionFinding(
 }
 
 /** The Option, if it is on the Mission list and its details check, or undefined to drop it. */
-function checkedOption(candidate: unknown, today: LocalDate): FindingOption | undefined {
+function checkedOption(
+  candidate: unknown,
+  context: MissionFindingContext,
+): FindingOption | undefined {
   if (typeof candidate !== "object" || candidate === null) return undefined;
-  const { key, date } = candidate as { key?: unknown; date?: unknown };
+  const { key, date, amountCents, from, to } = candidate as Record<string, unknown>;
   if (!(MISSION_OPTION_KEYS as readonly unknown[]).includes(key)) return undefined;
   if (key === "read_report" || key === "not_now") return { key };
+  if (key === "move") {
+    const ownAccount = (name: unknown) => context.accounts.find((account) => account.name === name);
+    const fromAccount = ownAccount(from);
+    const toAccount = ownAccount(to);
+    if (!fromAccount || !toAccount || fromAccount.id === toAccount.id) return undefined;
+    if (typeof amountCents !== "number" || !Number.isSafeInteger(amountCents) || amountCents <= 0) return undefined;
+    return { key: "move", amount: cents(amountCents), fromAccountId: fromAccount.id, toAccountId: toAccount.id };
+  }
   const checked = typeof date === "string" ? realDate(date) : undefined;
-  return checked && checked > today ? { key: "remind_me", date: checked } : undefined;
+  return checked && checked > context.today ? { key: "remind_me", date: checked } : undefined;
 }
 
 function realDate(text: string): LocalDate | undefined {

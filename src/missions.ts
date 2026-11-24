@@ -32,7 +32,16 @@ export interface Mission {
 /** The longest question the customer can send. */
 export const MAX_QUESTION_LENGTH = 500;
 
-/** The Mission's question isn't one it can run with, or the Mission isn't the customer's. */
+/** How many Missions a customer may send in one simulated day. */
+export const MAX_MISSIONS_PER_DAY = 10;
+
+/** The most tool calls one Mission may make (#53). The next one fails it; the Anthropic adapter also tells its model so. */
+export const MISSION_TOOL_CALL_LIMIT = 8;
+
+/** How long a Mission may run, by the wall clock, before it fails. */
+export const MISSION_TIME_LIMIT_MS = 3 * 60 * 1000;
+
+/** The Mission's question isn't one it can run with, a limit refuses it, or the Mission isn't the customer's. */
 export class MissionError extends Error {
   override name = "MissionError";
 }

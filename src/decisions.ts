@@ -2,9 +2,9 @@ import { cents, type Cents } from "./money";
 
 /**
  * What came of a Decision log entry's action: Done, Refused or Reversed for an action under a Rule or a customer
- * change; Reported or Failed for a Mission, which reports back with a Finding or ends keeping nothing.
+ * change; Reported, Stopped or Failed for a Mission, which reports back with a Finding or ends keeping nothing.
  */
-export const DECISION_RESULTS = ["Done", "Refused", "Reversed", "Reported", "Failed"] as const;
+export const DECISION_RESULTS = ["Done", "Refused", "Reversed", "Reported", "Stopped", "Failed"] as const;
 export type DecisionResult = (typeof DECISION_RESULTS)[number];
 
 /**

@@ -3,6 +3,7 @@ import type { Clock } from "./clock";
 import { createFakeMissionModel } from "./fake-mission-model";
 import { MISSION_OPTION_KEYS } from "./mission-finding";
 import type { MissionModel, MissionModelRequest, ModelFinding } from "./mission-model";
+import { MISSION_TOOL_CALL_LIMIT } from "./missions";
 
 // The Anthropic SDK adapter behind the language model interface (ADR 0005, ADR 0009). It runs the tool-use loop
 // itself: each tool the model asks for runs through the request's `callTool`, and the result goes back with the
@@ -36,7 +37,9 @@ export function chooseMissionModel(deps: {
   const { env, clock, fakeToolCallDelayMs, transportFor = sdkTransport } = deps;
   const apiKey = env.ANTHROPIC_API_KEY;
   if (!apiKey || env.PLINTH_E2E === "1" || env.VITEST) {
-    return { provider: "fake", model: createFakeMissionModel({ clock, toolCallDelayMs: fakeToolCallDelayMs }) };
+    // The fake's test scripts answer only in tests and the end-to-end suite, never a customer's question in the app.
+    const testScripts = env.PLINTH_E2E === "1" || Boolean(env.VITEST);
+    return { provider: "fake", model: createFakeMissionModel({ clock, toolCallDelayMs: fakeToolCallDelayMs, testScripts }) };
   }
   return {
     provider: "anthropic",
@@ -80,8 +83,11 @@ const SUBMIT_FINDING_TOOL: Anthropic.Tool = {
           properties: {
             key: { type: "string", enum: [...MISSION_OPTION_KEYS] },
             date: { ...NULLABLE_TEXT, description: "YYYY-MM-DD for remind_me, otherwise null." },
+            amountCents: { type: ["integer", "null"], description: "Whole cents to move, for move, otherwise null." },
+            from: { ...NULLABLE_TEXT, description: "The account to move from, named as the tools name it, for move, otherwise null." },
+            to: { ...NULLABLE_TEXT, description: "The account to move to, named as the tools name it, for move, otherwise null." },
           },
-          required: ["key", "date"],
+          required: ["key", "date", "amountCents", "from", "to"],
           additionalProperties: false,
         },
       },
@@ -94,8 +100,8 @@ const SUBMIT_FINDING_TOOL: Anthropic.Tool = {
   },
 };
 
-/** The most tool calls one Mission may make (#53). Calls past it are answered with an error, not run. */
-export const MISSION_TOOL_CALL_LIMIT = 8;
+// The most tool calls one Mission may make (#53). Calls past it are answered with an error, not run.
+export { MISSION_TOOL_CALL_LIMIT };
 
 /** The most output tokens one Mission may spend across all its requests, including the thinking the model does by default. */
 export const MISSION_OUTPUT_TOKEN_LIMIT = 32_000;

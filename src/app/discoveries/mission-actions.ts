@@ -26,3 +26,10 @@ export async function askAction(_previous: AskResult | null, form: FormData): Pr
   revalidatePath("/", "layout");
   return { message: null };
 }
+
+/** Stops one of the signed-in customer's running Missions, keeping nothing it found. */
+export async function stopAction(form: FormData): Promise<void> {
+  const customer = await requireCustomer();
+  getAppBank().stopMission(customer, Number(form.get("missionId")));
+  revalidatePath("/", "layout");
+}

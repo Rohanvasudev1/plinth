@@ -1,7 +1,7 @@
 import { formatLocalDate, type LocalDate } from "./calendar";
 import type { WhyRow } from "./decisions";
 import type { Finding } from "./findings";
-import { formatDollars, type Cents } from "./money";
+import { formatDollars, formatDollarsBriefly, type Cents } from "./money";
 
 // Text a Finding stores when it is written: its title and the Source of each fact (see CODING_STANDARDS.md).
 
@@ -87,4 +87,19 @@ export function priceRiseTitle(merchant: string, before: Cents, now: Cents): str
 /** A Subscription price rise Finding's title when a free trial turned paid. */
 export function trialTurnedPaidTitle(merchant: string, price: Cents): string {
   return `Your ${merchant} free trial turned paid at ${formatDollars(price)}`;
+}
+
+/** Why a Mission Move is refused when no buffer Rule moves money between its two accounts. */
+export function noBufferRuleReason(fromName: string, toName: string): string {
+  return `no buffer Rule lets your agent move money from ${fromName} to ${toName}`;
+}
+
+/** The Decision log action of a Mission Move that no Rule lets the agent make. */
+export function refusedMoveAction(amount: Cents, toName: string): string {
+  return `Move ${formatDollarsBriefly(amount)} to ${toName}`;
+}
+
+/** The Amount row of a picked Move's Decision log entry. */
+export function fixedAmountText(amount: Cents): string {
+  return `${formatDollars(amount)}, fixed when your agent asked you`;
 }
