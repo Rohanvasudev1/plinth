@@ -90,6 +90,11 @@ export function customerChangeDecision(change: {
   };
 }
 
+/** True when the entry records money the customer's agent moved: a Done entry by the agent, even if later undone. */
+export function isAgentMove(decision: Decision): boolean {
+  return decision.actor === "agent" && decision.result === "Done" && decision.ledgerTransactionId !== null;
+}
+
 export function isGuardrail(name: string): name is Guardrail {
   return (GUARDRAILS as readonly string[]).includes(name);
 }
