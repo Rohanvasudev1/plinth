@@ -131,9 +131,16 @@ export function paycheckTransaction(systemData: SystemData, payroll: Payroll, da
 }
 
 /** A Scheduled bill's payment due on `date`: from the customer's account to the Biller clearing account. */
+const BILL_PAYMENT_KEY_PREFIX = "bill:";
+
+/** Whether a ledger transaction is a Scheduled bill payment, from the idempotency key `billPaymentTransaction` gives it. */
+export function isBillPayment(transaction: { idempotencyKey: string }): boolean {
+  return transaction.idempotencyKey.startsWith(BILL_PAYMENT_KEY_PREFIX);
+}
+
 export function billPaymentTransaction(systemData: SystemData, bill: ScheduledBill, date: LocalDate): LedgerTransactionInput {
   return {
-    idempotencyKey: `bill:${bill.id}:${date}`,
+    idempotencyKey: `${BILL_PAYMENT_KEY_PREFIX}${bill.id}:${date}`,
     description: `${bill.payee} bill`,
     counterparty: bill.payee,
     category: bill.category ?? undefined,

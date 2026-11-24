@@ -1,11 +1,12 @@
 import Link from "next/link";
 
 /** The signed-in pages the nav bar can mark as current. */
-export type NavPage = "home" | "activity" | "agent" | "decision-log" | "simulator";
+export type NavPage = "home" | "activity" | "forecast" | "agent" | "decision-log" | "simulator";
 
 const MAIN_LINKS: { page: NavPage; href: string; label: string }[] = [
   { page: "home", href: "/", label: "Home" },
   { page: "activity", href: "/activity", label: "Activity" },
+  { page: "forecast", href: "/forecast", label: "Forecast" },
   { page: "agent", href: "/agent", label: "Agent & limits" },
 ];
 

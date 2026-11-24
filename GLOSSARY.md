@@ -157,12 +157,16 @@ A simulated business the customer pays by Card purchase, with a fixed Category.
 _Avoid_: Vendor, payee, shop
 
 **Usual month**:
-The average income and spending, per Category and in total, over the last six full calendar months.
+The average income and spending, per Category and in total, over the last six full calendar months, or over fewer when the customer has fewer. Needs at least one.
 _Avoid_: Average month, baseline, normal month
 
 **On pace**:
-This month's spending so far, scaled up to the whole month.
+This month's spending at its pace so far: Card purchases so far, scaled up to the whole month, plus every Scheduled bill due this month at its full amount, paid yet or not.
 _Avoid_: Run rate, projected spend
+
+**Left to save**:
+Usual month income minus spending, worked out for the Usual month and for On pace. Below zero when spending is higher than income.
+_Avoid_: Surplus, savings rate, net income
 
 **Forecast**:
 The expected Checking balance over the next 30 days, worked out from known paychecks, Scheduled bills, sweeps and usual daily spending.

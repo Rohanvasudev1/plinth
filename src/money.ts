@@ -60,3 +60,17 @@ export function formatDollarRange(range: CentsRange): string {
 export function formatDollarsBriefly(amount: Cents): string {
   return amount % 100 === 0 ? formatDollars(amount).slice(0, -3) : formatDollars(amount);
 }
+
+/**
+ * Divides an amount by a whole number, rounding to the nearest cent with halves away from zero, using integer
+ * arithmetic only, such as an average over months.
+ */
+export function divideCents(amount: number, divisor: number): Cents {
+  if (!Number.isSafeInteger(amount) || !Number.isSafeInteger(divisor) || divisor <= 0) {
+    throw new RangeError(`Can't divide ${amount} cents by ${divisor}`);
+  }
+  const remainder = amount % divisor;
+  const quotient = (amount - remainder) / divisor;
+  const roundAway = 2 * Math.abs(remainder) >= divisor ? Math.sign(amount) : 0;
+  return cents(quotient + roundAway);
+}

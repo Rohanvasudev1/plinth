@@ -45,10 +45,10 @@ test("every signed-in page has the nav bar, and it fits at 390px", async ({ page
   await page.getByRole("button", { name: "Sam Calloway" }).click();
   await expect(page.getByRole("heading", { name: "Home" })).toBeVisible();
 
-  for (const path of ["/", "/activity", "/agent", "/decision-log", "/simulator", "/setup"]) {
+  for (const path of ["/", "/activity", "/forecast", "/agent", "/decision-log", "/simulator", "/setup"]) {
     await page.goto(path);
     const nav = page.getByRole("navigation", { name: "Main" });
-    for (const name of ["Home", "Activity", "Agent & limits"]) {
+    for (const name of ["Home", "Activity", "Forecast", "Agent & limits"]) {
       await expect(nav.getByRole("link", { name, exact: true })).toBeVisible();
     }
     await expect(nav.getByRole("link", { name: "Simulator (testing tool)" })).toBeVisible();
