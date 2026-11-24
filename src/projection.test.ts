@@ -9,7 +9,7 @@ describe("the Projection", () => {
     const bank = openTestBank();
     const projection = projectionFor(bank, "Sam Calloway");
 
-    expect(projection.goalName).toBe("House fund");
+    expect(projection.goalAccountName).toBe("House fund");
     expect(projection.balance).toBe(12_400_00);
 
     const lines = projectionLines(projection, 0);
@@ -87,7 +87,7 @@ describe("the Projection", () => {
   it("projects Priya's Travel fund, not Sam's House fund", () => {
     const projection = projectionFor(openTestBank(), "Priya Natarajan");
 
-    expect(projection.goalName).toBe("Travel fund");
+    expect(projection.goalAccountName).toBe("Travel fund");
     expect(projection.balance).toBe(2_150_00);
   });
 });

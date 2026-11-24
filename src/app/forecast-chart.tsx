@@ -1,16 +1,12 @@
 import type { Forecast } from "@/bank";
 import { formatLocalDate } from "@/calendar";
 import { cents, formatDollars, formatDollarsBriefly, type Cents } from "@/money";
+import { coordinate, linePath } from "./chart-drawing";
 
 // Drawing units, not pixels: the SVG scales to its card's width, so it fits a 390px screen.
 const WIDTH = 360;
 const HEIGHT = 170;
 const PAD = { left: 52, right: 8, top: 14, bottom: 24 };
-
-/** Rounds a drawing coordinate to one decimal place, to keep the path short. */
-function coordinate(value: number): number {
-  return Math.round(value * 10) / 10;
-}
 
 /** The lowest balance and its date, and how it sits against the Buffer, for screen readers and everyone else. */
 function summaryText(forecast: Forecast): string {
@@ -33,7 +29,7 @@ export function ForecastChart({ forecast }: { forecast: Forecast }) {
   const span = high - low || 1;
   const x = (index: number) => PAD.left + (index * (WIDTH - PAD.left - PAD.right)) / (points.length - 1);
   const y = (amount: number) => PAD.top + ((high - amount) * (HEIGHT - PAD.top - PAD.bottom)) / span;
-  const line = points.map((point, index) => `${index ? "L" : "M"}${coordinate(x(index))},${coordinate(y(point.balance))}`).join(" ");
+  const line = linePath(balances, x, y);
   const lowestIndex = points.findIndex((point) => point.date === forecast.lowest.date);
   const lastDate = points[points.length - 1]?.date ?? forecast.start.date;
   const axisLabel = (amount: Cents) => (

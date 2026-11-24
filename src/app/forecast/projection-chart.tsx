@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { cents, formatDollars, formatDollarsBriefly, type Cents } from "@/money";
 import { MAX_CUT_PERCENT, PROJECTION_MONTHS, projectionLines, type Projection } from "@/projection";
+import { coordinate, linePath } from "../chart-drawing";
 
 // Drawing units, not pixels: the SVG scales to its card's width, so it fits a 390px screen.
 const WIDTH = 360;
@@ -12,11 +13,6 @@ const PAD = { left: 52, right: 8, top: 14, bottom: 24 };
 /** The cut the slider starts at, as in the demo. */
 const STARTING_CUT = 20;
 const CUT_STEP = 5;
-
-/** Rounds a drawing coordinate to one decimal place, to keep the path short. */
-function coordinate(value: number): number {
-  return Math.round(value * 10) / 10;
-}
 
 /**
  * The 3-year Projection of the sweep target at three paces, drawn as SVG lines with a text summary of each. The
@@ -34,19 +30,19 @@ export function ProjectionChart({ projection, month }: { projection: Projection;
   );
   const x = (index: number) => PAD.left + (index * (WIDTH - PAD.left - PAD.right)) / PROJECTION_MONTHS;
   const y = (amount: number) => PAD.top + ((high - amount) * (HEIGHT - PAD.top - PAD.bottom)) / high;
-  const path = (balances: Cents[]) =>
-    [projection.balance, ...balances]
-      .map((balance, index) => `${index ? "L" : "M"}${coordinate(x(index))},${coordinate(y(balance))}`)
-      .join(" ");
+  const path = (balances: Cents[]) => linePath([projection.balance, ...balances], x, y);
+  // The top label is the highest balance rounded down to a whole $1,000, drawn at its own height.
+  const topLabel = cents(Math.floor(high / 100_000) * 100_000);
+  const cutCategories = projection.cutCategories.join(" and ");
   const finalOf = (balances: Cents[]) => formatDollars(balances[balances.length - 1] ?? projection.balance);
   const cutAmount = cents(lines.withChanges.monthlySaving - lines.onPace.monthlySaving);
 
   return (
     <section className="card" aria-labelledby="projection-heading">
       <div className="card-head">
-        <h2 id="projection-heading">3-year Projection of your {projection.goalName}</h2>
+        <h2 id="projection-heading">3-year Projection of your {projection.goalAccountName}</h2>
         <p className="muted">
-          Assumes everything you save goes to your {projection.goalName}, with no interest. Starts from{" "}
+          Assumes everything you save goes to your {projection.goalAccountName}, with no interest. Starts from{" "}
           {formatDollars(projection.balance)} today.
         </p>
       </div>
@@ -56,9 +52,14 @@ export function ProjectionChart({ projection, month }: { projection: Projection;
         role="img"
         aria-labelledby="projection-heading projection-summary-heading"
       >
-        <text x={PAD.left - 6} y={coordinate(y(high)) + 4} textAnchor="end" className="chart-axis">
-          {formatDollarsBriefly(cents(Math.round(high / 100_000) * 100_000))}
-        </text>
+        {topLabel > 0 && (
+          <>
+            <line x1={PAD.left} x2={WIDTH - PAD.right} y1={coordinate(y(topLabel))} y2={coordinate(y(topLabel))} className="chart-zero" />
+            <text x={PAD.left - 6} y={coordinate(y(topLabel)) + 4} textAnchor="end" className="chart-axis">
+              {formatDollarsBriefly(topLabel)}
+            </text>
+          </>
+        )}
         <line x1={PAD.left} x2={WIDTH - PAD.right} y1={coordinate(y(0))} y2={coordinate(y(0))} className="chart-zero" />
         <text x={PAD.left - 6} y={coordinate(y(0)) + 4} textAnchor="end" className="chart-axis">
           $0
@@ -75,7 +76,7 @@ export function ProjectionChart({ projection, month }: { projection: Projection;
       </svg>
 
       <h3 id="projection-summary-heading" className="projection-summary-heading">
-        Your {projection.goalName} after 3 years
+        Your {projection.goalAccountName} after 3 years
       </h3>
       <ul className="projection-summary">
         <li>
@@ -97,7 +98,7 @@ export function ProjectionChart({ projection, month }: { projection: Projection;
 
       <div className="try-it">
         <label htmlFor="projection-cut">
-          Try it: cut Eating out and Shopping by <span className="num">{cut}%</span>
+          Try it: cut {cutCategories} by <span className="num">{cut}%</span>
         </label>
         <input
           id="projection-cut"

@@ -177,8 +177,12 @@ The usual day-to-day spending the Forecast takes off each day: the Card purchase
 _Avoid_: Burn rate, daily spend
 
 **Projection**:
-Where a Goal's balance would be after three years at a given pace of saving, with no interest.
+Where a Goal's balance would be after three years at a given pace of saving, with no interest. The Forecast page projects the sweep target at three paces: the Usual month's Left to save, On pace Left to save, and On pace with a Try-it cut.
 _Avoid_: Forecast, plan
+
+**Try-it cut**:
+A percent from 0 to 50 that the Forecast page's slider takes off On pace Eating out and Shopping, to show the Projection "with your changes". It runs in the browser, saves nothing and writes no Decision log entry.
+_Avoid_: Budget, savings plan
 
 **Activity**:
 The customer's list of posted ledger transactions, newest first.

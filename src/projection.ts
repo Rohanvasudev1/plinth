@@ -1,4 +1,5 @@
 // No database or server imports here: the Forecast page's slider runs `projectionLines` in the browser.
+import type { Category } from "./categories";
 import { cents, divideCents, type Cents } from "./money";
 
 /** How many months the Projection runs for: three years. */
@@ -7,18 +8,18 @@ export const PROJECTION_MONTHS = 36;
 /** The largest cut the slider tries, as a whole percent. */
 export const MAX_CUT_PERCENT = 50;
 
-/** What the Projection starts from: the sweep target's balance today and the monthly saving at each pace. */
+/** What the Projection starts from: the sweep target's balance today and the Left to save at each pace. */
 export interface Projection {
   kind: "projection";
-  /** The sweep target's account name, such as "House fund". */
-  goalName: string;
+  /** The sweep target's Goal account name, such as "House fund". */
+  goalAccountName: string;
   /** The sweep target's balance today. */
   balance: Cents;
-  /** Usual month income − Usual month spending. Below zero when spending is higher. */
-  usualMonthSaving: Cents;
-  /** Usual month income − On pace spending. Below zero when spending is higher. */
-  onPaceSaving: Cents;
-  /** On pace Eating out plus On pace Shopping: the spending the slider tries cutting. */
+  /** Left to save in the Usual month and On pace, the monthly saving of the first two lines. Below zero when spending is higher. */
+  leftToSave: { usualMonth: Cents; onPace: Cents };
+  /** The Categories the slider tries cutting: Eating out and Shopping. */
+  cutCategories: readonly Category[];
+  /** Their On pace spending, which the slider's cut comes off. */
   cuttable: Cents;
 }
 
@@ -31,7 +32,7 @@ export interface ProjectionLine {
 export interface ProjectionLines {
   usualMonth: ProjectionLine;
   onPace: ProjectionLine;
-  /** This month's pace with On pace Eating out and Shopping cut by the slider's percent. */
+  /** This month's pace with On pace spending in the cut Categories cut by the slider's percent. */
   withChanges: ProjectionLine;
 }
 
@@ -44,14 +45,15 @@ export function projectionLines(projection: Projection, cutPercent: number): Pro
   if (!Number.isInteger(cutPercent) || cutPercent < 0 || cutPercent > MAX_CUT_PERCENT) {
     throw new RangeError(`The cut must be a whole percent from 0 to ${MAX_CUT_PERCENT}, got ${cutPercent}`);
   }
-  const withChangesSaving = cents(projection.onPaceSaving + divideCents(projection.cuttable * cutPercent, 100));
+  const { leftToSave } = projection;
+  const withChangesSaving = cents(leftToSave.onPace + divideCents(projection.cuttable * cutPercent, 100));
   const line = (monthlySaving: Cents): ProjectionLine => ({
     monthlySaving,
     balances: balancesFrom(projection.balance, monthlySaving),
   });
   return {
-    usualMonth: line(projection.usualMonthSaving),
-    onPace: line(projection.onPaceSaving),
+    usualMonth: line(leftToSave.usualMonth),
+    onPace: line(leftToSave.onPace),
     withChanges: line(withChangesSaving),
   };
 }

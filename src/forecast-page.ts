@@ -125,8 +125,8 @@ export function readForecastPage(customerData: CustomerData, customer: Customer,
   };
 }
 
-/** Categories the Projection's slider tries cutting. */
-const CUTTABLE_CATEGORIES: readonly SpendingCategory[] = ["Eating out", "Shopping"];
+/** The Categories the Projection's slider tries cutting. */
+const CUT_CATEGORIES: readonly SpendingCategory[] = ["Eating out", "Shopping"];
 
 /**
  * The Projection of the sweep target of the customer's buffer Rule, with the slider's cut taken from On pace Eating out
@@ -138,22 +138,22 @@ function projectionOf(
   leftToSave: ForecastFigures["leftToSave"],
   categories: CategoryFigures[],
 ): ForecastFigures["projection"] {
-  const accounts = customerData.listAccounts(customer);
-  const checking = accounts.find((account) => account.kind === "checking");
+  const checking = customerData.listAccounts(customer).find((account) => account.kind === "checking");
   const savingsAccountId = checking
     ? bufferRuleFor(customerData.listRules(customer), checking.id)?.parameters.savingsAccountId
-    : undefined;
-  const goal = accounts.find((account) => account.id === savingsAccountId);
-  if (!goal) return { kind: "no_sweep_target" };
+    : null;
+  // Only the customer's own accounts come back, so an account that isn't theirs reads as missing.
+  const goalAccount = savingsAccountId == null ? undefined : customerData.getAccount(customer, savingsAccountId);
+  if (!goalAccount) return { kind: "no_sweep_target" };
   return {
     kind: "projection",
-    goalName: goal.name,
-    balance: goal.balance,
-    usualMonthSaving: leftToSave.usualMonth,
-    onPaceSaving: leftToSave.onPace,
+    goalAccountName: goalAccount.name,
+    balance: goalAccount.balance,
+    leftToSave,
+    cutCategories: CUT_CATEGORIES,
     cuttable: cents(
       categories
-        .filter((row) => CUTTABLE_CATEGORIES.includes(row.category))
+        .filter((row) => CUT_CATEGORIES.includes(row.category))
         .reduce((sum, row) => sum + row.onPace, 0),
     ),
   };
