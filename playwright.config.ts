@@ -7,7 +7,7 @@ const port = 3100;
 
 export default defineConfig({
   testDir: "./e2e",
-  // Every test shares one server, database and simulated clock, so tests run one at a time, files in name order.
+  // Every test shares one server, database and simulated clock, so tests run one at a time.
   workers: 1,
   fullyParallel: false,
   use: { baseURL: `http://localhost:${port}` },
@@ -17,7 +17,7 @@ export default defineConfig({
     url: `http://localhost:${port}`,
     reuseExistingServer: false,
     timeout: 120_000,
-    // Each end-to-end run starts from a fresh database.
-    env: { PLINTH_DB_PATH: path.join(os.tmpdir(), `plinth-e2e-${randomUUID()}.db`) },
+    // PLINTH_E2E turns on the reset route that each test calls first to restore the seed (e2e/restore-seed.ts).
+    env: { PLINTH_DB_PATH: path.join(os.tmpdir(), `plinth-e2e-${randomUUID()}.db`), PLINTH_E2E: "1" },
   },
 });
