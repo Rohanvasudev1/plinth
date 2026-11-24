@@ -95,6 +95,19 @@ export default async function PrivacyPage() {
         )}
       </section>
 
+      <section className="card" aria-labelledby="export">
+        <h2 id="export">Export</h2>
+        <p className="muted">
+          One JSON file of everything Plinth holds about you: accounts, Linked accounts, transactions, the Decision log,
+          Findings, Missions, settings, Rules, Goals and this access log. Each Export is added to the access log.
+        </p>
+        <form method="post" action="/privacy/export">
+          <button type="submit" className="button">
+            Export my data
+          </button>
+        </form>
+      </section>
+
       <section className="card" aria-labelledby="close-and-delete">
         <h2 id="close-and-delete">Close and delete</h2>
         <p className="muted">

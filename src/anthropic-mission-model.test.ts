@@ -93,7 +93,13 @@ describe("The Anthropic Mission model", () => {
     expect(first?.system).toBe(MISSION_SYSTEM_PROMPT);
     expect(first?.messages).toEqual([{ role: "user", content: "Am I on track for my House fund?" }]);
     expect(first?.tools?.map((tool) => ("name" in tool ? tool.name : undefined))).toEqual([
-      ...MISSION_TOOL_DEFINITIONS.map((tool) => tool.name),
+      "read_transactions",
+      "read_usual_month",
+      "read_forecast",
+      "read_projection",
+      "read_goals",
+      "read_scheduled_bills",
+      "read_linked_accounts",
       "submit_finding",
     ]);
     const toolResults = second?.messages.at(-1);

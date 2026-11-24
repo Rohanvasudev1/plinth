@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { expect, test } from "@playwright/test";
 import { openFromMoreMenu } from "./nav";
 import { expectNoHorizontalScroll } from "./page-checks";
@@ -36,6 +37,33 @@ test("Sam finds the paycheck check in the access log, and turning on Keep chat h
 
   await openFromMoreMenu(page, "Decision log");
   await expect(page.getByRole("article", { name: "Changed your settings: Keep chat history" })).toBeVisible();
+});
+
+test("Sam exports their data and the download is JSON holding their accounts, with the Export in its access log", async ({ page }) => {
+  await restoreSeed(page);
+  await page.goto("/sign-in");
+  await page.getByRole("button", { name: "Sam Calloway" }).click();
+  await openFromMoreMenu(page, "Privacy");
+
+  const exportCard = page.getByRole("region", { name: "Export" });
+  const downloading = page.waitForEvent("download");
+  await exportCard.getByRole("button", { name: "Export my data" }).click();
+  const download = await downloading;
+  expect(download.suggestedFilename()).toBe("plinth-export-2026-11-19.json");
+
+  const file = JSON.parse(await readFile(await download.path(), "utf8"));
+  expect(file.customer.name).toBe("Sam Calloway");
+  expect(file.plinthAccounts).toEqual([
+    expect.objectContaining({ name: "Checking", balanceCents: 22700 }),
+    expect.objectContaining({ name: "House fund", balanceCents: 1240000 }),
+  ]);
+  expect(file.accessLog[0]).toMatchObject({ who: "customer", what: "Everything Plinth holds about you" });
+
+  await page.reload();
+  const newest = page.getByRole("region", { name: "Access log" }).getByRole("listitem").first();
+  await expect(newest).toContainText("You");
+  await expect(newest).toContainText("Everything Plinth holds about you");
+  await expectNoHorizontalScroll(page);
 });
 
 test("Alex, who hasn't finished setup, sees each Data choice as off with a link to the Setup survey", async ({ page }) => {

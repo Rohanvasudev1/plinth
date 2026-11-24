@@ -64,3 +64,12 @@ const UNLINK_WHY_TEXT: Record<UnlinkReason, string> = {
 export function unlinkAccess(account: string, reason: UnlinkReason): NewAccessLogEntry {
   return { who: "plinth", what: `Your ${account} balance and Consent`, why: UNLINK_WHY_TEXT[reason] };
 }
+
+/** An Export: the customer downloading one file of everything Plinth holds about them. */
+export function exportAccess(): NewAccessLogEntry {
+  return {
+    who: "customer",
+    what: "Everything Plinth holds about you",
+    why: "Export: you downloaded a copy of your data",
+  };
+}

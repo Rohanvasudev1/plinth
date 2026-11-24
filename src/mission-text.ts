@@ -1,6 +1,7 @@
-import { formatLocalDate, type LocalDate } from "./calendar";
+import { formatLocalDate, localDateOf, type LocalDate } from "./calendar";
 import type { WhyRow } from "./decisions";
 import type { FindingFact } from "./findings";
+import type { LinkedAccount } from "./linked-accounts";
 import type { MissionToolName } from "./mission-tools";
 import type { MissionRead } from "./missions";
 
@@ -12,6 +13,7 @@ export const MISSION_PROGRESS = {
   transactions: "Reading your transactions",
   usualMonth: "Checking your Usual month and this month's pace",
   forecastAndGoals: "Checking your Forecast and Goals",
+  linkedAccounts: "Checking your Linked accounts",
   writingUp: "Writing up what it found",
 } as const;
 export type MissionProgressLabel = (typeof MISSION_PROGRESS)[keyof typeof MISSION_PROGRESS];
@@ -31,12 +33,29 @@ export const MISSION_READ_ITEMS = {
   projection: "3-year Projection",
   goals: "Goals",
   scheduledBills: "Scheduled bills",
+  linkedAccounts: "Linked accounts",
 } as const;
 
 /** The Source of a fact citing a call to `tool` that read `item`. Transactions name the period read. */
 export function missionToolSource(tool: MissionToolName, item: string): string {
   const source = MISSION_TOOL_SOURCES[tool];
   return tool === "read_transactions" ? `${source}, ${item}` : source;
+}
+
+/**
+ * The Source of a fact citing a read of the Linked accounts: the Institutions read and the date of the latest Sync
+ * among them, such as "From your Linked accounts at Summit Card and Northwind, last synced Thu 19 Nov".
+ */
+export function linkedAccountsSource(read: Pick<LinkedAccount, "institution" | "syncedAt">[]): string {
+  const source = MISSION_TOOL_SOURCES.read_linked_accounts;
+  if (read.length === 0) return `${source}: none with a Consent that lasts`;
+  const lastSynced = localDateOf(new Date(Math.max(...read.map((linked) => linked.syncedAt.getTime()))));
+  return `${source} at ${inWords(read.map((linked) => linked.institution))}, last synced ${formatLocalDate(lastSynced)}`;
+}
+
+/** Names as a list in words, such as "A, B and C". */
+function inWords(names: string[]): string {
+  return names.length <= 1 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
 }
 
 /** The Source of a fact citing each Mission tool. */
@@ -47,6 +66,7 @@ const MISSION_TOOL_SOURCES: Record<MissionToolName, string> = {
   read_projection: "From your Projection",
   read_goals: "From your Goals",
   read_scheduled_bills: "From your Scheduled bills",
+  read_linked_accounts: "From your Linked accounts",
 };
 
 /** Why a Mission couldn't finish, for its Decision log entry's Why panel. */
