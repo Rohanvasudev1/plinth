@@ -3,7 +3,7 @@ import { getAppBank } from "@/app-bank";
 import { BUFFER_RANGE, PAYMENT_LIMIT_RANGE, type Rule } from "@/rules";
 import { formatDollarRange, formatDollarsBriefly, formatDollarsForInput } from "@/money";
 import { requireCustomer } from "@/session";
-import { RuleAmountForm, RuleSwitch } from "./agent-forms";
+import { PauseForm, RuleAmountForm, RuleSwitch } from "./agent-forms";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +34,7 @@ export default async function AgentAndLimitsPage() {
   const rules = bank.customerData.listRules(customer);
   const bufferRules = rules.filter((rule) => rule.kind === "buffer");
   const paymentLimitRule = rules.find((rule) => rule.kind === "payment_limit");
+  const paused = bank.isAgentPaused(customer);
 
   return (
     <main className="page">
@@ -97,6 +98,18 @@ export default async function AgentAndLimitsPage() {
           />
         </section>
       )}
+
+      <section className="card stack" aria-labelledby="pause-agent">
+        <div>
+          <h2 id="pause-agent">{paused ? "Your agent is paused" : "Pause my agent"}</h2>
+          <p className="muted">
+            {paused
+              ? "Your agent takes no automatic actions until you unpause it. Unpausing doesn't rerun anything it missed."
+              : "Stops every automatic action straight away. You can unpause any time."}
+          </p>
+        </div>
+        <PauseForm paused={paused} />
+      </section>
 
       <section className="card" aria-labelledby="decision-log-link">
         <h2 id="decision-log-link">Decision log</h2>

@@ -119,7 +119,7 @@ The customer's choice of whether the agent's own view appears in a Finding: neve
 _Avoid_: Advice mode, tone
 
 **Guardrail**:
-A check that runs before any agent action and refuses it if it breaks a Rule or ownership limit.
+A check that runs before any agent action and refuses it if it breaks a Rule or ownership limit, or if the agent is paused.
 _Avoid_: Validation, safety check
 
 **Decision log**:
