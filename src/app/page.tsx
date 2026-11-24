@@ -222,6 +222,10 @@ export default async function HomePage() {
         </AccountCard>
       ))}
 
+      <Link href="/accounts" className="card link-card">
+        <strong>All accounts</strong> <span className="muted">See your Net worth, with the accounts you linked from Institutions.</span>
+      </Link>
+
       {home.forecast && <ForecastChart forecast={home.forecast} />}
 
       <AgentActionsCard actions={home.agentActions} />

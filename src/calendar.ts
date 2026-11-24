@@ -44,6 +44,13 @@ export function formatLocalDate(date: LocalDate): string {
   return shortDateFormat.format(new Date(`${date}T12:00:00Z`));
 }
 
+const longDateFormat = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+
+/** Formats a calendar date with its year, such as "23 May 2027", for a date that may be a year away, like a Consent's end. */
+export function formatLocalDateWithYear(date: LocalDate): string {
+  return longDateFormat.format(new Date(`${date}T12:00:00Z`));
+}
+
 function utcMidnight(date: LocalDate): number {
   return Date.parse(`${date}T00:00:00Z`);
 }
@@ -124,4 +131,11 @@ export function firstOfPreviousMonth(date: LocalDate): LocalDate {
 export function sameDayNextMonth(date: LocalDate): LocalDate {
   const firstOfNext = firstOfNextMonth(date);
   return addDays(firstOfNext, Math.min(dayOfMonth(date), daysInMonth(firstOfNext)) - 1);
+}
+
+/** The same day of the same month a year later, or 28 Feb when `date` is 29 Feb. */
+export function sameDayNextYear(date: LocalDate): LocalDate {
+  const { year, month, day } = partsOf(date);
+  const firstOfThatMonth = localDate(`${year + 1}-${String(month).padStart(2, "0")}-01`);
+  return addDays(firstOfThatMonth, Math.min(day, daysInMonth(firstOfThatMonth)) - 1);
 }

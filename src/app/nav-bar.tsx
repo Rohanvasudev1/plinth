@@ -6,6 +6,7 @@ import type { Customer } from "@/customer-data";
 export type NavPage =
   | "home"
   | "activity"
+  | "accounts"
   | "forecast"
   | "discoveries"
   | "agent"
@@ -16,6 +17,7 @@ export type NavPage =
 const MAIN_LINKS: { page: NavPage; href: string; label: string }[] = [
   { page: "home", href: "/", label: "Home" },
   { page: "activity", href: "/activity", label: "Activity" },
+  { page: "accounts", href: "/accounts", label: "Accounts" },
   { page: "forecast", href: "/forecast", label: "Forecast" },
   { page: "discoveries", href: "/discoveries", label: "Discoveries" },
 ];

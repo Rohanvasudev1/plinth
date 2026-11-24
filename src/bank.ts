@@ -1,5 +1,16 @@
 import type { AccessLogEntry } from "./access-log";
 import { readActivity, type ActivityRow } from "./activity";
+import { readAllAccounts, type AllAccountsView } from "./all-accounts";
+import {
+  linkAccount,
+  listLinkableAccounts,
+  renewConsent,
+  syncLinkedAccounts,
+  unlinkAccount,
+  type LinkableAccount,
+} from "./linked-account-changes";
+import type { LinkedAccount, LinkedAccountId } from "./linked-accounts";
+import type { InstitutionAccountKey } from "./open-banking";
 import { readForecastPage, type ForecastPage } from "./forecast-page";
 import { startBufferAgent } from "./buffer-agent";
 import { localDateOf } from "./calendar";
@@ -50,6 +61,8 @@ export type { AgentsViewOnPage, DiscoveriesPage, FindingOnPage } from "./discove
 export type { StartedMission } from "./mission-runner";
 export type { Mission } from "./missions";
 export type { AccessLogEntry, AccessReader } from "./access-log";
+export type { LinkableAccount } from "./linked-account-changes";
+export type { AllAccountsView, LinkedAccountOnPage, NetWorthFigures } from "./all-accounts";
 
 export interface GoalProgress {
   target: Cents;
@@ -118,6 +131,30 @@ export interface Bank extends Simulator, RuleChanges {
   /** The customer to sign in as, or throws UnknownCustomerError. */
   signIn(customerId: number): Customer;
   readHome(customer: Customer): HomeView;
+  /**
+   * All accounts: Cash, Investments, Debt and Net worth across Plinth accounts and every Linked account whose Consent
+   * has not ended, then every account. Reading it writes no access log entry.
+   */
+  readAllAccounts(customer: Customer): AllAccountsView;
+  /** The customer's Institution accounts they haven't linked, each with the date its Consent would end. */
+  listLinkableAccounts(customer: Customer): LinkableAccount[];
+  /**
+   * Links one of the customer's Institution accounts with a 12-month Consent, syncs it, and writes a Decision log entry
+   * with them as actor and the Sync's access log entry, in one transaction. Works while the agent is paused. Throws
+   * LinkedAccountError, saving nothing, if they don't hold it or have already linked it.
+   */
+  linkAccount(customer: Customer, key: InstitutionAccountKey): LinkedAccount;
+  /**
+   * Gives one of the customer's Linked accounts whose Consent has ended a new 12-month Consent from today, syncs it,
+   * and writes a Decision log entry with them as actor, in one transaction. Throws LinkedAccountError, saving nothing,
+   * if it isn't theirs or its Consent hasn't ended.
+   */
+  renewConsent(customer: Customer, linkedAccountId: LinkedAccountId): LinkedAccount;
+  /**
+   * Deletes one of the customer's Linked accounts and its Consent at once, writing a Decision log entry with them as
+   * actor and an access log entry. Throws LinkedAccountError, saving nothing, if it isn't theirs.
+   */
+  unlinkAccount(customer: Customer, linkedAccountId: LinkedAccountId): LinkedAccount;
   /** The customer's Activity: their posted ledger transactions, newest first, each tagged if their agent made it. */
   readActivity(customer: Customer): ActivityRow[];
   /**
@@ -253,13 +290,15 @@ export function createBank(deps: {
   return {
     ...simulator,
     advanceClock() {
-      // A reminder date the clock reaches opens its snoozed Finding again, in the same transaction as the move. The
-      // clock lives outside that transaction, so it is put back by hand if anything fails.
+      // A reminder date the clock reaches opens its snoozed Finding again, and each Linked account whose Consent lasts
+      // syncs, in the same transaction as the move. The clock lives outside that transaction, so it is put back by hand
+      // if anything fails.
       const before = clock.now();
       try {
         return customerData.inOneTransaction(() => {
           const advanced = simulator.advanceClock();
           reopenDueFindings({ clock, customerData, systemData });
+          syncLinkedAccounts({ clock, customerData, systemData });
           return advanced;
         });
       } catch (error) {
@@ -291,6 +330,11 @@ export function createBank(deps: {
     setAgentPaused: (customer, paused) => setAgentPaused(customerData, customer, paused),
     readDecisionLog: (customer) => customerData.listDecisions(customer),
     readActivity: (customer) => readActivity(customerData, customer),
+    readAllAccounts: (customer) => readAllAccounts(customerData, customer, localDateOf(clock.now())),
+    listLinkableAccounts: (customer) => listLinkableAccounts({ clock, customerData }, customer),
+    linkAccount: (customer, key) => linkAccount({ clock, customerData }, customer, key),
+    renewConsent: (customer, linkedAccountId) => renewConsent({ clock, customerData }, customer, linkedAccountId),
+    unlinkAccount: (customer, linkedAccountId) => unlinkAccount({ clock, customerData }, customer, linkedAccountId),
     readForecastPage: (customer) => readForecastPage(customerData, customer, localDateOf(clock.now())),
     readFindings: (customer) => customerData.listFindings(customer),
     readDiscoveries: (customer) => readDiscoveriesPage(customerData, customer, localDateOf(clock.now())),

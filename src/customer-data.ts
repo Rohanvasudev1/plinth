@@ -12,6 +12,7 @@ import {
   ledgerEntriesTable,
   ledgerEventsTable,
   ledgerTransactionsTable,
+  linkedAccountsTable,
   missionsTable,
   payrollsTable,
   rulesTable,
@@ -43,6 +44,15 @@ import {
   type MissionState,
 } from "./missions";
 import { checkGoalTarget, GoalError } from "./goals";
+import {
+  asLinkedAccountId,
+  LinkedAccountError,
+  type Consent,
+  type LinkedAccount,
+  type LinkedAccountId,
+  type NewLinkedAccount,
+} from "./linked-accounts";
+import { isInstitutionAccountKey } from "./open-banking";
 import type { Category } from "./categories";
 import { cents, type Cents } from "./money";
 import { isRuleKind, parseRuleContent, type NewRule, type Rule } from "./rules";
@@ -270,6 +280,24 @@ export interface CustomerData {
   recordAccess(customer: Customer, entry: NewAccessLogEntry): AccessLogEntry;
   /** The customer's access log, newest first. */
   listAccessLog(customer: Customer): AccessLogEntry[];
+  /**
+   * Stores a Linked account for the customer with the balance its first Sync read, synced now. Throws
+   * LinkedAccountError, saving nothing, if they already have one for that Institution account.
+   */
+  createLinkedAccount(customer: Customer, linked: NewLinkedAccount): LinkedAccount;
+  /** The customer's Linked accounts, in the order they were linked. */
+  listLinkedAccounts(customer: Customer): LinkedAccount[];
+  /** The customer's Linked account with this id, or undefined if it doesn't exist or isn't theirs. */
+  getLinkedAccount(customer: Customer, linkedAccountId: LinkedAccountId): LinkedAccount | undefined;
+  /** Stores the balance a Sync read for the customer's Linked account, synced now. Throws LinkedAccountError if it isn't theirs. */
+  saveLinkedAccountSync(customer: Customer, linkedAccountId: LinkedAccountId, balance: Cents): LinkedAccount;
+  /** Replaces the Consent on the customer's Linked account. Throws LinkedAccountError if it isn't theirs. */
+  saveConsent(customer: Customer, linkedAccountId: LinkedAccountId, consent: Consent): LinkedAccount;
+  /**
+   * Deletes the customer's Linked account and its Consent, keeping nothing of it, and returns what it held. Throws
+   * LinkedAccountError if it isn't theirs.
+   */
+  deleteLinkedAccount(customer: Customer, linkedAccountId: LinkedAccountId): LinkedAccount;
 }
 
 /** A change to a Rule: its switch, its parameters, or both. Whatever is left out stays as it is. */
@@ -942,7 +970,87 @@ export function createCustomerData(deps: {
       .map((row) => ({ id: row.id, at: new Date(row.createdAtMs), who: row.who, what: row.what, why: row.why }));
   }
 
+  function selectLinkedAccounts(customer: Customer, linkedAccountId?: LinkedAccountId): LinkedAccount[] {
+    return db
+      .select()
+      .from(linkedAccountsTable)
+      .where(
+        and(
+          eq(linkedAccountsTable.customerId, customer.id),
+          linkedAccountId === undefined ? undefined : eq(linkedAccountsTable.id, linkedAccountId),
+        ),
+      )
+      .orderBy(asc(linkedAccountsTable.id))
+      .all()
+      .map((row) => {
+        if (!isInstitutionAccountKey(row.institutionAccount)) {
+          throw new Error(`Linked account ${row.id} names no Institution account: ${row.institutionAccount}`);
+        }
+        return {
+          id: asLinkedAccountId(row.id),
+          institutionAccount: row.institutionAccount,
+          institution: row.institution,
+          type: row.type,
+          balance: cents(row.balanceCents),
+          syncedAt: new Date(row.syncedAtMs),
+          consent: { start: localDate(row.consentStart), end: localDate(row.consentEnd) },
+        };
+      });
+  }
+
+  function requireLinkedAccount(customer: Customer, linkedAccountId: LinkedAccountId): LinkedAccount {
+    const linked = selectLinkedAccounts(customer, linkedAccountId)[0];
+    if (!linked) throw new LinkedAccountError("That Linked account isn't yours");
+    return linked;
+  }
+
+  /** Updates one of the customer's Linked accounts, then reads it back. */
+  function updateLinkedAccount(
+    customer: Customer,
+    linkedAccountId: LinkedAccountId,
+    values: Partial<typeof linkedAccountsTable.$inferInsert>,
+  ): LinkedAccount {
+    requireLinkedAccount(customer, linkedAccountId);
+    db.update(linkedAccountsTable)
+      .set(values)
+      .where(and(eq(linkedAccountsTable.customerId, customer.id), eq(linkedAccountsTable.id, linkedAccountId)))
+      .run();
+    return requireLinkedAccount(customer, linkedAccountId);
+  }
+
   return {
+    createLinkedAccount(customer, linked) {
+      const already = selectLinkedAccounts(customer).some((other) => other.institutionAccount === linked.institutionAccount);
+      if (already) throw new LinkedAccountError(`${linked.institution} is already linked`);
+      const row = db
+        .insert(linkedAccountsTable)
+        .values({
+          customerId: customer.id,
+          institutionAccount: linked.institutionAccount,
+          institution: linked.institution,
+          type: linked.type,
+          balanceCents: linked.balance,
+          syncedAtMs: clock.now().getTime(),
+          consentStart: linked.consent.start,
+          consentEnd: linked.consent.end,
+        })
+        .returning({ id: linkedAccountsTable.id })
+        .get();
+      return requireLinkedAccount(customer, asLinkedAccountId(row.id));
+    },
+    listLinkedAccounts: (customer) => selectLinkedAccounts(customer),
+    getLinkedAccount: (customer, linkedAccountId) => selectLinkedAccounts(customer, linkedAccountId)[0],
+    saveLinkedAccountSync: (customer, linkedAccountId, balance) =>
+      updateLinkedAccount(customer, linkedAccountId, { balanceCents: cents(balance), syncedAtMs: clock.now().getTime() }),
+    saveConsent: (customer, linkedAccountId, consent) =>
+      updateLinkedAccount(customer, linkedAccountId, { consentStart: consent.start, consentEnd: consent.end }),
+    deleteLinkedAccount(customer, linkedAccountId) {
+      const linked = requireLinkedAccount(customer, linkedAccountId);
+      db.delete(linkedAccountsTable)
+        .where(and(eq(linkedAccountsTable.customerId, customer.id), eq(linkedAccountsTable.id, linkedAccountId)))
+        .run();
+      return linked;
+    },
     recordAccess(customer, entry) {
       const row = db
         .insert(accessLogTable)

@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getAppBank } from "./app-bank";
 import { SIMULATION_START } from "./app-clock";
+import { POST as setClock } from "./app/e2e/clock/route";
 import { POST } from "./app/e2e/reset/route";
 import { deleteAppDatabase } from "./db/app-database";
 import { formatDollars } from "./money";
@@ -103,5 +104,41 @@ describe("the end-to-end reset route", () => {
 
     expect(response.status).toBe(404);
     expect(samsBalances()).toEqual(["Checking $3,127.00", "House fund $12,740.00"]);
+  });
+});
+
+describe("the end-to-end clock route", () => {
+  const MAY_23_2027_9AM = "2027-05-23T13:00:00.000Z";
+
+  function clockRequest(body: unknown): Request {
+    return new Request("http://localhost/e2e/clock", { method: "POST", body: JSON.stringify(body) });
+  }
+
+  it("moves the simulated clock to the time it is sent, without posting anything", async () => {
+    vi.stubEnv("PLINTH_E2E", "1");
+
+    const response = await setClock(clockRequest({ at: MAY_23_2027_9AM }));
+
+    expect(response.status).toBe(204);
+    expect(getAppBank().clock.now().toISOString()).toBe(MAY_23_2027_9AM);
+    expect(samsBalances()).toEqual(["Checking $227.00", "House fund $12,400.00"]);
+  });
+
+  it("refuses a time that isn't one, and leaves the clock where it was", async () => {
+    vi.stubEnv("PLINTH_E2E", "1");
+
+    const response = await setClock(clockRequest({ at: "next Tuesday" }));
+
+    expect(response.status).toBe(400);
+    expect(getAppBank().clock.now()).toEqual(SIMULATION_START);
+  });
+
+  it("isn't there in a normal run or a production run, and leaves the clock where it was", async () => {
+    expect((await setClock(clockRequest({ at: MAY_23_2027_9AM }))).status).toBe(404);
+    vi.stubEnv("PLINTH_E2E", "1");
+    vi.stubEnv("NODE_ENV", "production");
+    expect((await setClock(clockRequest({ at: MAY_23_2027_9AM }))).status).toBe(404);
+
+    expect(getAppBank().clock.now()).toEqual(SIMULATION_START);
   });
 });

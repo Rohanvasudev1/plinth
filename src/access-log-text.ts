@@ -44,3 +44,21 @@ export function subscriptionScanAccess(): NewAccessLogEntry {
     why: "Subscription price rises: to check your existing Card purchases for price rises and free trials turned paid",
   };
 }
+
+/** A Sync of one Linked account: Plinth reading its balance from its Institution. `account` reads like "Summit Card credit card". */
+export function syncAccess(account: string): NewAccessLogEntry {
+  return {
+    who: "plinth",
+    what: `Your ${account} balance`,
+    why: "Sync: to keep a copy of the balance of an account you linked, while your Consent lasts",
+  };
+}
+
+/** Unlinking one Linked account, which deletes Plinth's copy of it. */
+export function unlinkAccess(account: string): NewAccessLogEntry {
+  return {
+    who: "plinth",
+    what: `Your ${account} balance and Consent`,
+    why: "You unlinked it, so Plinth deleted its copy of that data",
+  };
+}
