@@ -145,8 +145,12 @@ _Avoid_: Rollback, cancel
 ## Forecast
 
 **Category**:
-The kind of spending a merchant or Scheduled bill belongs to, such as Groceries or Housing.
+The kind of spending, income or saving a ledger transaction is, such as Groceries, Housing, Income or Savings. A Merchant or Scheduled bill gives its spending one Category.
 _Avoid_: Tag, label, bucket
+
+**Counterparty**:
+Who a ledger transaction's money moved to or from: a Merchant, a Scheduled bill's payee, an Employer, or, for a move between the customer's own accounts, the account the money went to.
+_Avoid_: Other party, recipient
 
 **Merchant**:
 A simulated business the customer pays by Card purchase, with a fixed Category.
@@ -163,6 +167,10 @@ _Avoid_: Run rate, projected spend
 **Forecast**:
 The expected Checking balance over the next 30 days, worked out from known paychecks, Scheduled bills, sweeps and usual daily spending.
 _Avoid_: Prediction, projection (that word is for Goals)
+
+**Daily allowance**:
+The usual day-to-day spending the Forecast takes off each day: the Card purchases from checking over the 90 days before today, divided by 90.
+_Avoid_: Burn rate, daily spend
 
 **Projection**:
 Where a Goal's balance would be after three years at a given pace of saving, with no interest.

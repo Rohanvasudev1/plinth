@@ -2,11 +2,19 @@ import { localDateOf } from "./calendar";
 import type { Clock } from "./clock";
 import type { Customer, CustomerData, LedgerTransaction } from "./customer-data";
 import type { LedgerEvent, LedgerEventDispatcher } from "./ledger-events";
-import { cents, formatDollars, type Cents } from "./money";
+import { formatDollars, type Cents } from "./money";
 import { bufferRuleFor, type BufferRule } from "./rules";
 import { billsBeforePayday, safeToSpend } from "./safe-to-spend";
 import type { AutonomyLevel } from "./settings";
-import { billsRow, bufferRuleRow, checkSweepGuardrails, chooseSweepRoute, recordSweep, type ProposedSweep } from "./sweep";
+import {
+  billsRow,
+  bufferRuleRow,
+  checkSweepGuardrails,
+  chooseSweepRoute,
+  recordSweep,
+  sweepAmount,
+  type ProposedSweep,
+} from "./sweep";
 import { EMPLOYERS, type SystemData } from "./system-data";
 
 /** A paycheck deposit: money from an employer's payroll clearing account into one of the customer's accounts. */
@@ -59,8 +67,7 @@ export function startBufferAgent(deps: {
     const savings = savingsAccountId === null ? undefined : customerData.getAccount(customer, savingsAccountId);
     const bills = billsBeforePayday(customerData, customer, localDateOf(clock.now()));
     const safe = checking ? safeToSpend(checking, rule.parameters.buffer, bills) : null;
-    // Round down to whole dollars.
-    const amount = cents(safe && safe.amount >= 100 ? safe.amount - (safe.amount % 100) : 0);
+    const amount = sweepAmount(safe);
     // The Autonomy level chooses the route before any guardrail runs. Asking makes a Finding, which isn't a refusal.
     const route = chooseSweepRoute(autonomyLevel, customerData.listRules(customer), amount);
     const proposed: ProposedSweep = {

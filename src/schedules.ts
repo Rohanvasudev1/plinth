@@ -8,9 +8,13 @@ export interface DueBill {
   dueDate: LocalDate;
 }
 
+/** Whether `date` falls on the payroll's pay cycle, counting back from its first pay date as well as forward. */
+export function isOnPayCycle(payroll: Payroll, date: LocalDate): boolean {
+  return daysBetween(payroll.firstPayDate, date) % payroll.intervalDays === 0;
+}
+
 export function isPayday(payroll: Payroll, date: LocalDate): boolean {
-  const days = daysBetween(payroll.firstPayDate, date);
-  return days >= 0 && days % payroll.intervalDays === 0;
+  return date >= payroll.firstPayDate && isOnPayCycle(payroll, date);
 }
 
 /** The first date after `today` on which any of the payrolls pays, or null if there are no payrolls. */

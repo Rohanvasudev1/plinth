@@ -59,7 +59,7 @@ describe("Sweep", () => {
     const sam = signInByName(bank, "Sam Calloway");
     const [checking] = bank.customerData.listAccounts(sam);
     if (!checking) throw new Error("Sam's Checking is missing");
-    bank.cardPurchase(sam, { accountId: checking.id, amount: cents(1_01), idempotencyKey: "card:coffee" });
+    bank.cardPurchase(sam, { accountId: checking.id, merchant: "morning-crumb-cafe", amount: cents(1_01), idempotencyKey: "card:coffee" });
 
     bank.postPaycheck();
 
@@ -91,7 +91,7 @@ describe("Sweep", () => {
       replaceBufferRule(bank, sam, buffer);
       const [checking] = bank.customerData.listAccounts(sam);
       if (spent > 0 && checking) {
-        bank.cardPurchase(sam, { accountId: checking.id, amount: cents(spent), idempotencyKey: "card:coffee" });
+        bank.cardPurchase(sam, { accountId: checking.id, merchant: "morning-crumb-cafe", amount: cents(spent), idempotencyKey: "card:coffee" });
       }
 
       bank.postPaycheck();

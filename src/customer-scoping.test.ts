@@ -123,6 +123,7 @@ describe("customer scoping", () => {
       bank.customerData.addScheduledBill(priya, {
         accountId: samsChecking.id,
         payee: "Rent",
+        category: "Housing",
         amount: cents(1_00),
         dayOfMonth: 1,
       }),

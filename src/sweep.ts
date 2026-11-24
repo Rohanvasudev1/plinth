@@ -4,8 +4,13 @@ import { GUARDRAILS, guardrailName, type Decision, type Guardrail, type NewDecis
 import { cents, formatDollars, formatDollarsBriefly, type Cents } from "./money";
 import { describeRule } from "./rule-changes";
 import type { BufferRule, Rule } from "./rules";
-import type { BillsBeforePayday } from "./safe-to-spend";
+import type { BillsBeforePayday, SafeToSpend } from "./safe-to-spend";
 import type { AutonomyLevel } from "./settings";
+
+/** What a Sweep moves: Safe to spend rounded down to whole dollars, or zero when there's none, or no checking account. */
+export function sweepAmount(safe: SafeToSpend | null): Cents {
+  return cents(safe && safe.amount >= 100 ? safe.amount - (safe.amount % 100) : 0);
+}
 
 /** Everything the guardrails need to judge one Sweep. */
 export interface ProposedSweep {
@@ -142,6 +147,8 @@ export function recordSweep(
   const posted = customerData.postLedgerTransaction(customer, {
     idempotencyKey: entry.idempotencyKey,
     description: `Sweep to ${savings.name}`,
+    counterparty: savings.name,
+    category: "Savings",
     entries: [
       { accountId: checking.id, amount: cents(-amount) },
       { accountId: savings.id, amount },

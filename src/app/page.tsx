@@ -11,6 +11,8 @@ import { requireCustomer } from "@/session";
 import { STANDARD_SETUP } from "@/setup-answers";
 import { SetupSurvey } from "./setup/setup-survey";
 import { AgentActionsToast, FindingOptions, UndoButton } from "./agent-action-controls";
+import { ForecastChart } from "./forecast-chart";
+import { NavBar } from "./nav-bar";
 import { WhyPanel } from "./why-panel";
 
 export const dynamic = "force-dynamic";
@@ -192,6 +194,7 @@ export default async function HomePage() {
     // A customer with no settings record hasn't finished setup, so the agent waits for the Setup survey.
     return (
       <main className="page narrow">
+        <NavBar customerName={customer.name} current="home" />
         <header className="top">
           <div>
             <h1>Before your agent does anything, tell it how you want to be looked after</h1>
@@ -200,9 +203,6 @@ export default async function HomePage() {
               Agent &amp; limits.
             </p>
           </div>
-          <p className="muted signed-in">
-            {customer.name} · <Link href="/sign-in">Switch</Link>
-          </p>
         </header>
         <SetupSurvey initial={STANDARD_SETUP} firstRun />
       </main>
@@ -213,16 +213,12 @@ export default async function HomePage() {
   const accountName = (accountId: number) => accounts.find((account) => account.id === accountId)?.name ?? "an account";
   return (
     <main className="page">
+      <NavBar customerName={home.customerName} current="home" />
       <header className="top">
         <div>
           <h1>Home</h1>
           <p className="muted">{dateFormat.format(home.today)}</p>
         </div>
-        <p className="muted signed-in">
-          {home.customerName} · <Link href="/sign-in">Switch</Link> · <Link href="/agent">Agent &amp; limits</Link> ·{" "}
-          <Link href="/decision-log">Decision log</Link> ·{" "}
-          <Link href="/simulator">Simulator</Link>
-        </p>
       </header>
 
       {home.agentPaused && (
@@ -265,6 +261,8 @@ export default async function HomePage() {
           )}
         </AccountCard>
       ))}
+
+      {home.forecast && <ForecastChart forecast={home.forecast} />}
 
       <AgentActionsCard actions={home.agentActions} />
 

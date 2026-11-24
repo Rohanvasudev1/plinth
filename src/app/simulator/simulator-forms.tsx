@@ -30,6 +30,7 @@ export function ClockControls() {
 }
 
 export function CardPurchaseForm(props: {
+  merchants: { key: string; label: string }[];
   accounts: { id: number; label: string }[];
   /** Fresh on every render of the page, so a double click or resubmit posts the purchase once. */
   purchaseId: string;
@@ -38,6 +39,16 @@ export function CardPurchaseForm(props: {
   return (
     <form action={action} className="stack">
       <input type="hidden" name="purchaseId" value={props.purchaseId} />
+      <label className="field">
+        <span>Merchant</span>
+        <select name="merchant" required>
+          {props.merchants.map((merchant) => (
+            <option key={merchant.key} value={merchant.key}>
+              {merchant.label}
+            </option>
+          ))}
+        </select>
+      </label>
       <label className="field">
         <span>Account</span>
         <select name="accountId" required>

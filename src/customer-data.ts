@@ -29,6 +29,7 @@ import {
 } from "./findings";
 import type { LedgerEvent, LedgerEventDispatcher } from "./ledger-events";
 import { checkGoalTarget, GoalError } from "./goals";
+import type { Category } from "./categories";
 import { cents, type Cents } from "./money";
 import { isRuleKind, parseRuleContent, type NewRule, type Rule } from "./rules";
 import { parseSettingsChoices, SettingsError, type SavingsGoal, type Settings, type SettingsChoices } from "./settings";
@@ -70,6 +71,9 @@ export interface LedgerEntryInput {
 export interface LedgerTransactionInput {
   idempotencyKey: string;
   description: string;
+  /** Who the money moved to or from: a Merchant, payee or employer, or, for a move between the customer's own accounts, the account it went to. */
+  counterparty?: string;
+  category?: Category;
   entries: LedgerEntryInput[];
 }
 
@@ -85,6 +89,9 @@ export interface LedgerTransaction {
   idempotencyKey: string;
   description: string;
   postedAt: Date;
+  /** Null on a transaction posted without one, such as an opening balance. */
+  counterparty: string | null;
+  category: Category | null;
   entries: LedgerEntryInput[];
 }
 
@@ -108,9 +115,11 @@ export interface ScheduledBill {
   amount: Cents;
   /** 1 to 31. In a shorter month the bill falls due on the month's last day. */
   dayOfMonth: number;
+  /** The Category each payment is posted under. Null only for a bill set up before Categories existed and not backfilled. */
+  category: Category | null;
 }
 
-export type NewScheduledBill = Omit<ScheduledBill, "id">;
+export type NewScheduledBill = Omit<ScheduledBill, "id" | "category"> & { category: Category };
 
 /**
  * The one data-access layer for customer-owned rows (ADR 0004). Every method takes the customer
@@ -369,6 +378,8 @@ export function createCustomerData(deps: {
             idempotencyKey: transaction.idempotencyKey,
             description: transaction.description,
             postedAtMs: now.getTime(),
+            counterparty: transaction.counterparty ?? null,
+            category: transaction.category ?? null,
           })
           .returning({ id: ledgerTransactionsTable.id })
           .get();
@@ -431,6 +442,8 @@ export function createCustomerData(deps: {
       idempotencyKey: transaction.idempotencyKey,
       description: transaction.description,
       postedAt: new Date(transaction.postedAtMs),
+      counterparty: transaction.counterparty,
+      category: transaction.category,
       entries: entries
         .filter((entry) => entry.ledgerTransactionId === transaction.id)
         .map((entry) => ({ accountId: entry.accountId, amount: cents(entry.amountCents) })),
@@ -931,6 +944,7 @@ export function createCustomerData(deps: {
           payee: bill.payee,
           amountCents: bill.amount,
           dayOfMonth: bill.dayOfMonth,
+          category: bill.category,
         })
         .returning({ id: scheduledBillsTable.id })
         .get();
@@ -949,6 +963,7 @@ export function createCustomerData(deps: {
           payee: row.payee,
           amount: cents(row.amountCents),
           dayOfMonth: row.dayOfMonth,
+          category: row.category,
         }));
     },
   };
