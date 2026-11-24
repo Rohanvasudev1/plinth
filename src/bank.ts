@@ -137,7 +137,9 @@ export function createBank(deps: { db: Database; clock: SettableClock }): Bank {
   const ledgerEvents = createLedgerEventDispatcher();
   const customerData = createCustomerData({ db, clock, ledgerEvents });
   const systemData = createSystemData(db);
-  seedDemoData(systemData, customerData);
+  seedDemoData(systemData, customerData, (seedClock) =>
+    createCustomerData({ db, clock: seedClock, ledgerEvents: createLedgerEventDispatcher() }),
+  );
   const simulator = createSimulator({ clock, systemData, customerData });
   startBufferAgent({ clock, customerData, systemData, ledgerEvents });
 

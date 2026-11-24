@@ -58,11 +58,14 @@ describe("Counterparty and Category on ledger transactions", () => {
     const bank = withoutSweeps(openTestBank());
     const sam = signInByName(bank, "Sam Calloway");
 
+    const seeded = bank.customerData.listLedgerTransactions(sam).length;
+
     // From Thursday 19 November to Thursday 3 December passes Rent on the 1st, Internet on the 2nd, and Phone and Power on the 3rd.
     for (let day = 0; day < 14; day++) bank.advanceClock();
 
     const bills = bank.customerData
       .listLedgerTransactions(sam)
+      .slice(seeded)
       .filter((transaction) => transaction.idempotencyKey.startsWith("bill:"))
       .map(({ counterparty, category }) => ({ counterparty, category }));
     expect(bills).toEqual([

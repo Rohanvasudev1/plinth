@@ -1,6 +1,6 @@
 import { datesAfterThrough, localDateOf, sameTimeNextDay, type LocalDate } from "./calendar";
 import type { SettableClock } from "./clock";
-import type { Customer, CustomerData, Payroll, ScheduledBill } from "./customer-data";
+import type { Customer, CustomerData, LedgerTransactionInput, Payroll, ScheduledBill } from "./customer-data";
 import type { Category } from "./categories";
 import { cents, type Cents } from "./money";
 import { isBillDue, isPayday } from "./schedules";
@@ -115,6 +115,35 @@ interface BillToPost {
   date: LocalDate;
 }
 
+/** A payroll's paycheck on `date`: from the employer's clearing account into the customer's account. */
+export function paycheckTransaction(systemData: SystemData, payroll: Payroll, date: LocalDate): LedgerTransactionInput {
+  const employer = EMPLOYERS[payroll.employer];
+  return {
+    idempotencyKey: `payroll:${payroll.employer}:${date}`,
+    description: `Paycheck from ${employer.name}`,
+    counterparty: employer.name,
+    category: "Income",
+    entries: [
+      { accountId: systemData.ensureSystemAccount(employer.clearingAccount), amount: cents(-payroll.amount) },
+      { accountId: payroll.accountId, amount: payroll.amount },
+    ],
+  };
+}
+
+/** A Scheduled bill's payment due on `date`: from the customer's account to the Biller clearing account. */
+export function billPaymentTransaction(systemData: SystemData, bill: ScheduledBill, date: LocalDate): LedgerTransactionInput {
+  return {
+    idempotencyKey: `bill:${bill.id}:${date}`,
+    description: `${bill.payee} bill`,
+    counterparty: bill.payee,
+    category: bill.category ?? undefined,
+    entries: [
+      { accountId: bill.accountId, amount: cents(-bill.amount) },
+      { accountId: systemData.ensureSystemAccount("biller"), amount: bill.amount },
+    ],
+  };
+}
+
 export function createSimulator(deps: {
   clock: SettableClock;
   systemData: SystemData;
@@ -143,22 +172,12 @@ export function createSimulator(deps: {
   }
 
   function postPaycheckDue({ customer, payroll, date }: PaycheckToPost): PostedPaycheck {
-    const employer = EMPLOYERS[payroll.employer];
-    const posted = customerData.postLedgerTransaction(customer, {
-      idempotencyKey: `payroll:${payroll.employer}:${date}`,
-      description: `Paycheck from ${employer.name}`,
-      counterparty: employer.name,
-      category: "Income",
-      entries: [
-        { accountId: systemData.ensureSystemAccount(employer.clearingAccount), amount: cents(-payroll.amount) },
-        { accountId: payroll.accountId, amount: payroll.amount },
-      ],
-    });
+    const posted = customerData.postLedgerTransaction(customer, paycheckTransaction(systemData, payroll, date));
     return {
       kind: "paycheck",
       customerId: customer.id,
       accountId: payroll.accountId,
-      employerName: employer.name,
+      employerName: EMPLOYERS[payroll.employer].name,
       date,
       amount: payroll.amount,
       ledgerTransactionId: posted.ledgerTransactionId,
@@ -167,16 +186,7 @@ export function createSimulator(deps: {
   }
 
   function postBillDue({ customer, bill, date }: BillToPost): PostedBill {
-    const posted = customerData.postLedgerTransaction(customer, {
-      idempotencyKey: `bill:${bill.id}:${date}`,
-      description: `${bill.payee} bill`,
-      counterparty: bill.payee,
-      category: bill.category ?? undefined,
-      entries: [
-        { accountId: bill.accountId, amount: cents(-bill.amount) },
-        { accountId: systemData.ensureSystemAccount("biller"), amount: bill.amount },
-      ],
-    });
+    const posted = customerData.postLedgerTransaction(customer, billPaymentTransaction(systemData, bill, date));
     return {
       kind: "bill",
       customerId: customer.id,
