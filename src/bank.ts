@@ -11,6 +11,7 @@ import {
 } from "./linked-account-changes";
 import type { LinkedAccount, LinkedAccountId } from "./linked-accounts";
 import type { InstitutionAccountKey } from "./open-banking";
+import { buildExport, type CustomerExport } from "./export";
 import { readForecastPage, type ForecastPage } from "./forecast-page";
 import { startBufferAgent } from "./buffer-agent";
 import { localDateOf } from "./calendar";
@@ -62,6 +63,7 @@ export type { StartedMission } from "./mission-runner";
 export type { Mission } from "./missions";
 export type { AccessLogEntry, AccessReader } from "./access-log";
 export type { LinkableAccount } from "./linked-account-changes";
+export type { CustomerExport } from "./export";
 export type { AllAccountsView, LinkedAccountOnPage, NetWorthFigures } from "./all-accounts";
 
 export interface GoalProgress {
@@ -244,6 +246,11 @@ export interface Bank extends Simulator, RuleChanges {
    * Asking for the state it is already in changes nothing. Throws SettingsError, saving nothing, before setup.
    */
   setDataChoice(customer: Customer, choice: DataChoice, on: boolean): Settings;
+  /**
+   * Export: writes an access log entry with the customer as reader, then builds one file of everything Plinth holds
+   * about them, including that entry, in one transaction. Works while the agent is paused.
+   */
+  buildExport(customer: Customer): CustomerExport;
 }
 
 /**
@@ -348,6 +355,7 @@ export function createBank(deps: {
     stopMission: (customer, missionId) => missions.stop(customer, missionId),
     readMission: (customer, missionId) => customerData.getMission(customer, missionId),
     setDataChoice: (customer, choice, on) => setDataChoice(customerData, customer, choice, on),
+    buildExport: (customer) => buildExport({ customerData }, customer),
     readPrivacy: (customer) => ({
       dataChoices: customerData.getSettings(customer)?.dataChoices ?? null,
       accessLog: customerData.listAccessLog(customer),
