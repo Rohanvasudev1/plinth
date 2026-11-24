@@ -25,14 +25,18 @@ test("Forecast shows Sam's Usual month, November On pace, left to save and each 
   await expect(page.getByRole("region", { name: "Usual spending" })).toContainText("$5,108.00");
   await expect(page.getByRole("region", { name: "Usual spending" })).toContainText("Average of the last 6 full months");
   const onPace = page.getByRole("region", { name: "November, on pace for" });
-  await expect(onPace).toContainText("$7,570.42");
-  await expect(onPace).toContainText("$2,462.42 more than usual");
-  await expect(page.getByRole("region", { name: "Left to save" })).toContainText("$1,912.00 → -$550.42");
+  await expect(onPace).toContainText("$6,628.47");
+  await expect(onPace).toContainText("$1,520.47 more than usual");
+  await expect(page.getByRole("region", { name: "Left to save" })).toContainText("$1,912.00 → $391.53");
 
   const shopping = page.getByRole("table", { name: "November compared with your Usual month" }).getByRole("row", { name: /Shopping/ });
   await expect(shopping).toContainText("$1,320.00");
   await expect(shopping).toContainText("$2,701.82");
   await expect(shopping).toContainText("+$1,381.82");
+  const table = page.getByRole("table", { name: "November compared with your Usual month" });
+  await expect(table.getByRole("row", { name: /Groceries/ })).toContainText("-$236.50");
+  // Rent counts once for the month, not scaled up to the pace of the month so far.
+  await expect(table.getByRole("row", { name: /Housing/ })).toContainText("same");
   await expect(page.getByRole("link", { name: "Forecast", exact: true })).toHaveAttribute("aria-current", "page");
   await expectNoHorizontalScroll(page);
 });

@@ -1,4 +1,5 @@
 import {
+  addDays,
   dayOfMonth,
   daysInMonth,
   firstOfMonth,
@@ -10,6 +11,8 @@ import {
 import { CATEGORIES, type Category } from "./categories";
 import type { Customer, CustomerData, LedgerTransaction } from "./customer-data";
 import { cents, divideCents, type Cents } from "./money";
+import { billsDue } from "./schedules";
+import { isBillPayment } from "./simulator";
 
 /** A Category that counts as spending: every Category except Income and Savings. */
 type SpendingCategory = Exclude<Category, "Income" | "Savings">;
@@ -52,6 +55,8 @@ interface CountedTransaction {
   category: "Income" | SpendingCategory;
   /** Always positive: money in for income, money out for spending. */
   amount: Cents;
+  /** True for a Scheduled bill payment, which On pace counts at the bill's full amount rather than scaling. */
+  bill: boolean;
 }
 
 /**
@@ -63,8 +68,9 @@ interface CountedTransaction {
  * every other Category except Savings, so moves between the customer's own accounts and opening balances, which
  * have no Category, count as neither.
  *
- * On pace is this month's spending through today × the days in the month ÷ the days elapsed, counting today, since
- * today's spending is in the total.
+ * On pace is this month's Card purchases through today × the days in the month ÷ the days elapsed, counting today,
+ * since today's purchases are in the total, plus the full amount of every Scheduled bill due this month, paid yet or
+ * not. Scaling a bill would make Rent paid on the 1st look like thirty Rents.
  */
 export function readForecastPage(customerData: CustomerData, customer: Customer, today: LocalDate): ForecastPage {
   const ownAccountIds = new Set(customerData.listAccounts(customer).map((account) => account.id));
@@ -74,10 +80,21 @@ export function readForecastPage(customerData: CustomerData, customer: Customer,
 
   const month = firstOfMonth(today);
   const inUsualMonths = counted.filter((transaction) => months.includes(firstOfMonth(transaction.date)));
-  const soFar = counted.filter((transaction) => transaction.date >= month && transaction.date <= today);
+  const purchasesSoFar = counted.filter(
+    (transaction) => !transaction.bill && transaction.date >= month && transaction.date <= today,
+  );
+  const billsThisMonth: CountedTransaction[] = billsDue(
+    customerData.listScheduledBills(customer),
+    addDays(month, -1),
+    addDays(firstOfNextMonth(month), -1),
+  ).flatMap(({ bill, dueDate }) =>
+    bill.category === null || bill.category === "Income" || bill.category === "Savings"
+      ? []
+      : [{ date: dueDate, category: bill.category, amount: bill.amount, bill: true }],
+  );
   const usual = (transactions: CountedTransaction[]) => divideCents(totalOf(transactions), months.length);
-  const onPace = (transactions: CountedTransaction[]) =>
-    divideCents(totalOf(transactions) * daysInMonth(today), dayOfMonth(today));
+  const onPace = (purchases: CountedTransaction[], bills: CountedTransaction[]) =>
+    cents(divideCents(totalOf(purchases) * daysInMonth(today), dayOfMonth(today)) + totalOf(bills));
   const spending = (transactions: CountedTransaction[], category?: SpendingCategory) =>
     transactions.filter((transaction) =>
       category === undefined ? transaction.category !== "Income" : transaction.category === category,
@@ -85,7 +102,7 @@ export function readForecastPage(customerData: CustomerData, customer: Customer,
 
   const income = usual(inUsualMonths.filter((transaction) => transaction.category === "Income"));
   const usualSpending = usual(spending(inUsualMonths));
-  const onPaceSpending = onPace(spending(soFar));
+  const onPaceSpending = onPace(spending(purchasesSoFar), billsThisMonth);
   return {
     kind: "figures",
     month,
@@ -96,7 +113,7 @@ export function readForecastPage(customerData: CustomerData, customer: Customer,
     categories: SPENDING_CATEGORIES.map((category) => ({
       category,
       usualMonth: usual(spending(inUsualMonths, category)),
-      onPace: onPace(spending(soFar, category)),
+      onPace: onPace(spending(purchasesSoFar, category), spending(billsThisMonth, category)),
     })).filter((row) => row.usualMonth !== 0 || row.onPace !== 0),
   };
 }
@@ -124,6 +141,7 @@ function countedTransaction(transaction: LedgerTransaction, ownAccountIds: Set<n
       date: localDateOf(transaction.postedAt),
       category,
       amount: cents(category === "Income" ? net : -net),
+      bill: isBillPayment(transaction),
     },
   ];
 }

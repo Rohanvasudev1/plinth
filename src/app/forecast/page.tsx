@@ -31,10 +31,14 @@ function differenceFromUsual(onPace: Cents, usual: Cents): string {
   return difference ? `${difference.amount} ${difference.more ? "more" : "less"} than usual` : "The same as usual";
 }
 
-/** A Category's change from usual, signed, such as "+$240.00", or "same". */
+/**
+ * A Category's change from usual, such as "+$240.00" or "-$22.89", or "same". Negatives come from the money
+ * formatter, as Left to save's do.
+ */
 function signedDifference(onPace: Cents, usual: Cents): string {
-  const difference = differenceOf(onPace, usual);
-  return difference ? `${difference.more ? "+" : "−"}${difference.amount}` : "same";
+  const difference = cents(onPace - usual);
+  if (difference === 0) return "same";
+  return difference > 0 ? `+${formatDollars(difference)}` : formatDollars(difference);
 }
 
 /** A bar's width as a whole percent of the widest amount on the page. */

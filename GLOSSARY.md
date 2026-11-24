@@ -161,7 +161,7 @@ The average income and spending, per Category and in total, over the last six fu
 _Avoid_: Average month, baseline, normal month
 
 **On pace**:
-This month's spending so far, scaled up to the whole month.
+This month's spending at its pace so far: Card purchases so far, scaled up to the whole month, plus every Scheduled bill due this month at its full amount, paid yet or not.
 _Avoid_: Run rate, projected spend
 
 **Left to save**:

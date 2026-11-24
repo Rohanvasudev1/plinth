@@ -44,16 +44,16 @@ describe("the Forecast page", () => {
     });
   });
 
-  it("puts Sam's November On pace from spending so far, scaled from 19 of 30 days to the whole month", () => {
+  it("puts Sam's November On pace on 19 Nov: Card purchases scaled from 19 of 30 days, Scheduled bills at their full amount", () => {
     const bank = openTestBank();
     const page = figuresFor(bank, "Sam Calloway");
 
-    // From 1 to 18 November Sam paid $1,627.00 of bills and $3,167.60 of Card purchases: $4,794.60 so far.
-    // $4,794.60 × 30 ÷ 19 = $7,570.421…
-    expect(page.onPace.spending).toBe(7_570_42);
+    // From 1 to 18 November Sam made $3,167.60 of Card purchases. $3,167.60 × 30 ÷ 19 = $5,001.473…
+    // The four Scheduled bills add their full $1,627.00 for the month.
+    expect(page.onPace.spending).toBe(6_628_47);
     expect(onPaceByCategory(page)).toEqual({
-      Housing: 2_289_47, // $1,450.00 × 30 ÷ 19 = $2,289.473…
-      Utilities: 279_47, // $177.00 × 30 ÷ 19 = $279.473…
+      Housing: 1_450_00, // Rent, not scaled
+      Utilities: 177_00, // Internet, Phone and Power, not scaled
       Groceries: 883_50, // $559.55 × 30 ÷ 19 = $883.50
       "Eating out": 929_21, // $588.50 × 30 ÷ 19 = $929.210…
       Shopping: 2_701_82, // $1,711.15 × 30 ÷ 19 = $2,701.815…
@@ -64,11 +64,38 @@ describe("the Forecast page", () => {
     });
   });
 
-  it("leaves Sam $1,912.00 to save in the Usual month, and $550.42 short On pace", () => {
+  it("doesn't scale Rent up on the 1st: Scheduled bills count once, paid or not, and Card purchases scale from 1 of 31 days", () => {
+    const bank = openTestBank();
+    const sam = signInByName(bank, "Sam Calloway");
+    const [checking] = bank.customerData.listAccounts(sam);
+    if (!checking) throw new Error("Sam's checking account is missing");
+    // From Thursday 19 November to Tuesday 1 December, when Rent is paid. Internet, Phone and Power aren't due yet.
+    for (let day = 0; day < 12; day++) bank.advanceClock();
+    bank.cardPurchase(sam, { accountId: checking.id, merchant: "morning-crumb-cafe", amount: cents(20_00), idempotencyKey: "card:coffee" });
+
+    const page = figuresFor(bank, "Sam Calloway");
+
+    // $20.00 × 31 ÷ 1 = $620.00, plus $1,627.00 of Scheduled bills.
+    expect(page.onPace.spending).toBe(2_247_00);
+    expect(onPaceByCategory(page)).toEqual({
+      Housing: 1_450_00,
+      Utilities: 177_00,
+      Groceries: 0,
+      "Eating out": 620_00,
+      Shopping: 0,
+      Transport: 0,
+      Subscriptions: 0,
+      Entertainment: 0,
+      Health: 0,
+    });
+  });
+
+  it("leaves Sam $1,912.00 to save in the Usual month, and $391.53 On pace", () => {
     const bank = openTestBank();
     const page = figuresFor(bank, "Sam Calloway");
 
-    expect(page.leftToSave).toEqual({ usualMonth: 1_912_00, onPace: -550_42 });
+    // $7,020.00 − $5,108.00, and $7,020.00 − $6,628.47
+    expect(page.leftToSave).toEqual({ usualMonth: 1_912_00, onPace: 391_53 });
   });
 
   it("counts a Card purchase as spending, but not a paycheck, the agent's sweep or Sam's own transfer", () => {
@@ -93,29 +120,41 @@ describe("the Forecast page", () => {
 
     const page = figuresFor(bank, "Sam Calloway");
 
-    // ($4,794.60 + $25.40) × 30 ÷ 20 = $7,230.00
-    expect(page.onPace.spending).toBe(7_230_00);
+    // ($3,167.60 + $25.40) × 30 ÷ 20 = $4,789.50, plus $1,627.00 of Scheduled bills.
+    expect(page.onPace.spending).toBe(6_416_50);
     expect(onPaceByCategory(page).Entertainment).toBe(101_85); // ($42.50 + $25.40) × 30 ÷ 20
     expect(page.usualMonth.income).toBe(7_020_00);
-    expect(page.leftToSave).toEqual({ usualMonth: 1_912_00, onPace: -210_00 });
+    expect(page.leftToSave).toEqual({ usualMonth: 1_912_00, onPace: 603_50 });
   });
 
-  it("gives Priya her own figures from October, her one full month, and none of Sam's", () => {
+  it("shows Sam and Priya each only their own figures, with only their own purchases today", () => {
     const bank = openTestBank();
     const sam = signInByName(bank, "Sam Calloway");
-    const [checking] = bank.customerData.listAccounts(sam);
-    if (!checking) throw new Error("Sam's checking account is missing");
-    const before = figuresFor(bank, "Priya Natarajan");
-    bank.cardPurchase(sam, { accountId: checking.id, merchant: "harbor-and-pine-goods", amount: cents(120_00), idempotencyKey: "card:lamp" });
+    const priya = signInByName(bank, "Priya Natarajan");
+    const [samsChecking] = bank.customerData.listAccounts(sam);
+    const [priyasChecking] = bank.customerData.listAccounts(priya);
+    if (!samsChecking || !priyasChecking) throw new Error("A seeded checking account is missing");
+    bank.cardPurchase(sam, { accountId: samsChecking.id, merchant: "bright-reel-cinema", amount: cents(25_40), idempotencyKey: "card:film" });
+    bank.cardPurchase(priya, { accountId: priyasChecking.id, merchant: "bright-reel-cinema", amount: cents(19_00), idempotencyKey: "card:film" });
 
+    const sams = figuresFor(bank, "Sam Calloway");
     const priyas = figuresFor(bank, "Priya Natarajan");
 
+    expect(sams.fullMonths).toBe(6);
+    expect(sams.usualMonth).toEqual({ income: 7_020_00, spending: 5_108_00 });
+    // ($3,167.60 + $25.40) × 30 ÷ 19 = $5,041.578…, plus $1,627.00 of Scheduled bills.
+    expect(sams.onPace.spending).toBe(6_668_58);
+    expect(onPaceByCategory(sams).Entertainment).toBe(107_21); // ($42.50 + $25.40) × 30 ÷ 19
+
+    // October, Priya's one full month: two paychecks of $2,480, and $2,447.00 of Card purchases plus Rent, Phone
+    // and Gym at $1,180.00 + $38.00 + $29.00.
     expect(priyas.fullMonths).toBe(1);
-    // Two paychecks of $2,480 in October.
-    expect(priyas.usualMonth.income).toBe(4_960_00);
-    // $2,447.00 of Card purchases, and Rent, Phone and Gym: $1,180.00 + $38.00 + $29.00.
-    expect(priyas.usualMonth.spending).toBe(3_694_00);
-    expect(priyas).toEqual(before);
+    expect(priyas.usualMonth).toEqual({ income: 4_960_00, spending: 3_694_00 });
+    // ($1,316.90 + $19.00) × 30 ÷ 19 = $2,109.315…, plus $1,247.00 of Scheduled bills, though Rent and Phone aren't
+    // due until the 28th and 30th.
+    expect(priyas.onPace.spending).toBe(3_356_32);
+    expect(onPaceByCategory(priyas).Entertainment).toBe(30_00); // $19.00 × 30 ÷ 19
+    expect(onPaceByCategory(priyas).Housing).toBe(1_180_00);
   });
 });
 
