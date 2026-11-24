@@ -1,26 +1,10 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 import { restoreSeed } from "./restore-seed";
 import { turnOnAgentAskingFirst } from "./setup-survey";
 import { expectNoHorizontalScroll } from "./page-checks";
+import { advanceClock } from "./simulator";
 
 test.use({ viewport: { width: 390, height: 844 } });
-
-/**
- * Presses "Advance clock one day" on the Simulator, once for each day after `from` up to and including `to`
- * (both YYYY-MM-DD), waiting for each day to land. Returns the Simulator's message for the last day.
- */
-async function advanceClock(page: Page, from: string, to: string): Promise<string> {
-  await page.goto("/simulator");
-  const status = page.getByRole("status");
-  const day = new Date(`${from}T00:00:00Z`);
-  const last = new Date(`${to}T00:00:00Z`);
-  while (day < last) {
-    day.setUTCDate(day.getUTCDate() + 1);
-    await page.getByRole("button", { name: "Advance clock one day" }).click();
-    await expect(status).toContainText(`Moved the clock to ${day.toISOString().slice(0, 10)}.`);
-  }
-  return (await status.textContent()) ?? "";
-}
 
 test("Journey 2: Alex sets up the agent to ask first, picks Move on the sweep Finding, pauses, and the next sweep is refused", async ({ page }) => {
   await restoreSeed(page);
