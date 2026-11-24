@@ -315,3 +315,36 @@ table.activity { width: 100%; border-collapse: collapse; }
   border: 1px solid var(--focus);
   white-space: nowrap;
 }
+
+/* Forecast page */
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.stat { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.stat-label { font-size: 0.85rem; font-weight: 500; color: var(--muted); }
+.stat-value { margin: 0; font-size: 1.45rem; font-weight: 800; white-space: normal; overflow-wrap: anywhere; }
+.stat-value .over { color: var(--bad); }
+.stat-value .then { font-size: 0.95rem; font-weight: 600; color: var(--muted); white-space: nowrap; }
+.stat-note { font-size: 0.82rem; }
+.card-head { display: flex; flex-direction: column; gap: 2px; margin-bottom: 8px; }
+.card-head .muted { font-size: 0.85rem; }
+table.categories { width: 100%; border-collapse: collapse; }
+.categories thead th {
+  text-align: left;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  font-weight: 500;
+  padding: 0 4px 6px;
+  border-bottom: 1px solid var(--line);
+}
+.categories th[scope="row"] { text-align: left; font-weight: 500; }
+.categories th[scope="row"], .categories td { padding: 8px 0 8px 4px; border-bottom: 1px solid var(--soft); vertical-align: top; }
+.categories tr:last-child th, .categories tr:last-child td { border-bottom: 0; }
+.categories .num-col { text-align: right; width: 1%; padding-left: 12px; }
+.categories .difference { font-size: 0.78rem; color: var(--muted); }
+.categories .difference.over { color: var(--bad); }
+.category-bars { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; }
+.category-bars div { height: 5px; border-radius: 3px; min-width: 2px; }
+.category-bars .usual { background: var(--line); }
+.category-bars .on-pace { background: var(--focus); }
+.category-bars .on-pace.over { background: var(--bad); }

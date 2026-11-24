@@ -1,4 +1,5 @@
 import { readActivity, type ActivityRow } from "./activity";
+import { readForecastPage, type ForecastPage } from "./forecast-page";
 import { startBufferAgent } from "./buffer-agent";
 import { localDateOf } from "./calendar";
 import type { SettableClock } from "./clock";
@@ -31,6 +32,7 @@ import { undoAgentAction, type UndoOutcome } from "./undo";
 export type { BillBeforePayday, BillsBeforePayday, SafeToSpend } from "./safe-to-spend";
 export type { UndoOutcome } from "./undo";
 export type { ActivityRow } from "./activity";
+export type { CategoryFigures, ForecastFigures, ForecastPage } from "./forecast-page";
 export type { ChooseOptionOutcome } from "./finding-choices";
 
 export interface GoalProgress {
@@ -87,6 +89,11 @@ export interface Bank extends Simulator, RuleChanges {
   readHome(customer: Customer): HomeView;
   /** The customer's Activity: their posted ledger transactions, newest first, each tagged if their agent made it. */
   readActivity(customer: Customer): ActivityRow[];
+  /**
+   * The Forecast page: the Usual month of income and spending, this month On pace, and left to save, or "not enough
+   * history" when the customer has no full calendar month of history.
+   */
+  readForecastPage(customer: Customer): ForecastPage;
   billsBeforePayday(customer: Customer): BillsBeforePayday;
   /** Every action the customer's agent took or tried to take, and every Undo, newest first. */
   readDecisionLog(customer: Customer): Decision[];
@@ -177,6 +184,7 @@ export function createBank(deps: { db: Database; clock: SettableClock }): Bank {
     setAgentPaused: (customer, paused) => setAgentPaused(customerData, customer, paused),
     readDecisionLog: (customer) => customerData.listDecisions(customer),
     readActivity: (customer) => readActivity(customerData, customer),
+    readForecastPage: (customer) => readForecastPage(customerData, customer, localDateOf(clock.now())),
     readFindings: (customer) => customerData.listFindings(customer),
     chooseOption: (customer, findingId, option) => chooseOption({ clock, customerData }, customer, findingId, option),
     undo: (customer, decisionId) => undoAgentAction(customerData, customer, decisionId),

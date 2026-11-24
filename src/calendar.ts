@@ -104,3 +104,18 @@ export function sameTimeNextDay(instant: Date): Date {
   const guess = new Date(instant.getTime() + DAY_MS);
   return new Date(guess.getTime() + (utcOffsetMinutes(instant) - utcOffsetMinutes(guess)) * 60_000);
 }
+
+/** The first day of the month containing `date`. */
+export function firstOfMonth(date: LocalDate): LocalDate {
+  return localDate(`${date.slice(0, 8)}01`);
+}
+
+/** The first day of the month after the one containing `date`. */
+export function firstOfNextMonth(date: LocalDate): LocalDate {
+  return addDays(firstOfMonth(date), daysInMonth(date));
+}
+
+/** The first day of the month before the one containing `date`. */
+export function firstOfPreviousMonth(date: LocalDate): LocalDate {
+  return firstOfMonth(addDays(firstOfMonth(date), -1));
+}

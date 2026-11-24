@@ -118,9 +118,12 @@ const SAMS_NOVEMBER_PURCHASES: SeedPurchase[] = [
   { day: 16, merchant: "harbor-and-pine-goods", amount: cents(342_35) },
 ];
 
-/** Priya's smaller pattern: $2,447.00 of Card purchases a month at seven Merchants. */
+/**
+ * Priya's smaller pattern: $2,447.00 of Card purchases a month at seven Merchants. It starts on the 1st, so her
+ * history covers all of October and the Forecast page has one full month to work from.
+ */
 const PRIYAS_MONTHLY_PURCHASES: SeedPurchase[] = [
-  { day: 2, merchant: "cityline-transit", amount: cents(127_00) },
+  { day: 1, merchant: "cityline-transit", amount: cents(127_00) },
   { day: 3, merchant: "morning-crumb-cafe", amount: cents(12_80) },
   { day: 5, merchant: "green-basket-market", amount: cents(268_30) },
   { day: 7, merchant: "morning-crumb-cafe", amount: cents(15_20) },

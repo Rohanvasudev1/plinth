@@ -164,6 +164,10 @@ _Avoid_: Average month, baseline, normal month
 This month's spending so far, scaled up to the whole month.
 _Avoid_: Run rate, projected spend
 
+**Left to save**:
+Usual month income minus spending, worked out for the Usual month and for On pace. Below zero when spending is higher than income.
+_Avoid_: Surplus, savings rate, net income
+
 **Forecast**:
 The expected Checking balance over the next 30 days, worked out from known paychecks, Scheduled bills, sweeps and usual daily spending.
 _Avoid_: Prediction, projection (that word is for Goals)
