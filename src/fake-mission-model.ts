@@ -1,7 +1,9 @@
 import { addDays, firstOfNextMonth, formatLocalDate, localDateOf, type LocalDate } from "./calendar";
 import type { Clock } from "./clock";
 import type { MissionModel, MissionModelRequest, MissionToolAnswer, ModelFact, ModelFinding } from "./mission-model";
+import { institutionAccountName } from "./linked-account-text";
 import { cents, formatDollars, type Cents } from "./money";
+import type { LinkedAccountType } from "./open-banking";
 
 // The scripted fake language model. It picks a canned script by keyword, makes real tool calls through the same
 // tools, and builds its Finding from their results, so every Finding check runs against it. Tests always use it, and
@@ -39,6 +41,7 @@ export function createFakeMissionModel(deps: {
       const session = new ScriptSession(request, localDateOf(clock.now()), toolCallDelayMs);
       const testScript = testScripts ? testScriptFor(request.question) : undefined;
       if (testScript) return testScript(session);
+      if (/\bowe\b|\bowing\b|\bdebts?\b/i.test(request.question)) return owed(session);
       const transactions = await session.call<TransactionsResult>("read_transactions", {
         from: addDays(session.today, -RECENT_DAYS),
         to: session.today,
@@ -130,6 +133,10 @@ type ForecastResult =
 type ProjectionResult =
   | { kind: "not_enough_history" | "no_sweep_target" }
   | { kind: "projection"; account: string; balanceCents: number; usualMonth: { after36MonthsCents: number } };
+
+interface LinkedAccountsResult {
+  linkedAccounts: { institution: string; type: LinkedAccountType; balanceCents: number }[];
+}
 
 /** A tool call the script made: its id, for facts to cite, and its result. */
 interface Called<T> {
@@ -350,6 +357,48 @@ async function onTrack(session: ScriptSession, usual: Called<UsualFigures>, ques
         ? "A Usual month leaves nothing to save, so the Goal doesn't grow."
         : `Saving ${dollars(monthly)} a month, ${dollars(toGo)} takes ${months} months. That assumes the sweep keeps moving your Left to save, with no interest.`,
     ),
+  };
+}
+
+/** What the customer owes on their Linked accounts, from their balances alone. */
+async function owed(session: ScriptSession): Promise<ModelFinding> {
+  const linked = await session.call<LinkedAccountsResult>("read_linked_accounts", {});
+  const accounts = linked.result.linkedAccounts;
+  if (accounts.length === 0) {
+    const title = "You have no Linked accounts for your agent to read";
+    const facts = [fact("Linked accounts with a Consent that lasts", "None", linked)];
+    return {
+      title,
+      facts,
+      options: [{ key: "read_report" }, { key: "not_now" }],
+      agentsView: "I would pick Not now: link the accounts you owe on with Link another bank, then ask again.",
+      cantKnow: null,
+      report: report(title, facts, "Your agent can only read accounts you have linked, while their Consent lasts."),
+    };
+  }
+  const owing = accounts.filter((account) => account.balanceCents < 0);
+  const holding = accounts.filter((account) => account.balanceCents >= 0);
+  const owedInAll = -owing.reduce((sum, account) => sum + account.balanceCents, 0);
+  const title =
+    owing.length === 0
+      ? "You owe nothing on your Linked accounts"
+      : `You owe ${dollars(owedInAll)} across ${owing.length} Linked account${owing.length === 1 ? "" : "s"}`;
+  const facts = [
+    ...owing.map((account) => fact(institutionAccountName(account), `${dollars(-account.balanceCents)} owed`, linked)),
+    fact("Owed in all", dollars(owedInAll), linked),
+  ];
+  if (holding.length > 0) {
+    const held = holding.reduce((sum, account) => sum + account.balanceCents, 0);
+    facts.push(fact("Held in your other Linked accounts", dollars(held), linked));
+  }
+  const cantKnow = "The interest rates and payment dates on what you owe. Plinth sees only your Linked accounts' balances.";
+  return {
+    title,
+    facts,
+    options: [{ key: "read_report" }, { key: "not_now" }],
+    agentsView: "I would pick Read the full report: it lists each balance as of its last Sync.",
+    cantKnow,
+    report: report(title, facts, `What Plinth can't know: ${cantKnow}`),
   };
 }
 

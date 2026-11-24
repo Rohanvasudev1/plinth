@@ -323,7 +323,7 @@ describe("Mission tools", () => {
     };
     readerFor.current = reader;
     await bank.startMission(customer, "Read everything").ended;
-    expect(results).toHaveLength(6);
+    expect(results).toHaveLength(7);
     return JSON.stringify(results);
   }
   const readerFor: { current: MissionModel | undefined } = { current: undefined };
