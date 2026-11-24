@@ -18,8 +18,6 @@ const FIGURES: { key: keyof NetWorthFigures; label: string }[] = [
   { key: "debt", label: "Debt" },
 ];
 
-const PLINTH_ACCOUNT_TYPE = { checking: "checking", savings: "savings" } as const;
-
 function LinkedAccountForm({ linked, action, label }: { linked: LinkedAccountOnPage; action: (form: FormData) => Promise<void>; label: string }) {
   return (
     <form action={action}>
@@ -112,7 +110,7 @@ export default async function AllAccountsPage({ searchParams }: { searchParams: 
               <tr key={`plinth-${account.id}`}>
                 <td>
                   <b>{account.name}</b>
-                  <div className="muted account-detail">Plinth {PLINTH_ACCOUNT_TYPE[account.kind]} · Everything</div>
+                  <div className="muted account-detail">Plinth {account.kind} · Everything</div>
                 </td>
                 <td className="num num-col">{formatDollars(account.balance)}</td>
               </tr>

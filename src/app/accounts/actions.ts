@@ -8,17 +8,20 @@ import { isInstitutionAccountKey } from "@/open-banking";
 import { requireCustomer } from "@/session";
 import type { AccountsNotice } from "./notices";
 
-/** Runs one Linked account change, then returns to All accounts with a notice of what happened. */
-async function change(run: () => void, done: AccountsNotice, from = "/accounts"): Promise<never> {
-  let notice: AccountsNotice = done;
+/**
+ * Runs one Linked account change, then returns to All accounts with `noticeOnSuccess`, or to `pageOnRefusal` with the
+ * refused notice if the bank refused it.
+ */
+async function change(run: () => void, noticeOnSuccess: AccountsNotice, pageOnRefusal = "/accounts"): Promise<never> {
+  let refused = false;
   try {
     run();
   } catch (error) {
     if (!(error instanceof LinkedAccountError)) throw error;
-    notice = "refused";
+    refused = true;
   }
   revalidatePath("/", "layout");
-  redirect(`${notice === "refused" ? from : "/accounts"}?notice=${notice}`);
+  redirect(refused ? `${pageOnRefusal}?notice=refused` : `/accounts?notice=${noticeOnSuccess}`);
 }
 
 /** Links the Institution account the signed-in customer picked on Link another bank. */

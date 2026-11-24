@@ -223,6 +223,18 @@ describe("Consent", () => {
     );
   });
 
+  it("doesn't sync them on the next advance from 23 May 2027 either", () => {
+    const bank = openTestBank();
+    const sam = signInByName(bank, "Sam Calloway");
+    bank.clock.setTo(MAY_23_2027_9AM);
+    const logBefore = plinthEntries(bank, sam).length;
+
+    bank.advanceClock();
+
+    expect(plinthEntries(bank, sam)).toHaveLength(logBefore);
+    expect(bank.readAllAccounts(sam).linkedAccounts.map((linked) => linked.consentEnded)).toEqual([true, true, true]);
+  });
+
   it("renews an ended Consent for 12 months from today, syncs, and writes a Decision log entry", () => {
     const bank = openTestBank();
     const sam = signInByName(bank, "Sam Calloway");

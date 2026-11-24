@@ -5,13 +5,14 @@ import type { Customer, CustomerData } from "./customer-data";
 import type { SystemData } from "./system-data";
 import { customerChangeDecision } from "./decisions";
 import { institutionAccountName, linkDecisionText, renewDecisionText, unlinkDecisionText } from "./linked-account-text";
-import { consentFrom, hasConsentEnded, LinkedAccountError, type LinkedAccount } from "./linked-accounts";
+import { consentFrom, hasConsentEnded, LinkedAccountError, type Consent, type LinkedAccount } from "./linked-accounts";
 import { openBankingAdapter, type InstitutionAccount, type InstitutionAccountKey } from "./open-banking";
 
 // Linking, renewing, unlinking and syncing Linked accounts. Link, renew and unlink are customer changes, so they work
 // while the agent is paused, and each writes a Decision log entry with the customer as actor. Every Sync and every
 // unlink writes an access log entry with Plinth as reader (ADR 0010).
 
+/** What linking, renewing, unlinking and syncing need: the clock for today's date, and the customer data layer. */
 interface Deps {
   clock: Clock;
   customerData: CustomerData;
@@ -38,22 +39,38 @@ function readBalance({ clock }: Deps, customer: Customer, key: InstitutionAccoun
 }
 
 /**
+ * Stores one of the customer's Institution accounts as a Linked account with this Consent, synced now, and writes the
+ * Sync's access log entry. Writes no Decision log entry: `linkAccount` does that, and the seed's Linked accounts have
+ * none. Throws LinkedAccountError if they don't hold it or already linked it.
+ */
+export function storeLinkedAccount(
+  deps: Deps,
+  customer: Customer,
+  key: InstitutionAccountKey,
+  consent: Consent,
+): LinkedAccount {
+  const { customerData } = deps;
+  const account = openBankingAdapter.listAccounts(customer).find((candidate) => candidate.key === key);
+  if (!account) throw new LinkedAccountError("You hold no such account at an Institution");
+  const linked = customerData.createLinkedAccount(customer, {
+    institutionAccount: key,
+    institution: account.institution,
+    type: account.type,
+    balance: readBalance(deps, customer, key),
+    consent,
+  });
+  customerData.recordAccess(customer, syncAccess(institutionAccountName(linked)));
+  return linked;
+}
+
+/**
  * Links one of the customer's Institution accounts with a 12-month Consent from today, syncs it and writes a Decision
  * log entry, in one transaction. Throws LinkedAccountError, saving nothing, if they don't hold it or already linked it.
  */
 export function linkAccount(deps: Deps, customer: Customer, key: InstitutionAccountKey): LinkedAccount {
   const { clock, customerData } = deps;
   return customerData.inOneTransaction(() => {
-    const account = openBankingAdapter.listAccounts(customer).find((candidate) => candidate.key === key);
-    if (!account) throw new LinkedAccountError("You hold no such account at an Institution");
-    const linked = customerData.createLinkedAccount(customer, {
-      institutionAccount: key,
-      institution: account.institution,
-      type: account.type,
-      balance: readBalance(deps, customer, key),
-      consent: consentFrom(localDateOf(clock.now())),
-    });
-    customerData.recordAccess(customer, syncAccess(institutionAccountName(linked)));
+    const linked = storeLinkedAccount(deps, customer, key, consentFrom(localDateOf(clock.now())));
     customerData.recordDecision(customer, customerChangeDecision({ ...linkDecisionText(linked), rule: null }));
     return linked;
   });

@@ -1,11 +1,10 @@
-import { syncAccess } from "./access-log-text";
 import { SIMULATION_START } from "./app-clock";
 import { dayOfMonth, localDate, localDateOf, sameMonth, sameTimeNextDay, type LocalDate } from "./calendar";
 import { fixedClock, type Clock } from "./clock";
 import type { Account, Customer, CustomerData, NewAccount, NewPayroll, NewScheduledBill } from "./customer-data";
-import { institutionAccountName } from "./linked-account-text";
+import { storeLinkedAccount } from "./linked-account-changes";
 import { cents, type Cents } from "./money";
-import { OPEN_BANKING_FROM, openBankingAdapter, type InstitutionAccountKey } from "./open-banking";
+import type { InstitutionAccountKey } from "./open-banking";
 import { STANDING_SEARCHES_ON, type GoalPreference, type SettingsChoices } from "./settings";
 import { billPaymentTransaction, createSimulator, paycheckTransaction, type MerchantKey } from "./simulator";
 import { isBillDue, isOnPayCycle } from "./schedules";
@@ -247,7 +246,8 @@ export function seedDemoData(system: SystemData, data: CustomerData, customerDat
   const ledger = customerDataOn(historyClock);
   const simulator = createSimulator({ clock: historyClock, systemData: system, customerData: ledger });
   const openingBalances = system.ensureSystemAccount("openingBalances");
-  const atSimulationStart = customerDataOn(fixedClock(SIMULATION_START));
+  const simulationStartClock = fixedClock(SIMULATION_START);
+  const atSimulationStart = { clock: simulationStartClock, customerData: customerDataOn(simulationStartClock) };
   data.inOneTransaction(() => {
     for (const seed of SEED_CUSTOMERS) {
       historyClock.setTo(HISTORY_OPENS);
@@ -284,19 +284,7 @@ export function seedDemoData(system: SystemData, data: CustomerData, customerDat
 
   /** Stores the customer's Linked accounts as synced at the simulation start, with one access log entry per Sync. */
   function linkAccounts(customer: Customer, { accounts, consent }: NonNullable<SeedCustomer["linkedAccounts"]>): void {
-    const held = openBankingAdapter.listAccounts(customer);
-    for (const key of accounts) {
-      const account = held.find((candidate) => candidate.key === key);
-      if (!account) throw new Error(`${customer.name} holds no Institution account ${key}`);
-      atSimulationStart.createLinkedAccount(customer, {
-        institutionAccount: key,
-        institution: account.institution,
-        type: account.type,
-        balance: openBankingAdapter.balanceOn(customer, key, OPEN_BANKING_FROM),
-        consent,
-      });
-      atSimulationStart.recordAccess(customer, syncAccess(institutionAccountName(account)));
-    }
+    for (const key of accounts) storeLinkedAccount(atSimulationStart, customer, key, consent);
   }
 
   /** Posts each date's paychecks, then bills, then Card purchases, then the transfer, at 9am on that date. */
