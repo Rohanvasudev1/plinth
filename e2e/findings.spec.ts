@@ -1,13 +1,26 @@
-import { expect, test } from "@playwright/test";
-import { restoreSeed, setAutonomyLevel } from "./restore-seed";
+import { expect, test, type Page } from "@playwright/test";
+import { restoreSeed } from "./restore-seed";
 
 test.use({ viewport: { width: 390, height: 844 } });
 
-test("with Ask me before everything, Sam's sweep becomes a Finding on Home, and picking Move sweeps", async ({ page }) => {
-  await restoreSeed(page);
-  await setAutonomyLevel(page, "Sam Calloway", "ask_first");
+/** Signs in as Sam and runs setup again from Agent & limits, keeping every answer but choosing Ask me before everything. */
+async function signInAsSamAskingFirst(page: Page): Promise<void> {
   await page.goto("/sign-in");
   await page.getByRole("button", { name: "Sam Calloway" }).click();
+  await page.getByRole("link", { name: "Agent & limits" }).click();
+  await page.getByRole("link", { name: "Run setup again" }).click();
+  const next = page.getByRole("button", { name: "Next", exact: true });
+  await next.click();
+  await page.getByRole("radio", { name: /Ask me before everything/ }).check();
+  for (let step = 1; step < 6; step++) await next.click();
+  await expect(page.getByRole("list", { name: "Summary" })).toContainText("Suggest everything and wait for my OK.");
+  await page.getByRole("button", { name: "Turn on my agent" }).click();
+  await expect(page.getByRole("heading", { name: "Home" })).toBeVisible();
+}
+
+test("with Ask me before everything, Sam's sweep becomes a Finding on Home, and picking Move sweeps", async ({ page }) => {
+  await restoreSeed(page);
+  await signInAsSamAskingFirst(page);
 
   // The clock starts on Thursday 19 November. Moving it to Friday 20 November posts Sam's paycheck.
   await page.getByRole("link", { name: "Simulator" }).click();
@@ -39,9 +52,7 @@ test("with Ask me before everything, Sam's sweep becomes a Finding on Home, and 
 
 test("picking Leave it moves nothing and is in the Decision log", async ({ page }) => {
   await restoreSeed(page);
-  await setAutonomyLevel(page, "Sam Calloway", "ask_first");
-  await page.goto("/sign-in");
-  await page.getByRole("button", { name: "Sam Calloway" }).click();
+  await signInAsSamAskingFirst(page);
   await page.getByRole("link", { name: "Simulator" }).click();
   await page.getByRole("button", { name: "Advance clock one day" }).click();
   await expect(page.getByRole("status")).toContainText("Posted your Acme Corp paycheck");

@@ -249,6 +249,27 @@ describe("Sweep Findings over time", () => {
     expect(bank.readFindings(sam)).toEqual([expect.objectContaining({ state: "open" })]);
   });
 
+  it("Alex can't see Sam's Findings, settings or Rules", () => {
+    const { bank, sam, findingId } = samAskedAboutSweep();
+    const alex = signInByName(bank, "Alex Okafor");
+    const samsRuleIds = bank.customerData.listRules(sam).map((rule) => rule.id);
+
+    // Alex hasn't finished setup, so Alex has no settings and no Rules of their own to see.
+    expect(bank.readFindings(alex)).toEqual([]);
+    expect(bank.readSettings(alex)).toBeUndefined();
+    expect(bank.customerData.listRules(alex)).toEqual([]);
+    for (const ruleId of samsRuleIds) expect(bank.customerData.getRule(alex, ruleId)).toBeUndefined();
+    expect(bank.chooseOption(alex, findingId, "move")).toEqual({
+      ok: false,
+      reason: "There is no such Finding.",
+      finding: undefined,
+    });
+
+    expect(balancesOf(bank, sam)).toEqual({ checking: 3_467_00, savings: 12_400_00 });
+    expect(bank.readFindings(sam)).toEqual([expect.objectContaining({ state: "open" })]);
+    expect(bank.readSettings(sam)).toMatchObject({ autonomyLevel: "ask_first" });
+  });
+
   it("Home shows open Findings first, then chosen and expired ones", () => {
     const bank = openTestBank();
     const sam = signInByName(bank, "Sam Calloway");
