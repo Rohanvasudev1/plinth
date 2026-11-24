@@ -57,6 +57,13 @@ function partsOf(date: LocalDate): { year: number; month: number; day: number } 
   return { year: year ?? NaN, month: month ?? NaN, day: day ?? NaN };
 }
 
+/** Whether two dates fall in the same calendar month of the same year. */
+export function sameMonth(a: LocalDate, b: LocalDate): boolean {
+  const first = partsOf(a);
+  const second = partsOf(b);
+  return first.year === second.year && first.month === second.month;
+}
+
 /** The day of the month, from 1 to 31. */
 export function dayOfMonth(date: LocalDate): number {
   return partsOf(date).day;

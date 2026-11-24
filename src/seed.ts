@@ -1,10 +1,10 @@
-import { daysBetween, dayOfMonth, localDate, localDateOf, sameTimeNextDay, type LocalDate } from "./calendar";
+import { dayOfMonth, localDate, localDateOf, sameMonth, sameTimeNextDay, type LocalDate } from "./calendar";
 import { fixedClock, type Clock } from "./clock";
-import type { Account, Customer, CustomerData, NewAccount, NewPayroll, NewScheduledBill, Payroll } from "./customer-data";
+import type { Account, Customer, CustomerData, NewAccount, NewPayroll, NewScheduledBill } from "./customer-data";
 import { cents, type Cents } from "./money";
 import type { GoalPreference, SettingsChoices } from "./settings";
 import { billPaymentTransaction, createSimulator, paycheckTransaction, type MerchantKey } from "./simulator";
-import { isBillDue } from "./schedules";
+import { isBillDue, isOnPayCycle } from "./schedules";
 import type { SystemData } from "./system-data";
 
 /** A Card purchase from checking on a day of the month, from 1 to 28 so it falls in every month. */
@@ -203,18 +203,18 @@ const SEED_CUSTOMERS: SeedCustomer[] = [
 /**
  * Seeds the demo customers, their accounts, payrolls, Scheduled bills, and, for customers who have finished setup,
  * their buffer and payment limit Rules and settings records, plus the clearing accounts, once per database. Opening
- * balances and history post through `ledgerAt`, a data-access layer on the seed's own clock, so they carry their
+ * balances and history post through `customerDataOn`, a data-access layer on the seed's own clock, so they carry their
  * past dates and never read the bank's time. The bank's agents aren't running yet, so history makes no sweeps and
  * writes no Decision log entries. It all happens in one database transaction.
  */
-export function seedDemoData(system: SystemData, data: CustomerData, ledgerAt: (clock: Clock) => CustomerData): void {
+export function seedDemoData(system: SystemData, data: CustomerData, customerDataOn: (clock: Clock) => CustomerData): void {
   system.ensureSystemAccount("acmePayroll");
   system.ensureSystemAccount("biller");
   system.ensureSystemAccount("merchant");
   if (system.listCustomers().length > 0) return;
 
   const historyClock = fixedClock(HISTORY_OPENS);
-  const ledger = ledgerAt(historyClock);
+  const ledger = customerDataOn(historyClock);
   const simulator = createSimulator({ clock: historyClock, systemData: system, customerData: ledger });
   const openingBalances = system.ensureSystemAccount("openingBalances");
   data.inOneTransaction(() => {
@@ -263,7 +263,7 @@ export function seedDemoData(system: SystemData, data: CustomerData, ledgerAt: (
       const date = localDateOf(at);
       if (date < history.from) continue;
       historyClock.setTo(at);
-      for (const payroll of payrolls.filter((candidate) => paidOnInHistory(candidate, date))) {
+      for (const payroll of payrolls.filter((candidate) => isOnPayCycle(candidate, date))) {
         ledger.postLedgerTransaction(customer, paycheckTransaction(system, payroll, date));
       }
       for (const bill of bills.filter((candidate) => isBillDue(candidate, date))) {
@@ -273,7 +273,10 @@ export function seedDemoData(system: SystemData, data: CustomerData, ledgerAt: (
         ? [...history.monthlyPurchases, ...history.novemberPurchases]
         : history.monthlyPurchases;
       for (const { merchant, amount } of purchases.filter((purchase) => purchase.day === dayOfMonth(date))) {
-        simulator.cardPurchase(customer, { accountId: checking.id, merchant, amount, idempotencyKey: `card:${merchant}:${date}` });
+        const key = `card:${merchant}:${date}`;
+        const posted = simulator.cardPurchase(customer, { accountId: checking.id, merchant, amount, idempotencyKey: key });
+        // The key holds one purchase per Merchant a day, so a pattern with two would otherwise lose one silently.
+        if (!posted.created) throw new Error(`Seeded history has two purchases under ${key}`);
       }
       if (history.monthlyTransfer.day === dayOfMonth(date)) transfer(customer, checking, savings, history.monthlyTransfer.amount, date);
     }
@@ -295,13 +298,4 @@ export function seedDemoData(system: SystemData, data: CustomerData, ledgerAt: (
       ],
     });
   }
-}
-
-function sameMonth(a: LocalDate, b: LocalDate): boolean {
-  return a.slice(0, 7) === b.slice(0, 7);
-}
-
-/** Whether the payroll pays on `date`, counting back from its first pay date as well as forward. */
-function paidOnInHistory(payroll: Payroll, date: LocalDate): boolean {
-  return daysBetween(date, payroll.firstPayDate) % payroll.intervalDays === 0;
 }
