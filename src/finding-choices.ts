@@ -1,18 +1,18 @@
 import { formatLocalDate, localDateOf } from "./calendar";
 import type { Clock } from "./clock";
 import type { Customer, CustomerData } from "./customer-data";
-import { customerChangeDecision, type Decision, type WhyRow } from "./decisions";
+import { customerChangeDecision, type Decision } from "./decisions";
 import {
   expiredReason,
   findingWhyRows,
+  fixedAmountText,
   leftMoneyAction,
   noBufferRuleReason,
   PICK_CHANGES,
   pickedOptionAction,
+  refusedMoveAction,
 } from "./finding-text";
 import { describeOption, FindingError, type Finding, type FindingOptionKey, type MoveOption } from "./findings";
-import { formatDollars, formatDollarsBriefly } from "./money";
-import { describeRule } from "./rule-changes";
 import { bufferRuleFor, type BufferRule } from "./rules";
 import { billsBeforePayday } from "./safe-to-spend";
 import { bufferRuleRow, checkedByRow, checkSweepGuardrails, recordSweep, type ProposedSweep } from "./sweep";
@@ -100,15 +100,8 @@ export function chooseOption(
   }
 
   function move(finding: Finding, option: MoveOption, picked: string): ChooseOptionOutcome {
-    // A sweep Finding moves under the Rule it was made under. A Mission Finding has none, so its Move goes under the
-    // customer's buffer Rule for the account it moves from, through the same guardrails.
-    const rule = finding.rule
-      ? customerData.getRule(customer, finding.rule.id)
-      : bufferRuleFor(customerData.listRules(customer), option.fromAccountId);
-    if (rule?.kind !== "buffer") {
-      if (finding.rule) throw new FindingError(`Finding ${finding.id} names no buffer Rule to move under`);
-      return refuseWithoutRule(finding, option, picked);
-    }
+    const rule = ruleToMoveUnder(finding, option);
+    if (!rule) return refuseWithoutRule(finding, option, picked);
     const checking = customerData.getAccount(customer, option.fromAccountId);
     const savings = customerData.getAccount(customer, option.toAccountId);
     const proposed: ProposedSweep = {
@@ -126,8 +119,8 @@ export function chooseOption(
       trigger: { ledgerEventId: finding.ledgerEventId, description: "You chose this Option" },
       why: [
         { label: "Trigger", value: picked },
-        finding.rule ? bufferRuleRow(rule, checking, savings) : ruleRow(rule),
-        { label: "Amount", value: `${formatDollars(option.amount)}, fixed when your agent asked you` },
+        bufferRuleRow(rule, checking, savings),
+        { label: "Amount", value: fixedAmountText(option.amount) },
       ],
     });
     if (!decision) return { ok: false, reason: ALREADY_CHOSEN, finding };
@@ -142,25 +135,37 @@ export function chooseOption(
     return { ok: true, finding: customerData.markFindingChosen(customer, finding.id, "move"), decision };
   }
 
-  /** The Rule row of a Mission Move's entry, naming the buffer Rule's own accounts. */
-  function ruleRow(rule: BufferRule): WhyRow {
-    const accountName = (accountId: number) => customerData.getAccount(customer, accountId)?.name ?? "an account";
-    return { label: "Rule", value: describeRule(rule, accountName) };
+  /**
+   * The buffer Rule a Move goes under: a sweep Finding's own Rule, or for a Mission Finding, which has none, the
+   * customer's buffer Rule that moves money between the same two accounts. Undefined when a Mission Finding's
+   * accounts have no such Rule.
+   */
+  function ruleToMoveUnder(finding: Finding, option: MoveOption): BufferRule | undefined {
+    if (finding.rule) {
+      const rule = customerData.getRule(customer, finding.rule.id);
+      if (rule?.kind !== "buffer") throw new FindingError(`Finding ${finding.id} names no buffer Rule to move under`);
+      return rule;
+    }
+    const rule = bufferRuleFor(customerData.listRules(customer), option.fromAccountId);
+    return rule?.parameters.savingsAccountId === option.toAccountId ? rule : undefined;
   }
 
   /**
-   * A Mission Move from an account no buffer Rule covers: no Rule lets the agent move money from it, so the Rule on
-   * guardrail refuses it. The entry names the Mission, since it has no Rule.
+   * A Mission Move between accounts no buffer Rule moves money between: no Rule lets the agent make it, so the Rule
+   * on guardrail refuses it. The entry names the Mission and its Finding, since it has no Rule.
    */
   function refuseWithoutRule(finding: Finding, option: MoveOption, picked: string): ChooseOptionOutcome {
     const from = customerData.getAccount(customer, option.fromAccountId);
     const to = customerData.getAccount(customer, option.toAccountId);
-    const refusal = { guardrail: "Rule on" as const, reason: noBufferRuleReason(from?.name ?? "that account") };
+    const refusal = {
+      guardrail: "Rule on" as const,
+      reason: noBufferRuleReason(from?.name ?? "that account", to?.name ?? "that account"),
+    };
     customerData.recordDecision(customer, {
       actor: "agent",
       trigger: { ledgerEventId: null, description: "You chose this Option" },
       rule: null,
-      action: `Move ${formatDollarsBriefly(option.amount)} to ${to?.name ?? "an account"}`,
+      action: refusedMoveAction(option.amount, to?.name ?? "an account"),
       fromAccountId: from?.id ?? null,
       toAccountId: to?.id ?? null,
       amount: option.amount,
@@ -168,7 +173,7 @@ export function chooseOption(
       refusedBy: refusal.guardrail,
       why: [
         { label: "Trigger", value: picked },
-        { label: "Amount", value: `${formatDollars(option.amount)}, fixed when your agent asked you` },
+        { label: "Amount", value: fixedAmountText(option.amount) },
         checkedByRow({ ran: [refusal.guardrail], refusal }),
       ],
       ledgerTransactionId: null,

@@ -13,6 +13,13 @@ const DEFAULT_OPTIONS: FindingOption[] = [{ key: "read_report" }, { key: "not_no
 /** The parts of a Mission's Finding the model wrote, checked and ready to store. */
 export type MissionFindingToStore = Pick<NewFinding, "title" | "facts" | "options" | "agentsView" | "report">;
 
+/** What the checks know beyond the Finding: today, and the asking customer's own accounts, which a Move must name. */
+export interface MissionFindingContext {
+  sourceOf: (toolCallId: string) => string | undefined;
+  today: LocalDate;
+  accounts: { id: number; name: string }[];
+}
+
 /** The checked Finding, or why the Mission fails. */
 export type CheckedMissionFinding = { ok: true; finding: MissionFindingToStore } | { ok: false; reason: string };
 
@@ -50,12 +57,7 @@ const MONEY_OR_RATE = new RegExp(
  */
 export function checkMissionFinding(
   model: ModelFinding,
-  context: {
-    sourceOf: (toolCallId: string) => string | undefined;
-    today: LocalDate;
-    /** The asking customer's own accounts, which a Move's account names must be among. */
-    accounts: { id: number; name: string }[];
-  },
+  context: MissionFindingContext,
 ): CheckedMissionFinding {
   const title = trimmedText(model.title);
   if (!title) return { ok: false, reason: MISSION_FAILURES.noTitle };
@@ -95,7 +97,7 @@ export function checkMissionFinding(
 /** The Option, if it is on the Mission list and its details check, or undefined to drop it. */
 function checkedOption(
   candidate: unknown,
-  context: { today: LocalDate; accounts: { id: number; name: string }[] },
+  context: MissionFindingContext,
 ): FindingOption | undefined {
   if (typeof candidate !== "object" || candidate === null) return undefined;
   const { key, date, amountCents, from, to } = candidate as Record<string, unknown>;

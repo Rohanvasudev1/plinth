@@ -1,6 +1,7 @@
 import { localDateOf, type LocalDate } from "./calendar";
 import type { Customer, CustomerData } from "./customer-data";
 import { STANDING_SEARCHES, type Finding, type StandingSearch } from "./findings";
+import { UNFINISHED_MISSION_TEXT } from "./mission-text";
 import type { Mission } from "./missions";
 import type { AdviceSetting } from "./settings";
 
@@ -13,6 +14,17 @@ export interface AgentsViewOnPage {
 /** A Finding on the Discoveries page. Its Agent's view is only there when the Advice setting lets it be. */
 export type FindingOnPage = Omit<Finding, "agentsView"> & { agentsView: AgentsViewOnPage | null };
 
+/** A Mission that ended without a Finding, as Discoveries shows it. */
+export interface UnfinishedMission {
+  id: number;
+  question: string;
+  state: "stopped" | "failed";
+  /** "Stopped. Nothing was kept." or "Couldn't finish this". */
+  text: string;
+  /** True when the page offers Try again, which starts a new Mission with the same question. */
+  tryAgain: boolean;
+}
+
 export interface DiscoveriesPage {
   /** The customer's current Advice setting, or null if they haven't finished setup. */
   adviceSetting: AdviceSetting | null;
@@ -20,9 +32,9 @@ export interface DiscoveriesPage {
   runningMissions: Mission[];
   /**
    * Today's Missions that ended without a Finding, stopped or failed, newest first, leaving out any whose question
-   * was asked again later. A failed one offers Try again.
+   * was asked again later, each with what the page says about it. Only a failed one offers Try again.
    */
-  unfinishedMissions: Mission[];
+  unfinishedMissions: UnfinishedMission[];
   /** Every Finding the customer has, newest first. */
   findings: FindingOnPage[];
   openFindingCount: number;
@@ -54,13 +66,16 @@ export function readDiscoveriesPage(customerData: CustomerData, customer: Custom
 }
 
 /** Today's stopped and failed Missions, newest first, each only while no later Mission asked its question again. */
-function unfinishedMissions(newestFirst: Mission[], today: LocalDate): Mission[] {
-  return newestFirst.filter(
-    (mission, index) =>
-      (mission.state === "stopped" || mission.state === "failed") &&
-      localDateOf(mission.startedAt) === today &&
-      !newestFirst.slice(0, index).some((later) => later.question === mission.question),
-  );
+function unfinishedMissions(newestFirst: Mission[], today: LocalDate): UnfinishedMission[] {
+  return newestFirst.flatMap((mission, index) => {
+    const { state } = mission;
+    if (state !== "stopped" && state !== "failed") return [];
+    if (localDateOf(mission.startedAt) !== today) return [];
+    if (newestFirst.slice(0, index).some((later) => later.question === mission.question)) return [];
+    return [
+      { id: mission.id, question: mission.question, state, text: UNFINISHED_MISSION_TEXT[state], tryAgain: state === "failed" },
+    ];
+  });
 }
 
 /** How many of these Findings are open, for the nav bar's badge and Home's link card. */

@@ -154,11 +154,14 @@ describe("Picking a Mission Finding's Move", () => {
     const fromMission = bank.chooseOption(sam, finding.id, "move");
     const missionChecks = agentEntriesIn(bank, sam)[0]?.why.find((row) => row.label === "Checked by");
 
-    expect(fromMission.ok).toBe(fromSweep.ok);
+    // Pause stops only automatic actions, and the customer chose the amount, so neither refuses a picked Move.
+    expect(fromSweep).toMatchObject({ ok: true });
+    expect(fromMission).toMatchObject({ ok: true });
+    expect(missionChecks).toEqual({ label: "Checked by", value: "Guardrails passed: ownership, positive amount, Rule on, Buffer kept" });
     expect(missionChecks).toEqual(sweepChecks);
   });
 
-  it("is refused, moving nothing, when no buffer Rule covers the account it moves from", async () => {
+  it("is refused, moving nothing, when no buffer Rule moves money between its two accounts", async () => {
     const bank = createBank({
       db: openTestDatabase(),
       clock: fixedClock(SIMULATION_START),
@@ -170,7 +173,11 @@ describe("Picking a Mission Finding's Move", () => {
 
     const outcome = bank.chooseOption(sam, findingId, "move");
 
-    expect(outcome).toMatchObject({ ok: false, finding: { state: "open", refusal: { guardrail: "Rule on" } } });
+    expect(outcome).toMatchObject({
+      ok: false,
+      reason: "no buffer Rule lets your agent move money from House fund to Checking",
+      finding: { state: "open", refusal: { guardrail: "Rule on" } },
+    });
     expect(balancesOf(bank, sam)).toEqual({ checking: 3_467_00, houseFund: 12_400_00 });
     expect(agentEntriesIn(bank, sam)[0]).toMatchObject({
       result: "Refused",

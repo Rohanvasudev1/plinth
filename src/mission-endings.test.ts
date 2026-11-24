@@ -199,7 +199,13 @@ describe("Discoveries with ended Missions", () => {
     const failed = await bank.startMission(sam, FAKE_TEST_QUESTIONS.modelError).ended;
 
     expect(bank.readDiscoveries(sam).unfinishedMissions).toEqual([
-      expect.objectContaining({ id: failed.id, question: FAKE_TEST_QUESTIONS.modelError, state: "failed" }),
+      {
+        id: failed.id,
+        question: FAKE_TEST_QUESTIONS.modelError,
+        state: "failed",
+        text: "Couldn't finish this",
+        tryAgain: true,
+      },
     ]);
     expect(bank.readDiscoveries(priya).unfinishedMissions).toEqual([]);
 
@@ -215,7 +221,11 @@ describe("Discoveries with ended Missions", () => {
       again.id,
       expect.any(Number),
     ]);
-    expect(bank.readDiscoveries(sam).unfinishedMissions.map((mission) => mission.state)).toEqual(["failed", "stopped"]);
+    expect(bank.readDiscoveries(sam).unfinishedMissions[1]).toMatchObject({
+      state: "stopped",
+      text: "Stopped. Nothing was kept.",
+      tryAgain: false,
+    });
   });
 
   it("shows only today's unfinished Missions by the simulated clock", async () => {
