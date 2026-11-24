@@ -32,7 +32,7 @@ import { undoAgentAction, type UndoOutcome } from "./undo";
 export type { BillBeforePayday, BillsBeforePayday, SafeToSpend } from "./safe-to-spend";
 export type { UndoOutcome } from "./undo";
 export type { ActivityRow } from "./activity";
-export type { Forecast, ForecastDay } from "./forecast";
+export type { Forecast } from "./forecast";
 export type { ChooseOptionOutcome } from "./finding-choices";
 
 export interface GoalProgress {
@@ -162,6 +162,10 @@ export function createBank(deps: { db: Database; clock: SettableClock }): Bank {
     return billsBeforePaydayOf(customerData, customer, localDateOf(clock.now()));
   }
 
+  function forecastFor(customer: Customer): Forecast | null {
+    return readForecast({ customerData, merchantClearingAccountId }, customer, clock.now());
+  }
+
   return {
     ...simulator,
     ...createRuleChanges(customerData),
@@ -177,7 +181,7 @@ export function createBank(deps: { db: Database; clock: SettableClock }): Bank {
       return customer;
     },
     billsBeforePayday,
-    readForecast: (customer) => readForecast({ customerData, merchantClearingAccountId }, customer, clock.now()),
+    readForecast: forecastFor,
     readSettings: (customer) => customerData.getSettings(customer),
     changeSettings: (customer, change) => changeSettings(customerData, customer, change),
     finishSetup: (customer, answers) => applySetup(customerData, customer, answers, "survey"),
@@ -211,7 +215,7 @@ export function createBank(deps: { db: Database; clock: SettableClock }): Bank {
         safeToSpend: checking
           ? safeToSpend(checking, bufferRuleFor(customerData.listRules(customer), checking.id)?.parameters.buffer ?? cents(0), bills)
           : null,
-        forecast: readForecast({ customerData, merchantClearingAccountId }, customer, clock.now()),
+        forecast: forecastFor(customer),
         findings: findingsOnHome(customerData.listFindings(customer)),
         agentActions: customerData
           .listDecisions(customer)

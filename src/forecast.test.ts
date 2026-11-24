@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { Bank, Forecast } from "./bank";
 import type { Customer } from "./customer-data";
-import { cents } from "./money";
+import { cents, type Cents } from "./money";
 import { openTestBank, signInByName } from "./test-bank";
 
 /** The Forecast's balance on one date, which must be one of its 30 days. */
-function balanceOn(forecast: Forecast | null, date: string): number {
+function balanceOn(forecast: Forecast | null, date: string): Cents {
   const day = forecast?.days.find((candidate) => candidate.date === date);
   if (!day) throw new Error(`The Forecast has no day ${date}`);
   return day.balance;
@@ -131,5 +131,15 @@ describe("30-day Forecast", () => {
     // The 20 Nov sweep is $313 instead of $340.
     expect(balanceOn(forecast, "2026-11-20")).toBe(2_996_87);
     expect(forecast?.lowest).toEqual({ date: "2026-12-03", balance: -321_82 });
+  });
+
+  it("Priya's Forecast is worked out from her own Checking, not Sam's", () => {
+    const bank = openTestBank();
+    const priya = signInByName(bank, "Priya Natarajan");
+
+    const forecast = bank.readForecast(priya);
+
+    expect(forecast?.start).toEqual({ date: "2026-11-19", balance: 1_836_42 });
+    expect(forecast?.buffer).toBe(500_00);
   });
 });

@@ -7,7 +7,7 @@ import { isBillDue, isPayday } from "./schedules";
 import { checkSweepGuardrails, chooseSweepRoute, sweepAmount } from "./sweep";
 
 /** How many days the Forecast runs for, after today. */
-export const FORECAST_DAYS = 30;
+const FORECAST_DAYS = 30;
 
 /** How many days before today the daily allowance averages Card purchases over. */
 const ALLOWANCE_DAYS = 90;
@@ -31,7 +31,7 @@ export interface Forecast {
   buffer: Cents | null;
   /** The day with the lowest balance, the earliest if several tie. */
   lowest: ForecastDay;
-  /** The usual day-to-day spending taken off each day: Card purchases over the 90 days before today, a day. */
+  /** The Daily allowance taken off each day: Card purchases from checking over the 90 days before today, a day. */
   dailyAllowance: Cents;
 }
 
@@ -55,7 +55,7 @@ export function readForecast(
   const rules = customerData.listRules(customer);
   const rule = bufferRuleFor(rules, checking.id);
   const settings = customerData.getSettings(customer);
-  const dailyAllowance = averageDailyCardPurchases(deps, customer, today);
+  const dailyAllowance = averageDailyCardPurchases(deps, customer, checking.id, today);
 
   /** What the agent would sweep after a paycheck on `date` leaves `balance` in checking, or zero. */
   const sweepAfterPaycheck = (date: LocalDate, balance: Cents): Cents => {
@@ -63,14 +63,14 @@ export function readForecast(
     if (!settings || !rule?.on || rule.parameters.savingsAccountId === null) return cents(0);
     const savings = customerData.getAccount(customer, rule.parameters.savingsAccountId);
     const billsBefore = billsBeforePayday(customerData, customer, date);
-    const projected = { ...checking, balance };
-    const amount = sweepAmount(safeToSpend(projected, rule.parameters.buffer, billsBefore));
+    const checkingThatDay = { ...checking, balance };
+    const amount = sweepAmount(safeToSpend(checkingThatDay, rule.parameters.buffer, billsBefore));
     const route = chooseSweepRoute(settings.autonomyLevel, rules, amount);
     if (route.route !== "act") return cents(0);
     const check = checkSweepGuardrails(customerData, {
       customer,
       rule,
-      checking: projected,
+      checking: checkingThatDay,
       savings,
       amount,
       bills: billsBefore,
@@ -100,10 +100,14 @@ export function readForecast(
   };
 }
 
-/** Card purchases from any of the customer's accounts in the 90 days before today, averaged per day, to the cent. */
+/**
+ * The Daily allowance: Card purchases from the checking account in the 90 days before today, averaged per day, to the
+ * cent. It divides by 90 even for a customer with less history, as the spec words it.
+ */
 function averageDailyCardPurchases(
   deps: { customerData: CustomerData; merchantClearingAccountId: number },
   customer: Customer,
+  checkingAccountId: number,
   today: LocalDate,
 ): Cents {
   const from = addDays(today, -ALLOWANCE_DAYS);
@@ -113,8 +117,9 @@ function averageDailyCardPurchases(
       const date = localDateOf(transaction.postedAt);
       return date >= from && date < today;
     })
+    .filter((transaction) => transaction.entries.some((entry) => entry.accountId === deps.merchantClearingAccountId))
     .flatMap((transaction) => transaction.entries)
-    .filter((entry) => entry.accountId === deps.merchantClearingAccountId)
-    .reduce((sum, entry) => sum + entry.amount, 0);
+    .filter((entry) => entry.accountId === checkingAccountId)
+    .reduce((sum, entry) => sum - entry.amount, 0);
   return cents(Math.round(total / ALLOWANCE_DAYS));
 }

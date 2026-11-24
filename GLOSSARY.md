@@ -168,6 +168,10 @@ _Avoid_: Run rate, projected spend
 The expected Checking balance over the next 30 days, worked out from known paychecks, Scheduled bills, sweeps and usual daily spending.
 _Avoid_: Prediction, projection (that word is for Goals)
 
+**Daily allowance**:
+The usual day-to-day spending the Forecast takes off each day: the Card purchases from checking over the 90 days before today, divided by 90.
+_Avoid_: Burn rate, daily spend
+
 **Projection**:
 Where a Goal's balance would be after three years at a given pace of saving, with no interest.
 _Avoid_: Forecast, plan

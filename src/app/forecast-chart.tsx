@@ -73,8 +73,8 @@ export function ForecastChart({ forecast }: { forecast: Forecast }) {
       </svg>
       <p id="forecast-summary">{summaryText(forecast)}</p>
       <p className="muted">
-        Counts your paychecks, Scheduled bills, the sweeps your agent would make on its own, and{" "}
-        {formatDollars(forecast.dailyAllowance)} a day of usual spending.
+        Counts your paychecks, Scheduled bills, the sweeps your agent would make on its own, and a Daily allowance of{" "}
+        {formatDollars(forecast.dailyAllowance)} for usual spending.
       </p>
     </section>
   );

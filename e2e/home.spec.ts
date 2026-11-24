@@ -49,7 +49,7 @@ test("Home shows the 30-day Forecast with the Buffer and its lowest point, above
   await expect(forecast).toContainText(
     "Lowest balance in the next 30 days: -$321.82 on Thu 3 Dec. That is $1,821.82 below your $1,500.00 Buffer.",
   );
-  await expect(forecast).toContainText("$130.13 a day of usual spending");
+  await expect(forecast).toContainText("a Daily allowance of $130.13 for usual spending");
 
   const headings = await page.getByRole("heading", { level: 2 }).allTextContents();
   expect(headings.indexOf("30-day Forecast")).toBe(headings.indexOf("What your agent did") - 1);
