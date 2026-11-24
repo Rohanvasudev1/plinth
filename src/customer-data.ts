@@ -163,7 +163,8 @@ export interface CustomerData {
   setGoalTarget(customer: Customer, accountId: number, target: Cents): Account;
   /**
    * Posts a pair of entries that sum to zero, plus a ledger event, in one database transaction, then hands
-   * the event to subscribers. Each entry must be on the customer's own account or a system account.
+   * the event to subscribers. A payout from several accounts at once, as Close and delete makes, posts several pairs,
+   * each summing to zero. Each entry must be on the customer's own account or a system account.
    * Idempotency keys are unique per customer: reusing one of the customer's keys returns the existing
    * ledger transaction and changes nothing, while another customer may use the same key.
    */
@@ -245,6 +246,8 @@ export interface CustomerData {
   getFinding(customer: Customer, findingId: number): Finding | undefined;
   /** Expires every open Finding of this kind of the customer's. Returns how many it expired. */
   expireOpenFindings(customer: Customer, kind: FindingKind): number;
+  /** Expires every open or snoozed Finding of the customer's, whatever made it. Returns how many. */
+  expireLiveFindings(customer: Customer): number;
   /** Expires every open or snoozed Finding of the customer's that this Standing search made. Returns how many. */
   expireStandingSearchFindings(customer: Customer, standingSearch: StandingSearch): number;
   /** Snoozes the customer's open Finding until `until`, clearing any earlier refusal. Throws FindingError if it isn't open. */
@@ -273,6 +276,13 @@ export interface CustomerData {
   recordMissionProgress(customer: Customer, missionId: number, progressLabel: MissionProgressLabel, read?: MissionRead): Mission;
   /** Ends the customer's running Mission, timed by the clock. Throws MissionError if it isn't running. */
   endMission(customer: Customer, missionId: number, state: Exclude<MissionState, "running">): Mission;
+  /**
+   * Close and delete's deletion of the customer's working data: every Mission, Finding and settings version, and each
+   * Goal's target. Their Decision log entries keep their stored text, and lose their links to the deleted Missions
+   * and Findings. The Ledger, Decision log, access log, Rules, payrolls, Scheduled bills and Pause history stay.
+   * Linked accounts are unlinked one by one first, each with its own entries.
+   */
+  deleteWorkingData(customer: Customer): void;
   /**
    * Writes one access log entry, timed by the clock (ADR 0010). Call it in the same transaction as the action that
    * read the customer's data. Entries are never changed or removed.
@@ -388,14 +398,18 @@ export function createCustomerData(deps: {
   function validate(customer: Customer, transaction: LedgerTransactionInput): void {
     const { idempotencyKey, entries } = transaction;
     if (idempotencyKey.trim() === "") throw new LedgerError("A ledger transaction needs an idempotency key");
-    if (entries.length !== 2) throw new LedgerError("A ledger transaction is a pair of entries");
-    let sum = 0;
-    for (const entry of entries) {
-      cents(entry.amount);
-      if (entry.amount === 0) throw new LedgerError("A ledger entry can't be zero");
-      sum += entry.amount;
+    if (entries.length === 0 || entries.length % 2 !== 0) {
+      throw new LedgerError("A ledger transaction is a pair of entries, or several pairs");
     }
-    if (sum !== 0) throw new LedgerError(`Ledger entries must sum to zero, got ${sum} cents`);
+    for (let index = 0; index < entries.length; index += 2) {
+      let sum = 0;
+      for (const entry of entries.slice(index, index + 2)) {
+        cents(entry.amount);
+        if (entry.amount === 0) throw new LedgerError("A ledger entry can't be zero");
+        sum += entry.amount;
+      }
+      if (sum !== 0) throw new LedgerError(`Each pair of ledger entries must sum to zero, got ${sum} cents`);
+    }
 
     const accountIds = [...new Set(entries.map((entry) => entry.accountId))];
     const allowed = db
@@ -1150,6 +1164,25 @@ export function createCustomerData(deps: {
           and(eq(findingsTable.customerId, customer.id), eq(findingsTable.kind, kind), eq(findingsTable.state, "open")),
         )
         .run().changes;
+    },
+    expireLiveFindings(customer) {
+      return db
+        .update(findingsTable)
+        .set({ state: "expired", snoozedUntil: null, refusedBy: null, refusalReason: null })
+        .where(and(eq(findingsTable.customerId, customer.id), inArray(findingsTable.state, [...LIVE_FINDING_STATES])))
+        .run().changes;
+    },
+    deleteWorkingData(customer) {
+      inOneTransaction(() => {
+        db.update(decisionsTable)
+          .set({ missionId: null, findingId: null })
+          .where(eq(decisionsTable.customerId, customer.id))
+          .run();
+        db.delete(findingsTable).where(eq(findingsTable.customerId, customer.id)).run();
+        db.delete(missionsTable).where(eq(missionsTable.customerId, customer.id)).run();
+        db.delete(settingsVersionsTable).where(eq(settingsVersionsTable.customerId, customer.id)).run();
+        db.update(accountsTable).set({ goalCents: null }).where(eq(accountsTable.customerId, customer.id)).run();
+      });
     },
     expireStandingSearchFindings(customer, standingSearch) {
       return db

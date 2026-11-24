@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { and, asc, eq, isNotNull, isNull } from "drizzle-orm";
 import type { Customer } from "./customer-data";
 import type { Database } from "./db/database";
 import { accountsTable, customersTable } from "./db/schema";
@@ -12,6 +12,8 @@ export const SYSTEM_ACCOUNTS = {
   acmePayroll: { key: "clearing:acme-corp-payroll", name: "Acme Corp payroll" },
   biller: { key: "clearing:biller", name: "Biller" },
   merchant: { key: "clearing:merchant", name: "Merchant" },
+  /** Takes a Closed customer's Plinth balances when Close and delete pays them out. */
+  accountClosure: { key: "clearing:account-closure", name: "Account closure" },
   openingBalances: { key: "opening-balances", name: "Opening balances" },
 } as const;
 
@@ -31,23 +33,59 @@ export function isEmployer(key: string): key is Employer {
 
 /** Rows that belong to no customer: the customer list itself and the system accounts. */
 export interface SystemData {
+  /** Every customer, Closed ones included, as Sign in as lists them. */
   listCustomers(): Customer[];
+  /**
+   * Every customer who isn't Closed. The Simulator, Sync and agents loop over these, so a Closed customer stays
+   * still.
+   */
+  listOpenCustomers(): Customer[];
   findCustomer(customerId: number): Customer | undefined;
   createCustomer(name: string): Customer;
+  /** Whether the customer used Close and delete. */
+  isClosed(customer: Customer): boolean;
+  /** Marks the customer Closed at `at`. Close and delete calls it last, in its transaction. */
+  markClosed(customer: Customer, at: Date): void;
   /** Creates the system account if it doesn't exist yet, and returns its id. */
   ensureSystemAccount(account: SystemAccount): number;
 }
 
+const customerColumns = { id: customersTable.id, name: customersTable.name };
+
 export function createSystemData(db: Database): SystemData {
   return {
     listCustomers() {
-      return db.select().from(customersTable).orderBy(asc(customersTable.id)).all();
+      return db.select(customerColumns).from(customersTable).orderBy(asc(customersTable.id)).all();
+    },
+    listOpenCustomers() {
+      return db
+        .select(customerColumns)
+        .from(customersTable)
+        .where(isNull(customersTable.closedAtMs))
+        .orderBy(asc(customersTable.id))
+        .all();
     },
     findCustomer(customerId) {
-      return db.select().from(customersTable).where(eq(customersTable.id, customerId)).get();
+      return db.select(customerColumns).from(customersTable).where(eq(customersTable.id, customerId)).get();
     },
     createCustomer(name) {
-      return db.insert(customersTable).values({ name }).returning().get();
+      return db.insert(customersTable).values({ name }).returning(customerColumns).get();
+    },
+    isClosed(customer) {
+      const row = db
+        .select({ id: customersTable.id })
+        .from(customersTable)
+        .where(and(eq(customersTable.id, customer.id), isNotNull(customersTable.closedAtMs)))
+        .get();
+      return row !== undefined;
+    },
+    markClosed(customer, at) {
+      const changed = db
+        .update(customersTable)
+        .set({ closedAtMs: at.getTime() })
+        .where(and(eq(customersTable.id, customer.id), isNull(customersTable.closedAtMs)))
+        .run().changes;
+      if (changed !== 1) throw new Error(`Customer ${customer.id} is already Closed or doesn't exist`);
     },
     ensureSystemAccount(account) {
       const { key, name } = SYSTEM_ACCOUNTS[account];

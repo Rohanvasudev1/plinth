@@ -102,7 +102,7 @@ export interface Simulator {
   advanceClock(): AdvancedClock;
   /**
    * Spends from one of the customer's accounts at a simulated merchant, through the Merchant clearing account.
-   * Throws CardDeclinedError if the account isn't the customer's, the Merchant isn't one of MERCHANTS, the amount isn't above zero, or the account
+   * Throws CardDeclinedError if the customer is Closed, the account isn't the customer's, the Merchant isn't one of MERCHANTS, the amount isn't above zero, or the account
    * holds less than the amount.
    */
   cardPurchase(customer: Customer, purchase: CardPurchase): PostedCardPurchase;
@@ -165,9 +165,9 @@ export function createSimulator(deps: {
 }): Simulator {
   const { clock, systemData, customerData } = deps;
 
-  /** Every customer's paychecks paid on `date`, in customer order and the order each payroll was set up. */
+  /** Every open customer's paychecks paid on `date`, in customer order and the order each payroll was set up. */
   function paychecksOn(date: LocalDate): PaycheckToPost[] {
-    return systemData.listCustomers().flatMap((customer) =>
+    return systemData.listOpenCustomers().flatMap((customer) =>
       customerData
         .listPayrolls(customer)
         .filter((payroll) => isPayday(payroll, date))
@@ -175,9 +175,9 @@ export function createSimulator(deps: {
     );
   }
 
-  /** Every customer's Scheduled bills due on `date`, in customer order and the order each bill was set up. */
+  /** Every open customer's Scheduled bills due on `date`, in customer order and the order each bill was set up. */
   function billsOn(date: LocalDate): BillToPost[] {
-    return systemData.listCustomers().flatMap((customer) =>
+    return systemData.listOpenCustomers().flatMap((customer) =>
       customerData
         .listScheduledBills(customer)
         .filter((bill) => isBillDue(bill, date))
@@ -244,6 +244,7 @@ export function createSimulator(deps: {
       const already = customerData.findLedgerTransaction(customer, idempotencyKey);
       if (already) return { ledgerTransactionId: already.id, created: false };
 
+      if (systemData.isClosed(customer)) throw new CardDeclinedError("This account is closed");
       const account = customerData.getAccount(customer, accountId);
       if (!account) throw new CardDeclinedError("That account isn't yours");
       if (!isMerchantKey(merchantKey)) throw new CardDeclinedError("There is no such Merchant");

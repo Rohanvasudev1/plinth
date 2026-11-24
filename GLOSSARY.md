@@ -261,3 +261,7 @@ _Avoid_: Audit trail, Read list, access history
 **Closed customer**:
 A customer who used Close and delete. Plinth has paid out their balances, deleted their working data, and kept the Ledger, Decision log and Access log as records. They can no longer sign in.
 _Avoid_: Deleted customer, deactivated account
+
+**Account-closure clearing account**:
+The Clearing account that takes a Closed customer's Plinth balances when Close and delete pays them out, as one ledger transaction under `closure:<customer id>` with one pair of entries per account.
+_Avoid_: Closure account, exit account

@@ -1,6 +1,7 @@
 import type { AccessReader, NewAccessLogEntry } from "./access-log";
 import type { MissionRead } from "./missions";
 import { readListText } from "./mission-text";
+import type { UnlinkReason } from "./linked-account-text";
 
 /** Each reader's name in the access log. */
 export const ACCESS_READER_TEXT: Record<AccessReader, string> = {
@@ -54,11 +55,14 @@ export function syncAccess(account: string): NewAccessLogEntry {
   };
 }
 
-/** Unlinking one Linked account, which deletes Plinth's copy of it. */
-export function unlinkAccess(account: string): NewAccessLogEntry {
+/** Unlinking one Linked account, which deletes Plinth's copy of it, because the customer unlinked it or closed. */
+export function unlinkAccess(account: string, reason: UnlinkReason): NewAccessLogEntry {
   return {
     who: "plinth",
     what: `Your ${account} balance and Consent`,
-    why: "You unlinked it, so Plinth deleted its copy of that data",
+    why:
+      reason === "close"
+        ? "You closed your Plinth account, so Plinth deleted its copy of that data"
+        : "You unlinked it, so Plinth deleted its copy of that data",
   };
 }

@@ -45,6 +45,19 @@ describe("replacing the app database restores the seed", () => {
     expect(after.readDecisionLog(signInByName(after, "Sam Calloway"))).toEqual([]);
   });
 
+  it("reopens a Closed customer with their seeded balances, so they can sign in again", () => {
+    const before = getAppBank();
+    before.closeAccount(signInByName(before, "Alex Okafor"));
+    expect(() => signInByName(before, "Alex Okafor")).toThrow("This account is closed");
+
+    deleteAppDatabase();
+
+    const after = getAppBank();
+    const alex = signInByName(after, "Alex Okafor");
+    expect(after.isClosed(alex)).toBe(false);
+    expect(after.readClosureSummary(alex).payout).toBe(400_00);
+  });
+
   it("leaves a working agent, so the next paycheck sweeps again", () => {
     getAppBank().advanceClock();
     deleteAppDatabase();

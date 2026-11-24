@@ -4,7 +4,13 @@ import type { Clock } from "./clock";
 import type { Customer, CustomerData } from "./customer-data";
 import type { SystemData } from "./system-data";
 import { customerChangeDecision } from "./decisions";
-import { institutionAccountName, linkDecisionText, renewDecisionText, unlinkDecisionText } from "./linked-account-text";
+import {
+  institutionAccountName,
+  linkDecisionText,
+  renewDecisionText,
+  unlinkDecisionText,
+  type UnlinkReason,
+} from "./linked-account-text";
 import { consentFrom, hasConsentEnded, LinkedAccountError, type Consent, type LinkedAccount, type LinkedAccountId } from "./linked-accounts";
 import { openBankingAdapter, type InstitutionAccount, type InstitutionAccountKey } from "./open-banking";
 
@@ -84,13 +90,13 @@ function sync(deps: Deps, customer: Customer, linked: LinkedAccount): LinkedAcco
 }
 
 /**
- * Syncs every customer's Linked accounts whose Consent has not ended today, once each. The Simulator runs it when
+ * Syncs every open customer's Linked accounts whose Consent has not ended today, once each. A Closed customer has none. The Simulator runs it when
  * it advances the clock, in the same transaction. Pause doesn't stop it: a Sync is a read, not an agent action.
  */
 export function syncLinkedAccounts(deps: Deps & { systemData: SystemData }): void {
   const today = localDateOf(deps.clock.now());
   deps.customerData.inOneTransaction(() => {
-    for (const customer of deps.systemData.listCustomers()) {
+    for (const customer of deps.systemData.listOpenCustomers()) {
       for (const linked of deps.customerData.listLinkedAccounts(customer)) {
         if (!hasConsentEnded(linked.consent, today)) sync(deps, customer, linked);
       }
@@ -118,15 +124,21 @@ export function renewConsent(deps: Deps, customer: Customer, linkedAccountId: Li
 
 /**
  * Deletes the customer's Linked account and its Consent at once, whether or not the Consent has ended, and writes a
- * Decision log entry and an access log entry, in one transaction. Throws LinkedAccountError, saving nothing, if it
- * isn't theirs. They can link it again later with a new Consent.
+ * Decision log entry and an access log entry, in one transaction. `reason` says whether they pressed Unlink or closed
+ * their Plinth account. Throws LinkedAccountError, saving nothing, if it isn't theirs. They can link it again later
+ * with a new Consent.
  */
-export function unlinkAccount({ customerData }: Deps, customer: Customer, linkedAccountId: LinkedAccountId): LinkedAccount {
+export function unlinkAccount(
+  { customerData }: Deps,
+  customer: Customer,
+  linkedAccountId: LinkedAccountId,
+  reason: UnlinkReason = "unlink",
+): LinkedAccount {
   return customerData.inOneTransaction(() => {
     const unlinked = customerData.deleteLinkedAccount(customer, linkedAccountId);
     const name = institutionAccountName(unlinked);
-    customerData.recordDecision(customer, customerChangeDecision({ ...unlinkDecisionText(unlinked), rule: null }));
-    customerData.recordAccess(customer, unlinkAccess(name));
+    customerData.recordDecision(customer, customerChangeDecision({ ...unlinkDecisionText(unlinked, reason), rule: null }));
+    customerData.recordAccess(customer, unlinkAccess(name, reason));
     return unlinked;
   });
 }

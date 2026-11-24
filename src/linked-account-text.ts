@@ -54,14 +54,22 @@ export function renewDecisionText(linked: LinkedAccount) {
   };
 }
 
+/** Why a Linked account was unlinked: the customer pressed Unlink, or closed their Plinth account. */
+export type UnlinkReason = "unlink" | "close";
+
+const UNLINK_TRIGGER_TEXT: Record<UnlinkReason, string> = {
+  unlink: "You pressed Unlink on All accounts",
+  close: "You closed your Plinth account",
+};
+
 /** The Decision log entry's text for the customer unlinking an account. */
-export function unlinkDecisionText(linked: LinkedAccount) {
+export function unlinkDecisionText(linked: LinkedAccount, reason: UnlinkReason) {
   const name = institutionAccountName(linked);
   return {
     trigger: "You unlinked an account",
     action: `Unlinked ${name}`,
     why: [
-      { label: "Trigger", value: "You pressed Unlink on All accounts" },
+      { label: "Trigger", value: UNLINK_TRIGGER_TEXT[reason] },
       { label: "Account", value: name },
       { label: "What Plinth kept", value: "Nothing. Plinth deleted its copy of that data" },
     ],
