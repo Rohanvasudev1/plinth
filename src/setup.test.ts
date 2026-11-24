@@ -278,4 +278,27 @@ describe("Setup survey", () => {
     expect({ settings: bank.readSettings(sam), rules: bank.customerData.listRules(sam) }).toEqual(before);
     expect(bank.readDecisionLog(sam)).toEqual([]);
   });
+
+  it("after the survey with Ask me before everything, Alex's payday makes a sweep Finding to the first Goal account", () => {
+    const bank = openTestBank();
+    const alex = signInByName(bank, "Alex Okafor");
+    bank.finishSetup(alex, ALEX_ANSWERS);
+    const [checking, travel] = bank.customerData.listAccounts(alex);
+
+    bank.clock.setTo(new Date("2026-11-27T14:00:00Z"));
+    bank.postPaycheck();
+
+    // $400 + $2,100 in Checking, less the $1,000 Buffer and no bills before payday.
+    expect(bank.readFindings(alex)).toEqual([
+      expect.objectContaining({
+        kind: "sweep",
+        state: "open",
+        options: [
+          expect.objectContaining({ key: "move", amount: 1_500_00, fromAccountId: checking?.id, toAccountId: travel?.id }),
+          expect.objectContaining({ key: "leave" }),
+        ],
+      }),
+    ]);
+    expect(bank.customerData.getAccount(alex, checking!.id)?.balance).toBe(2_500_00);
+  });
 });

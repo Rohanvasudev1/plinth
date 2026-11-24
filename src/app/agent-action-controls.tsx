@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useState } from "react";
-import { markAgentActionsSeen, undoAction } from "./agent-actions";
+import { chooseOptionAction, markAgentActionsSeen, undoAction } from "./agent-actions";
 
 /** The Undo button on one agent action. A refusal shows its reason under the button. */
 export function UndoButton({ decisionId, action }: { decisionId: number; action: string }) {
@@ -46,5 +46,34 @@ export function AgentActionsToast({ actions }: { actions: { id: number; text: st
         ×
       </button>
     </div>
+  );
+}
+
+/** The Options on one open Finding, each a button. A refused pick shows its reason under them. */
+export function FindingOptions({
+  findingId,
+  options,
+}: {
+  findingId: number;
+  options: { key: string; label: string; detail: string }[];
+}) {
+  const [result, formAction, pending] = useActionState(chooseOptionAction, null);
+  return (
+    <form action={formAction} className="finding-options">
+      <input type="hidden" name="findingId" value={findingId} />
+      <div className="option-buttons">
+        {options.map((option) => (
+          <button key={option.key} type="submit" name="option" value={option.key} className="option-button" disabled={pending}>
+            <b>{option.label}</b>
+            <small>{option.detail}</small>
+          </button>
+        ))}
+      </div>
+      {result?.message && (
+        <p role="alert" className="result refused">
+          {result.message}
+        </p>
+      )}
+    </form>
   );
 }

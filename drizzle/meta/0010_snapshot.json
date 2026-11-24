@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "31533cc4-989a-412e-bb27-c152a3490883",
+  "id": "f21de465-c542-4a30-a151-d19616d134e7",
   "prevId": "42f11034-5989-412b-bb55-1423df288ec0",
   "tables": {
     "accounts": {
@@ -48,13 +48,6 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
-        },
-        "goal": {
-          "name": "goal",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
         }
       },
       "indexes": {
@@ -71,14 +64,6 @@
             "customer_id"
           ],
           "isUnique": false
-        },
-        "accounts_customer_goal": {
-          "name": "accounts_customer_goal",
-          "columns": [
-            "customer_id",
-            "goal"
-          ],
-          "isUnique": true
         }
       },
       "foreignKeys": {
@@ -106,10 +91,6 @@
         "accounts_goal_on_savings": {
           "name": "accounts_goal_on_savings",
           "value": "\"accounts\".\"goal_cents\" IS NULL OR (\"accounts\".\"kind\" = 'savings' AND \"accounts\".\"goal_cents\" > 0)"
-        },
-        "accounts_savings_goal_on_savings": {
-          "name": "accounts_savings_goal_on_savings",
-          "value": "\"accounts\".\"goal\" IS NULL OR \"accounts\".\"kind\" = 'savings'"
         }
       }
     },
@@ -405,6 +386,173 @@
         "decisions_agent_uses_rule": {
           "name": "decisions_agent_uses_rule",
           "value": "\"decisions\".\"actor\" = 'customer' OR \"decisions\".\"rule_id\" IS NOT NULL"
+        }
+      }
+    },
+    "findings": {
+      "name": "findings",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "customer_id": {
+          "name": "customer_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at_ms": {
+          "name": "created_at_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "ledger_event_id": {
+          "name": "ledger_event_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "rule_id": {
+          "name": "rule_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "rule_version": {
+          "name": "rule_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "facts": {
+          "name": "facts",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "options": {
+          "name": "options",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "chosen_option": {
+          "name": "chosen_option",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "refused_by": {
+          "name": "refused_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "refusal_reason": {
+          "name": "refusal_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "findings_customer_id": {
+          "name": "findings_customer_id",
+          "columns": [
+            "customer_id"
+          ],
+          "isUnique": false
+        },
+        "findings_customer_event_kind": {
+          "name": "findings_customer_event_kind",
+          "columns": [
+            "customer_id",
+            "ledger_event_id",
+            "kind"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "findings_customer_id_customers_id_fk": {
+          "name": "findings_customer_id_customers_id_fk",
+          "tableFrom": "findings",
+          "tableTo": "customers",
+          "columnsFrom": [
+            "customer_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "findings_ledger_event_id_ledger_events_id_fk": {
+          "name": "findings_ledger_event_id_ledger_events_id_fk",
+          "tableFrom": "findings",
+          "tableTo": "ledger_events",
+          "columnsFrom": [
+            "ledger_event_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "findings_rule_id_rules_id_fk": {
+          "name": "findings_rule_id_rules_id_fk",
+          "tableFrom": "findings",
+          "tableTo": "rules",
+          "columnsFrom": [
+            "rule_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "findings_chosen_option": {
+          "name": "findings_chosen_option",
+          "value": "(\"findings\".\"state\" = 'chosen') = (\"findings\".\"chosen_option\" IS NOT NULL)"
+        },
+        "findings_refusal": {
+          "name": "findings_refusal",
+          "value": "(\"findings\".\"refused_by\" IS NULL) = (\"findings\".\"refusal_reason\" IS NULL)"
         }
       }
     },

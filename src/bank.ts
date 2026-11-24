@@ -4,6 +4,8 @@ import type { SettableClock } from "./clock";
 import { createCustomerData, type Account, type Customer, type CustomerData } from "./customer-data";
 import type { Database } from "./db/database";
 import type { Decision, DecisionResult } from "./decisions";
+import { chooseOption, type ChooseOptionOutcome } from "./finding-choices";
+import type { Finding, FindingOptionKey } from "./findings";
 import { createLedgerEventDispatcher, type LedgerEventDispatcher } from "./ledger-events";
 import { cents, type Cents } from "./money";
 import {
@@ -26,6 +28,7 @@ import { undoAgentAction, type UndoOutcome } from "./undo";
 
 export type { BillBeforePayday, BillsBeforePayday, SafeToSpend } from "./safe-to-spend";
 export type { UndoOutcome } from "./undo";
+export type { ChooseOptionOutcome } from "./finding-choices";
 
 export interface GoalProgress {
   target: Cents;
@@ -55,6 +58,8 @@ export interface HomeView {
   billsBeforePayday: BillsBeforePayday;
   /** Null when the customer has no checking account. */
   safeToSpend: SafeToSpend | null;
+  /** The customer's open Findings, newest first, so they can pick an Option, then their latest closed one, if any. */
+  findings: Finding[];
   /** "What your agent did": every action the customer's agent took or tried to take, newest first. */
   agentActions: AgentActionOnHome[];
   /** Agent actions the customer hasn't been shown yet, newest first, for the toast. */
@@ -108,6 +113,13 @@ export interface Bank extends Simulator, RuleChanges {
    * state it is already in changes nothing. Returns whether the agent is now paused.
    */
   setAgentPaused(customer: Customer, paused: boolean): boolean;
+  /** The customer's Findings, open ones first, each group newest first. */
+  readFindings(customer: Customer): Finding[];
+  /**
+   * Carries out the Option the customer picked on one of their open Findings. "Move" re-runs the guardrails and
+   * moves money at most once; "Leave it" moves nothing. Either way it writes a Decision log entry.
+   */
+  chooseOption(customer: Customer, findingId: number, option: FindingOptionKey): ChooseOptionOutcome;
   /** Marks agent actions as shown to the customer, so the toast shows them only once. */
   markAgentActionsSeen(customer: Customer, decisionIds: number[]): void;
 }
@@ -153,6 +165,8 @@ export function createBank(deps: { db: Database; clock: SettableClock }): Bank {
     isAgentPaused: (customer) => customerData.isAgentPaused(customer),
     setAgentPaused: (customer, paused) => setAgentPaused(customerData, customer, paused),
     readDecisionLog: (customer) => customerData.listDecisions(customer),
+    readFindings: (customer) => customerData.listFindings(customer),
+    chooseOption: (customer, findingId, option) => chooseOption({ clock, customerData }, customer, findingId, option),
     undo: (customer, decisionId) => undoAgentAction(customerData, customer, decisionId),
     markAgentActionsSeen: (customer, decisionIds) => customerData.markAgentActionsSeen(customer, decisionIds),
     readHome(customer) {
@@ -174,6 +188,7 @@ export function createBank(deps: { db: Database; clock: SettableClock }): Bank {
         safeToSpend: checking
           ? safeToSpend(checking, bufferRuleFor(customerData.listRules(customer), checking.id)?.parameters.buffer ?? cents(0), bills)
           : null,
+        findings: findingsOnHome(customerData.listFindings(customer)),
         agentActions: customerData
           .listDecisions(customer)
           .filter((decision) => decision.actor === "agent")
@@ -182,6 +197,13 @@ export function createBank(deps: { db: Database; clock: SettableClock }): Bank {
       };
     },
   };
+}
+
+/** Every open Finding, then only the newest chosen or expired one, so old Findings don't pile up on Home. */
+function findingsOnHome(findings: Finding[]): Finding[] {
+  const open = findings.filter((finding) => finding.state === "open");
+  const latestClosed = findings.find((finding) => finding.state !== "open");
+  return latestClosed ? [...open, latestClosed] : open;
 }
 
 function homeAccount(account: Account): HomeAccount {
