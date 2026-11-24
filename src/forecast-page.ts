@@ -12,7 +12,7 @@ import type { Customer, CustomerData, LedgerTransaction } from "./customer-data"
 import { cents, divideCents, type Cents } from "./money";
 
 /** A Category that counts as spending: every Category except Income and Savings. */
-export type SpendingCategory = Exclude<Category, "Income" | "Savings">;
+type SpendingCategory = Exclude<Category, "Income" | "Savings">;
 
 const SPENDING_CATEGORIES = CATEGORIES.filter(
   (category): category is SpendingCategory => category !== "Income" && category !== "Savings",

@@ -157,7 +157,7 @@ A simulated business the customer pays by Card purchase, with a fixed Category.
 _Avoid_: Vendor, payee, shop
 
 **Usual month**:
-The average income and spending, per Category and in total, over the last six full calendar months.
+The average income and spending, per Category and in total, over the last six full calendar months, or over fewer when the customer has fewer. Needs at least one.
 _Avoid_: Average month, baseline, normal month
 
 **On pace**:

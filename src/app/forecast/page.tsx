@@ -14,18 +14,27 @@ function monthName(month: LocalDate): string {
   return monthFormat.format(new Date(`${month}T12:00:00Z`));
 }
 
+/** Whether On pace spending is above the Usual month, which the page marks in red. */
+function isOverUsual(onPace: Cents, usual: Cents): boolean {
+  return onPace > usual;
+}
+
+/** On pace minus usual, as a positive amount and whether it is more or less, or null when they are the same. */
+function differenceOf(onPace: Cents, usual: Cents): { amount: string; more: boolean } | null {
+  if (onPace === usual) return null;
+  return { amount: formatDollars(cents(Math.abs(onPace - usual))), more: isOverUsual(onPace, usual) };
+}
+
 /** How far On pace is from the Usual month, such as "$782.00 more than usual". */
 function differenceFromUsual(onPace: Cents, usual: Cents): string {
-  const difference = cents(onPace - usual);
-  if (difference === 0) return "The same as usual";
-  return `${formatDollars(cents(Math.abs(difference)))} ${difference > 0 ? "more" : "less"} than usual`;
+  const difference = differenceOf(onPace, usual);
+  return difference ? `${difference.amount} ${difference.more ? "more" : "less"} than usual` : "The same as usual";
 }
 
 /** A Category's change from usual, signed, such as "+$240.00", or "same". */
 function signedDifference(onPace: Cents, usual: Cents): string {
-  const difference = cents(onPace - usual);
-  if (difference === 0) return "same";
-  return `${difference > 0 ? "+" : "−"}${formatDollars(cents(Math.abs(difference)))}`;
+  const difference = differenceOf(onPace, usual);
+  return difference ? `${difference.more ? "+" : "−"}${difference.amount}` : "same";
 }
 
 /** A bar's width as a whole percent of the widest amount on the page. */
@@ -58,7 +67,7 @@ function Figures({ page }: { page: ForecastFigures }) {
           {formatDollars(page.usualMonth.spending)}
         </Stat>
         <Stat id="stat-on-pace" label={`${month}, on pace for`} note={differenceFromUsual(page.onPace.spending, page.usualMonth.spending)}>
-          <span className={page.onPace.spending > page.usualMonth.spending ? "over" : undefined}>
+          <span className={isOverUsual(page.onPace.spending, page.usualMonth.spending) ? "over" : undefined}>
             {formatDollars(page.onPace.spending)}
           </span>
         </Stat>
@@ -92,7 +101,7 @@ function Figures({ page }: { page: ForecastFigures }) {
                   <div className="category-bars" aria-hidden="true">
                     <div className="usual" style={{ width: widthOf(row.usualMonth, widest) }} />
                     <div
-                      className={row.onPace > row.usualMonth ? "on-pace over" : "on-pace"}
+                      className={isOverUsual(row.onPace, row.usualMonth) ? "on-pace over" : "on-pace"}
                       style={{ width: widthOf(row.onPace, widest) }}
                     />
                   </div>
@@ -100,7 +109,7 @@ function Figures({ page }: { page: ForecastFigures }) {
                 <td className="num num-col">{formatDollars(row.usualMonth)}</td>
                 <td className="num num-col">
                   {formatDollars(row.onPace)}
-                  <div className={`difference${row.onPace > row.usualMonth ? " over" : ""}`}>
+                  <div className={`difference${isOverUsual(row.onPace, row.usualMonth) ? " over" : ""}`}>
                     {signedDifference(row.onPace, row.usualMonth)}
                   </div>
                 </td>
