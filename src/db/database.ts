@@ -4,7 +4,7 @@ import { drizzle, type BetterSQLite3Database } from "drizzle-orm/better-sqlite3"
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import * as schema from "./schema";
 
-export type Database = BetterSQLite3Database<typeof schema>;
+export type Database = BetterSQLite3Database<typeof schema> & { $client: BetterSqlite3.Database };
 
 // Next.js bundles server code, so paths resolve from the project root, where every command runs.
 const migrationsFolder = path.join(process.cwd(), "drizzle");
