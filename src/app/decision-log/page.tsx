@@ -1,9 +1,9 @@
-import Link from "next/link";
 import { DISPLAY_TIME_ZONE } from "@/app-clock";
 import { getAppBank } from "@/app-bank";
 import type { Decision } from "@/decisions";
 import { formatDollars } from "@/money";
 import { requireCustomer } from "@/session";
+import { NavBar } from "../nav-bar";
 import { WhyPanel } from "../why-panel";
 
 export const dynamic = "force-dynamic";
@@ -55,14 +55,12 @@ export default async function DecisionLogPage() {
   const decisions = getAppBank().readDecisionLog(customer);
   return (
     <main className="page">
+      <NavBar customerName={customer.name} current="decision-log" />
       <header className="top">
         <div>
           <h1>Decision log</h1>
           <p className="muted">Every action your agent took or tried to take, every change you made to it, the Rule behind each, and what happened.</p>
         </div>
-        <p className="muted signed-in">
-          {customer.name} · <Link href="/">Home</Link>
-        </p>
       </header>
 
       {decisions.length === 0 ? (
