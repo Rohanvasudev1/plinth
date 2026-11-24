@@ -9,7 +9,7 @@ test.use({ viewport: { width: 390, height: 844 } });
 async function signInAs(page: Page, name: "Sam Calloway" | "Alex Okafor"): Promise<void> {
   await page.goto("/sign-in");
   await page.getByRole("button", { name }).click();
-  await expect(page).not.toHaveURL(/\/sign-in/);
+  await expect(page.getByRole("navigation", { name: "Main" })).toBeVisible();
 }
 
 /** The value of one of the four figures at the top of All accounts, such as Net worth. */
@@ -53,6 +53,7 @@ test("Journey 5: Sam sees where they stand, links Harbor, finds its Sync, keeps 
   const newest = page.getByRole("region", { name: "Access log" }).getByRole("listitem").first();
   await expect(newest).toContainText("Plinth");
   await expect(newest).toContainText("Your Harbor Credit Union checking balance");
+  await expect(newest).toContainText("Sync");
   await expectNoHorizontalScroll(page);
 
   // 4. Sam turns on Keep my chat history, and the Decision log records the change.
@@ -71,8 +72,8 @@ test("Journey 5: Sam sees where they stand, links Harbor, finds its Sync, keeps 
   await page.getByRole("region", { name: "Export" }).getByRole("button", { name: "Export my data" }).click();
   const download = await downloading;
   expect(download.suggestedFilename()).toMatch(/\.json$/);
-  const file = JSON.parse(await readFile(await download.path(), "utf8"));
-  expect(file.customer.name).toBe("Sam Calloway");
+  const exported = JSON.parse(await readFile(await download.path(), "utf8"));
+  expect(exported.customer.name).toBe("Sam Calloway");
 
   // 6. Sam unlinks Harbor and is told Plinth deleted its copy.
   await nav.getByRole("link", { name: "Accounts" }).click();
