@@ -34,6 +34,7 @@ export type { BillBeforePayday, BillsBeforePayday, SafeToSpend } from "./safe-to
 export type { UndoOutcome } from "./undo";
 export type { ActivityRow } from "./activity";
 export type { CategoryFigures, ForecastFigures, ForecastPage } from "./forecast-page";
+export type { Projection, ProjectionLine, ProjectionLines } from "./projection";
 export type { Forecast } from "./forecast";
 export type { ChooseOptionOutcome } from "./finding-choices";
 

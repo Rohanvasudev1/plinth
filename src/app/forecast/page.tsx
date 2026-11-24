@@ -4,6 +4,7 @@ import type { LocalDate } from "@/calendar";
 import { cents, formatDollars, type Cents } from "@/money";
 import { requireCustomer } from "@/session";
 import { NavBar } from "../nav-bar";
+import { ProjectionChart } from "./projection-chart";
 
 export const dynamic = "force-dynamic";
 
@@ -122,6 +123,18 @@ function Figures({ page }: { page: ForecastFigures }) {
           </tbody>
         </table>
       </section>
+
+      {page.projection.kind === "projection" ? (
+        <ProjectionChart projection={page.projection} month={month} />
+      ) : (
+        <section className="card" aria-labelledby="projection-heading">
+          <h2 id="projection-heading">No Projection yet</h2>
+          <p className="muted">
+            Your buffer Rule doesn&rsquo;t sweep to a Goal, so there&rsquo;s no Goal to project. Pick a savings goal in
+            Setup to see where each pace leads.
+          </p>
+        </section>
+      )}
     </>
   );
 }
@@ -143,8 +156,8 @@ export default async function ForecastPage() {
         <section className="card">
           <h2>Not enough history yet</h2>
           <p className="muted">
-            Your Usual month and this month&rsquo;s pace show here once you have a full calendar month of paychecks and
-            spending.
+            Your Usual month, this month&rsquo;s pace and the Projection show here once you have a full calendar month
+            of paychecks and spending.
           </p>
         </section>
       ) : (

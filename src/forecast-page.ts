@@ -11,6 +11,8 @@ import {
 import { CATEGORIES, type Category } from "./categories";
 import type { Customer, CustomerData, LedgerTransaction } from "./customer-data";
 import { cents, divideCents, type Cents } from "./money";
+import type { Projection } from "./projection";
+import { bufferRuleFor } from "./rules";
 import { billsDue } from "./schedules";
 import { isBillPayment } from "./simulator";
 
@@ -44,6 +46,8 @@ export interface ForecastFigures {
   leftToSave: { usualMonth: Cents; onPace: Cents };
   /** Every spending Category with spending in the Usual month or this month, in Category order. */
   categories: CategoryFigures[];
+  /** The 3-year Projection of the sweep target's balance, or why there is none. */
+  projection: Projection | { kind: "no_sweep_target" };
 }
 
 /** What the Forecast page shows: its figures, or that there isn't enough history to work them out. */
@@ -103,18 +107,55 @@ export function readForecastPage(customerData: CustomerData, customer: Customer,
   const income = usual(inUsualMonths.filter((transaction) => transaction.category === "Income"));
   const usualSpending = usual(spending(inUsualMonths));
   const onPaceSpending = onPace(spending(purchasesSoFar), billsThisMonth);
+  const categories = SPENDING_CATEGORIES.map((category) => ({
+    category,
+    usualMonth: usual(spending(inUsualMonths, category)),
+    onPace: onPace(spending(purchasesSoFar, category), spending(billsThisMonth, category)),
+  }));
+  const leftToSave = { usualMonth: cents(income - usualSpending), onPace: cents(income - onPaceSpending) };
   return {
     kind: "figures",
     month,
     fullMonths: months.length,
     usualMonth: { income, spending: usualSpending },
     onPace: { spending: onPaceSpending },
-    leftToSave: { usualMonth: cents(income - usualSpending), onPace: cents(income - onPaceSpending) },
-    categories: SPENDING_CATEGORIES.map((category) => ({
-      category,
-      usualMonth: usual(spending(inUsualMonths, category)),
-      onPace: onPace(spending(purchasesSoFar, category), spending(billsThisMonth, category)),
-    })).filter((row) => row.usualMonth !== 0 || row.onPace !== 0),
+    leftToSave,
+    categories: categories.filter((row) => row.usualMonth !== 0 || row.onPace !== 0),
+    projection: projectionOf(customerData, customer, leftToSave, categories),
+  };
+}
+
+/** Categories the Projection's slider tries cutting. */
+const CUTTABLE_CATEGORIES: readonly SpendingCategory[] = ["Eating out", "Shopping"];
+
+/**
+ * The Projection of the sweep target of the customer's buffer Rule, with the slider's cut taken from On pace Eating out
+ * and Shopping, or "no sweep target" when the buffer Rule sweeps nowhere.
+ */
+function projectionOf(
+  customerData: CustomerData,
+  customer: Customer,
+  leftToSave: ForecastFigures["leftToSave"],
+  categories: CategoryFigures[],
+): ForecastFigures["projection"] {
+  const accounts = customerData.listAccounts(customer);
+  const checking = accounts.find((account) => account.kind === "checking");
+  const savingsAccountId = checking
+    ? bufferRuleFor(customerData.listRules(customer), checking.id)?.parameters.savingsAccountId
+    : undefined;
+  const goal = accounts.find((account) => account.id === savingsAccountId);
+  if (!goal) return { kind: "no_sweep_target" };
+  return {
+    kind: "projection",
+    goalName: goal.name,
+    balance: goal.balance,
+    usualMonthSaving: leftToSave.usualMonth,
+    onPaceSaving: leftToSave.onPace,
+    cuttable: cents(
+      categories
+        .filter((row) => CUTTABLE_CATEGORIES.includes(row.category))
+        .reduce((sum, row) => sum + row.onPace, 0),
+    ),
   };
 }
 
