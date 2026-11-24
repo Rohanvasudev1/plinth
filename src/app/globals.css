@@ -358,3 +358,17 @@ table.categories { width: 100%; border-collapse: collapse; }
 .category-bars .usual { background: var(--line); }
 .category-bars .on-pace { background: var(--focus); }
 .category-bars .on-pace.over { background: var(--bad); }
+.projection-line { fill: none; stroke-width: 2; }
+.projection-line.usual { stroke: var(--good); }
+.projection-line.on-pace { stroke: var(--bad); stroke-dasharray: 5 3; }
+.projection-line.with-changes { stroke: var(--focus); stroke-width: 2.5; }
+.projection-summary-heading { margin: 4px 0 4px; font-size: 0.95rem; }
+.projection-summary { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.projection-summary i { display: inline-block; width: 14px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
+.projection-summary i.usual { background: var(--good); }
+.projection-summary i.on-pace { background: var(--bad); }
+.projection-summary i.with-changes { background: var(--focus); }
+.try-it { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; background: var(--bg); border-radius: 8px; padding: 12px; }
+.try-it label { font-weight: 600; }
+.try-it input { width: 100%; accent-color: var(--focus); }
+.try-it .muted { font-size: 0.82rem; }
