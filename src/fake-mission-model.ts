@@ -11,7 +11,8 @@ import { cents, formatDollars, type Cents } from "./money";
 const RECENT_DAYS = 90;
 
 /**
- * Questions that run the fake's test scripts, for tests and the end-to-end suite: one fails with a model error, one
+ * Questions that run the fake's test scripts when it is made with `testScripts`, for tests and the end-to-end suite
+ * only: one fails with a model error, one
  * runs long, reading once a minute until it is stopped or reaches a limit, one reads more often than a Mission may,
  * and one returns a fact that cites no tool call.
  */
@@ -29,12 +30,14 @@ export function createFakeMissionModel(deps: {
   clock: Clock;
   /** How long to wait before each tool call, so the app shows a running Mission's progress. Zero in tests. */
   toolCallDelayMs?: number;
+  /** Whether the questions in FAKE_TEST_QUESTIONS run their test scripts. Only tests and the end-to-end suite. */
+  testScripts?: boolean;
 }): MissionModel {
-  const { clock, toolCallDelayMs = 0 } = deps;
+  const { clock, toolCallDelayMs = 0, testScripts = false } = deps;
   return {
     async runMission(request) {
       const session = new ScriptSession(request, localDateOf(clock.now()), toolCallDelayMs);
-      const testScript = testScriptFor(request.question);
+      const testScript = testScripts ? testScriptFor(request.question) : undefined;
       if (testScript) return testScript(session);
       const transactions = await session.call<TransactionsResult>("read_transactions", {
         from: addDays(session.today, -RECENT_DAYS),

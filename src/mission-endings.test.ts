@@ -3,7 +3,7 @@ import { SIMULATION_START } from "./app-clock";
 import { createBank, type Bank } from "./bank";
 import { fixedClock } from "./clock";
 import { openTestDatabase } from "./db/database";
-import { FAKE_TEST_QUESTIONS } from "./fake-mission-model";
+import { createFakeMissionModel, FAKE_TEST_QUESTIONS } from "./fake-mission-model";
 import type { MissionModel } from "./mission-model";
 import { openTestBank, signInByName } from "./test-bank";
 
@@ -236,5 +236,17 @@ describe("Discoveries with ended Missions", () => {
     bank.advanceClock();
 
     expect(bank.readDiscoveries(sam).unfinishedMissions).toEqual([]);
+  });
+});
+
+describe("The fake model's test scripts", () => {
+  it("don't run when the fake is made without them, as in the app: a test question gets an ordinary answer", async () => {
+    const clock = fixedClock(SIMULATION_START);
+    const bank = createBank({ db: openTestDatabase(), clock, missionModel: createFakeMissionModel({ clock }) });
+    const sam = signInByName(bank, "Sam Calloway");
+
+    const finished = await bank.startMission(sam, FAKE_TEST_QUESTIONS.modelError).ended;
+
+    expect(finished.state).toBe("reported");
   });
 });

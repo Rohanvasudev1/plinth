@@ -199,13 +199,13 @@ export interface Bank extends Simulator, RuleChanges {
 export function createBank(deps: {
   db: Database;
   clock: SettableClock;
-  /** The language model Missions run on. The scripted fake when left out. */
+  /** The language model Missions run on. The scripted fake, with its test scripts, when left out. */
   missionModel?: MissionModel;
   /** How long a Mission may run, by the wall clock, before it fails. Three minutes when left out. */
   missionTimeLimitMs?: number;
 }): Bank {
   const { db, clock } = deps;
-  const missionModel = deps.missionModel ?? createFakeMissionModel({ clock });
+  const missionModel = deps.missionModel ?? createFakeMissionModel({ clock, testScripts: true });
   const ledgerEvents = createLedgerEventDispatcher();
   const customerData = createCustomerData({ db, clock, ledgerEvents });
   const systemData = createSystemData(db);

@@ -127,7 +127,7 @@ The Option the agent would pick in a Finding, and why, shown only as far as the 
 _Avoid_: Lean, recommendation, advice
 
 **Mission**:
-A question the customer sends the agent to look into, which reads only that customer's data and reports back with one Finding.
+A question the customer sends the agent to look into, which reads only that customer's data and reports back with one Finding. While it runs, the customer can stop it. It fails on a model error, at its time limit, at its 9th tool call, or when its Finding fails its checks. A Mission that is stopped or fails keeps nothing. A customer has at most one Mission running, and at most 10 a simulated day.
 _Avoid_: Job, task, query
 
 **Mission tool**:
@@ -163,7 +163,7 @@ A check that runs before any agent action and refuses it if it breaks a Rule or 
 _Avoid_: Validation, safety check
 
 **Decision log**:
-The customer-visible record of every agent action, with its trigger, the Rule it used, and its result, plus each change the customer makes to the agent: Undo, a picked Option, a Rule or setting edit, a Goal's target, and Pause. A Mission's entry names no Rule, because the customer asked for it, and its result is Reported, with a link to its Finding, or Failed.
+The customer-visible record of every agent action, with its trigger, the Rule it used, and its result, plus each change the customer makes to the agent: Undo, a picked Option, a Rule or setting edit, a Goal's target, and Pause. A Mission's entry names no Rule, because the customer asked for it, and its result is Reported, with a link to its Finding, Stopped, when the customer stopped it, or Failed.
 _Avoid_: Audit trail, history
 
 **Why**:
