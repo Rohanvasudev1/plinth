@@ -223,7 +223,8 @@ export interface CustomerData {
   /**
    * Makes an open Finding, timed by the clock. Its Rule and the accounts its Options name must be the customer's,
    * and Read the full report needs a report. Throws FindingError if the customer already has a Finding of this kind
-   * for this ledger event, or one about this subscription's Merchant and price.
+   * for this ledger event, or one about this subscription's Merchant and price, and MissionError if it names a
+   * Mission that isn't theirs.
    */
   createFinding(customer: Customer, finding: NewFinding): Finding;
   /** The customer's Findings, open ones first, each group newest first. */

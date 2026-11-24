@@ -15,12 +15,24 @@ export type MissionFindingToStore = Pick<NewFinding, "title" | "facts" | "option
 /** The checked Finding, or why the Mission fails. */
 export type CheckedMissionFinding = { ok: true; finding: MissionFindingToStore } | { ok: false; reason: string };
 
+/** A number written as digits, or as a number word, such as "six" or "a hundred". */
+const NUMBER = String.raw`(?:\d[\d,.]*|(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|fifteen|twenty|thirty|forty|fifty|hundred|thousand|half)\b)`;
+
 /**
- * A money amount or a rate: a currency sign next to a digit, a digit next to `%`, or a number followed by "percent"
- * or "dollars". Only a cited fact may state one, so What Plinth can't know never states an outside price or rate.
- * Other numbers, such as a year, are allowed (decision on #53).
+ * A money amount or a rate: a currency sign or code next to a number, a digit next to `%`, or a number followed by
+ * "percent" or "dollars". Only a cited fact may state one, so What Plinth can't know never states an outside price
+ * or rate. Other numbers, such as a year, are allowed (decision on #53).
  */
-const MONEY_OR_RATE = /[$€£¥]\s?\d|\d\s?%|\d[\d,.]*\s*(percent|per cent|dollars?)\b/i;
+const MONEY_OR_RATE = new RegExp(
+  [
+    String.raw`[$€£¥]\s?\d`,
+    String.raw`\b(?:USD|EUR|GBP)\s?\d`,
+    String.raw`\d\s?(?:USD|EUR|GBP)\b`,
+    String.raw`\d\s?%`,
+    String.raw`\b${NUMBER}\s*(?:percent|per cent|dollars?)\b`,
+  ].join("|"),
+  "i",
+);
 
 /**
  * Checks the Finding a Mission's model returned (ADR 0009):

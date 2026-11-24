@@ -185,6 +185,9 @@ describe("What Plinth can't know", () => {
       "Mortgage rates are near 6.5%.",
       "Rates are around 6 percent.",
       "Rents are about 2100 dollars.",
+      "Rates are around six percent.",
+      "Rents average USD 2,100.",
+      "Rents average 2,100 USD.",
     ]) {
       const { bank, sam, finished } = await missionSaying(cantKnow);
 
