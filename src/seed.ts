@@ -249,9 +249,11 @@ export function seedDemoData(system: SystemData, data: CustomerData, customerDat
   const simulationStartClock = fixedClock(SIMULATION_START);
   const atSimulationStart = { clock: simulationStartClock, customerData: customerDataOn(simulationStartClock) };
   data.inOneTransaction(() => {
+    const seeded = new Map<string, Customer>();
     for (const seed of SEED_CUSTOMERS) {
       historyClock.setTo(HISTORY_OPENS);
       const customer: Customer = system.createCustomer(seed.name);
+      seeded.set(seed.name, customer);
       const accountIds: Partial<Record<NewAccount["kind"], number>> = {};
       for (const { openingBalance, ...newAccount } of seed.accounts) {
         const account = data.openAccount(customer, newAccount);
@@ -280,7 +282,65 @@ export function seedDemoData(system: SystemData, data: CustomerData, customerDat
       data.createRule(customer, { kind: "payment_limit", parameters: { paymentLimit: SEED_PAYMENT_LIMIT }, on: true });
       data.saveSettings(customer, seedSettings(seed.setup.goal));
     }
+    seedGroups(seeded);
   });
+
+  /**
+   * Jordan Reyes, the Outside contact, and two Groups: Flatmates (Sam, Alex, Jordan) and Lisbon trip (Sam, Priya),
+   * with six Shared costs as history and no Decision log entries. Sam's three come from Sam's seeded bill payments and
+   * Card purchase; the others were added by hand.
+   */
+  function seedGroups(seeded: Map<string, Customer>): void {
+    const customer = (name: string): Customer => {
+      const found = seeded.get(name);
+      if (!found) throw new Error(`The seed has no customer named ${name}`);
+      return found;
+    };
+    const sam = customer("Sam Calloway");
+    const priya = customer("Priya Natarajan");
+    const alex = customer("Alex Okafor");
+    const jordan = system.createOutsideContact("Jordan Reyes");
+    const flatmates = data.createGroup(sam, {
+      name: "Flatmates",
+      members: [{ customerId: sam.id }, { customerId: alex.id }, { outsideContactId: jordan.id }],
+    });
+    const lisbon = data.createGroup(sam, { name: "Lisbon trip", members: [{ customerId: sam.id }, { customerId: priya.id }] });
+
+    const bills = ledger.listScheduledBills(sam);
+    const billKey = (payee: string, date: string) => {
+      const bill = bills.find((candidate) => candidate.payee === payee);
+      if (!bill) throw new Error(`Sam has no ${payee} bill`);
+      return `bill:${bill.id}:${date}`;
+    };
+    for (const key of [billKey("Internet", "2026-11-02"), billKey("Power", "2026-11-03"), "card:green-basket-market:2026-11-16"]) {
+      const transaction = ledger.findLedgerTransaction(sam, key);
+      const paid = transaction?.entries.find((entry) => entry.amount < 0);
+      if (!transaction?.counterparty || !paid) throw new Error(`Sam's seeded history has no payment under ${key}`);
+      data.addSharedCost(sam, {
+        groupId: flatmates.id,
+        description: transaction.counterparty,
+        amount: cents(-paid.amount),
+        date: localDateOf(transaction.postedAt),
+        source: "activity",
+        ledgerTransactionId: transaction.id,
+      });
+    }
+    const byHand = { groupId: flatmates.id, source: "by_hand" } as const;
+    data.addOutsideContactSharedCost(jordan.id, {
+      ...byHand,
+      description: "Cleaning supplies",
+      amount: cents(36_00),
+      date: localDate("2026-11-06"),
+    });
+    data.addSharedCost(alex, { ...byHand, description: "Dish soap and bin bags", amount: cents(24_00), date: localDate("2026-11-12") });
+    data.addSharedCost(priya, {
+      groupId: lisbon.id,
+      source: "by_hand",
+      description: "Apartment, 4 nights",
+      amount: cents(640_00),
+      date: localDate("2026-11-15"),
+    });
+  }
 
   /** Stores the customer's Linked accounts as synced at the simulation start, with one access log entry per Sync. */
   function linkAccounts(customer: Customer, { accounts, consent }: NonNullable<SeedCustomer["linkedAccounts"]>): void {

@@ -7,6 +7,7 @@ import { formatDollars, parseDollars } from "@/money";
 import type { Customer } from "@/customer-data";
 import { requireCustomer } from "@/session";
 import { CardDeclinedError, isMerchantKey, MERCHANTS, type PostedTransaction } from "@/simulator";
+import { SplitError } from "@/split";
 
 /** What the last Simulator button did, shown under the buttons. */
 export interface SimulatorResult {
@@ -70,6 +71,37 @@ export async function cardPurchase(_previous: SimulatorResult | null, form: Form
       : { ok: true, message: "That purchase already went through. Nothing changed." };
   } catch (error) {
     if (error instanceof CardDeclinedError) return { ok: false, message: `Declined: ${error.message}.` };
+    throw error;
+  }
+}
+
+/**
+ * Plays an Outside contact adding a Shared cost they paid. The form's `member` names an Outside contact and Group pair
+ * from the signed-in customer's own Groups, as `<outside contact id>:<group id>`, so the Simulator names no other Group.
+ */
+export async function outsideContactSharedCost(_previous: SimulatorResult | null, form: FormData): Promise<SimulatorResult> {
+  const customer = await requireCustomer();
+  const bank = getAppBank();
+  const pair = bank
+    .listOutsideContactsInGroups(customer)
+    .find((candidate) => `${candidate.outsideContactId}:${candidate.groupId}` === String(form.get("member") ?? ""));
+  if (!pair) return { ok: false, message: "Pick who adds it and to which Group." };
+  let amount;
+  try {
+    amount = parseDollars(String(form.get("amount") ?? ""));
+  } catch {
+    return { ok: false, message: "Enter an amount in dollars, such as 25 or 25.50." };
+  }
+  try {
+    const cost = bank.outsideContactAddsSharedCost(pair.outsideContactId, {
+      groupId: pair.groupId,
+      description: String(form.get("description") ?? ""),
+      amount,
+    });
+    revalidatePath("/", "layout");
+    return { ok: true, message: `${pair.name} added ${cost.description}, ${formatDollars(cost.amount)}, to ${pair.groupName}.` };
+  } catch (error) {
+    if (error instanceof SplitError) return { ok: false, message: `Refused: ${error.message}.` };
     throw error;
   }
 }

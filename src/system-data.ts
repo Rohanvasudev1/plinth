@@ -1,7 +1,8 @@
 import { and, asc, eq, isNull } from "drizzle-orm";
 import type { Customer } from "./customer-data";
 import type { Database } from "./db/database";
-import { accountsTable, customersTable } from "./db/schema";
+import { accountsTable, customersTable, outsideContactsTable } from "./db/schema";
+import { asOutsideContactId, type OutsideContact } from "./split";
 
 /**
  * System accounts: one clearing account per simulated outside institution, which takes the
@@ -31,7 +32,7 @@ export function isEmployer(key: string): key is Employer {
   return Object.hasOwn(EMPLOYERS, key);
 }
 
-/** Rows that belong to no customer: the customer list itself and the system accounts. */
+/** Rows that belong to no customer: the customer list itself, the system accounts and the Outside contacts. */
 export interface SystemData {
   /** Every customer, Closed ones included, as Sign in as lists them. */
   listCustomers(): Customer[];
@@ -50,6 +51,10 @@ export interface SystemData {
   markClosed(customer: Customer, at: Date): void;
   /** Creates the system account if it doesn't exist yet, and returns its id. */
   ensureSystemAccount(account: SystemAccount): number;
+  /** Adds an Outside contact, a person outside Plinth whom the Simulator plays as a Member. */
+  createOutsideContact(name: string): OutsideContact;
+  /** Every Outside contact, in the order they were added. */
+  listOutsideContacts(): OutsideContact[];
 }
 
 const customerColumns = { id: customersTable.id, name: customersTable.name };
@@ -86,6 +91,18 @@ export function createSystemData(db: Database): SystemData {
         .where(and(eq(customersTable.id, customer.id), isNull(customersTable.closedAtMs)))
         .run().changes;
       if (changed !== 1) throw new Error(`Customer ${customer.id} is already Closed or doesn't exist`);
+    },
+    createOutsideContact(name) {
+      const row = db.insert(outsideContactsTable).values({ name }).returning().get();
+      return { id: asOutsideContactId(row.id), name: row.name };
+    },
+    listOutsideContacts() {
+      return db
+        .select()
+        .from(outsideContactsTable)
+        .orderBy(asc(outsideContactsTable.id))
+        .all()
+        .map((row) => ({ id: asOutsideContactId(row.id), name: row.name }));
     },
     ensureSystemAccount(account) {
       const { key, name } = SYSTEM_ACCOUNTS[account];

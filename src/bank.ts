@@ -51,6 +51,15 @@ import { createSimulator, type Simulator } from "./simulator";
 import { setStandingSearch } from "./standing-searches";
 import { startSubscriptionPriceRises } from "./subscription-price-rises";
 import { createSystemData, type SystemData } from "./system-data";
+import type { GroupId, SharedCost } from "./split";
+import {
+  groupOnPage,
+  outsideContactsInGroups,
+  readSplitView,
+  type GroupOnPage,
+  type OutsideContactInGroup,
+  type SplitView,
+} from "./split-page";
 import { undoAgentAction, type UndoOutcome } from "./undo";
 
 export type { BillBeforePayday, BillsBeforePayday, SafeToSpend } from "./safe-to-spend";
@@ -68,6 +77,7 @@ export type { LinkableAccount } from "./linked-account-changes";
 export type { CustomerExport } from "./export";
 export type { AllAccountsView, LinkedAccountOnPage, NetWorthFigures } from "./all-accounts";
 export type { ClosureOutcome, ClosureSummary } from "./closure";
+export type { GroupOnPage, MemberBalance, OutsideContactInGroup, SharedCostOnPage, SplitSummary, SplitView } from "./split-page";
 
 export interface GoalProgress {
   target: Cents;
@@ -271,6 +281,21 @@ export interface Bank extends Simulator, RuleChanges {
    * about them, including that entry, in one transaction. Works while the agent is paused.
    */
   buildExport(customer: Customer): CustomerExport;
+  /**
+   * The Split page: each Group the customer is a Member of, each other Member's net with the customer, the summary,
+   * and Shared costs newest first. It never shows a net between two other Members. Writes no access log entry.
+   */
+  readSplit(customer: Customer): SplitView;
+  /** One of the customer's Groups as the Split page shows it. Throws SplitError if they aren't a Member. */
+  readGroup(customer: Customer, groupId: GroupId): GroupOnPage;
+  /**
+   * Adds a Shared cost the customer paid by hand, dated today, split equally across the Group. Moves no money. Works
+   * before setup. Throws SplitError, saving nothing, if they aren't a Member, the amount isn't above zero or what it
+   * was for is blank.
+   */
+  addSharedCost(customer: Customer, cost: { groupId: GroupId; description: string; amount: Cents }): SharedCost;
+  /** The Outside contacts in the customer's Groups, for the Simulator's form that plays them. */
+  listOutsideContactsInGroups(customer: Customer): OutsideContactInGroup[];
 }
 
 /**
@@ -390,6 +415,11 @@ export function createBank(deps: {
     readMission: (customer, missionId) => customerData.getMission(customer, missionId),
     setDataChoice: (customer, choice, on) => setDataChoice(customerData, customer, choice, on),
     buildExport: (customer) => buildExport({ customerData }, customer),
+    readSplit: (customer) => readSplitView(customerData, customer),
+    readGroup: (customer, groupId) => groupOnPage(customer, customerData.getGroup(customer, groupId)),
+    addSharedCost: (customer, cost) =>
+      customerData.addSharedCost(customer, { ...cost, date: localDateOf(clock.now()), source: "by_hand" }),
+    listOutsideContactsInGroups: (customer) => outsideContactsInGroups(customerData, customer),
     readPrivacy: (customer) => ({
       dataChoices: customerData.getSettings(customer)?.dataChoices ?? null,
       accessLog: customerData.listAccessLog(customer),
