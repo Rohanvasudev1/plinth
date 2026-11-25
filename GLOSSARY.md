@@ -171,7 +171,7 @@ The explanation of one Decision log entry, built from its recorded trigger, Rule
 _Avoid_: Reason, rationale
 
 **Undo**:
-Reversing an agent action with a new, opposite ledger transaction.
+Reversing an agent action: with a new, opposite ledger transaction when it moved money, or, for the Split rule, by removing the Shared cost it added.
 _Avoid_: Rollback, cancel
 
 ## Forecast
