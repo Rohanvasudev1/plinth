@@ -269,3 +269,49 @@ _Avoid_: Deleted customer, deactivated account
 **Account-closure clearing account**:
 The Clearing account that takes a Closed customer's Plinth balances when Close and delete pays them out, one ledger transaction per account under `closure:<customer id>:<account id>`.
 _Avoid_: Closure account, exit account
+
+## Split
+
+**Group**:
+A fixed set of Members who share costs, such as Flatmates or Lisbon trip.
+_Avoid_: Circle, pool, household
+
+**Member**:
+One person in a Group: a Plinth customer or an Outside contact.
+_Avoid_: Participant, friend
+
+**Outside contact**:
+A person outside Plinth whom the Simulator plays as a Member, such as Jordan Reyes.
+_Avoid_: External user, guest
+
+**Shared cost**:
+An amount one Member paid for their Group, split into equal Shares.
+_Avoid_: Expense, bill split
+
+**Share**:
+One Member's equal part of a Shared cost. Leftover cents go to the Member who paid.
+_Avoid_: Portion, cut
+
+**Request**:
+An ask from one Member to another for the whole net amount owed between them in one Group. Nothing moves until the other Member pays it.
+_Avoid_: Invoice, payment request, reminder
+
+**Settle-up payment**:
+A payment from one Member to another to reduce what they owe in a Group, made by instant transfer.
+_Avoid_: Transfer, reimbursement
+
+**Split rule**:
+The Rule that lets the agent add chosen Scheduled bills to a Group as Shared costs when they post, and send Requests. It moves no money.
+_Avoid_: Auto-split, bill sharing
+
+**Shared cost spotted**:
+The Standing search that reports a Card purchase at a Merchant the customer has split with a Group before.
+_Avoid_: Split suggestion, split alert
+
+**Plinth transfers clearing account**:
+The Clearing account that sits between two Plinth customers in a Settle-up payment, so each side posts its own ledger transaction.
+_Avoid_: Internal transfer account
+
+**Instant transfer clearing account**:
+The Clearing account for Settle-up payments to and from Outside contacts.
+_Avoid_: Payment network account
