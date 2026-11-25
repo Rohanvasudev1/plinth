@@ -140,10 +140,10 @@ describe("Split", () => {
     expect(netsIn(samsView, "Flatmates")).toEqual({ "Alex Okafor": 143_04, "Jordan Reyes": 139_04 });
     expect(netsIn(samsView, "Lisbon trip")).toEqual({ "Priya Natarajan": -345_00 });
     expect(samsView.summary).toEqual({ owedToYou: 282_08, youOwe: 345_00, net: -62_92 });
-    // Sam sees only nets with Sam: never what Alex and Jordan owe each other.
-    for (const group of samsView.groups) {
-      expect(group.otherMembers.map((member) => member.name)).not.toContain("Sam Calloway");
-    }
+    // Sam sees only nets with Sam: never the $4.00 Alex owes Jordan.
+    const nets = samsView.groups.flatMap((group) => group.otherMembers.map((member) => Math.abs(member.net)));
+    expect(nets).not.toContain(4_00);
+    expect(Object.keys(samsView.groups[0] ?? {})).toEqual(["id", "name", "memberNames", "otherMembers", "sharedCosts"]);
 
     const priyasView = bank.readSplit(priya);
     expect(priyasView.groups.map((group) => group.name)).toEqual(["Lisbon trip"]);

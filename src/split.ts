@@ -91,6 +91,9 @@ export interface NewSharedCost {
   ledgerTransactionId?: number;
 }
 
+/** A Shared cost the customer adds by hand, or an Outside contact adds through the Simulator: dated today, no ledger transaction. */
+export type SharedCostByHand = Pick<NewSharedCost, "groupId" | "description" | "amount">;
+
 /** A Group read or write refused: the reader isn't a Member, or the Shared cost doesn't fit. */
 export class SplitError extends Error {
   override name = "SplitError";
@@ -117,6 +120,11 @@ export function shareOf(cost: SharedCost, memberCount: number, member: MemberId)
   return cost.paidBy === member ? shares.payer : shares.other;
 }
 
+/** Whether a Shared cost still counts towards Shares and nets: it hasn't been removed. */
+export function stillCounts(cost: SharedCost): boolean {
+  return cost.removedAt === null;
+}
+
 /**
  * The net between Members `a` and `b` in a Group: b's Shares of costs a paid, minus a's Shares of costs b paid.
  * Above zero, b owes a. Removed Shared costs don't count. Every page and module works the net out here.
@@ -125,7 +133,7 @@ export function netBetween(group: Group, a: MemberId, b: MemberId): Cents {
   const count = group.members.length;
   let net = 0;
   for (const cost of group.sharedCosts) {
-    if (cost.removedAt !== null) continue;
+    if (!stillCounts(cost)) continue;
     if (cost.paidBy === a) net += shareOf(cost, count, b);
     if (cost.paidBy === b) net -= shareOf(cost, count, a);
   }

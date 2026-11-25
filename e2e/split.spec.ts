@@ -119,3 +119,32 @@ test("Sam and Priya each see only their own Groups and figures after both add a 
   await expect(balances(page, "Lisbon trip").getByRole("listitem")).toHaveText(["You owe Priya Natarajan $345.00"]);
   await expect(page.getByRole("region", { name: "Where you stand" })).toContainText("Net-$62.92");
 });
+
+test("A Shared cost sent for a Group the customer isn't in answers 404 and adds nothing", async ({ page }) => {
+  await restoreSeed(page);
+  await signInAs(page, "Sam Calloway");
+  await openFromMoreMenu(page, "Split");
+  const flatmatesId = await page
+    .getByRole("region", { name: "Add a shared cost" })
+    .getByLabel("Group")
+    .locator("option", { hasText: "Flatmates" })
+    .getAttribute("value");
+
+  await signInAs(page, "Priya Natarajan");
+  await openFromMoreMenu(page, "Split");
+  const form = page.getByRole("region", { name: "Add a shared cost" });
+  // Priya's Group list holds only Lisbon trip, so point its one option at Flatmates, as a tampered form would.
+  await form.getByLabel("Group").locator("option").evaluate((option, id) => option.setAttribute("value", id ?? ""), flatmatesId);
+  await form.getByLabel("What for").fill("Snacks");
+  await form.getByLabel("Amount in dollars").fill("9");
+  await form.getByRole("button", { name: "Add" }).click();
+  await expect(page.getByRole("heading", { name: "This page could not be found." })).toBeVisible();
+
+  await signInAs(page, "Sam Calloway");
+  await openFromMoreMenu(page, "Split");
+  await expect(page.getByRole("main")).not.toContainText("Snacks");
+  await expect(balances(page, "Flatmates").getByRole("listitem")).toHaveText([
+    "Alex Okafor owes you $133.04",
+    "Jordan Reyes owes you $129.04",
+  ]);
+});

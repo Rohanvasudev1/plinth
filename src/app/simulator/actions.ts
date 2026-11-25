@@ -77,14 +77,14 @@ export async function cardPurchase(_previous: SimulatorResult | null, form: Form
 
 /**
  * Plays an Outside contact adding a Shared cost they paid. The form's `member` names an Outside contact and Group pair
- * from the signed-in customer's own Groups, as `<outside contact id>:<group id>`, so the Simulator names no other Group.
+ * from the signed-in customer's own Groups by its key, so the Simulator names no other Group.
  */
 export async function outsideContactSharedCost(_previous: SimulatorResult | null, form: FormData): Promise<SimulatorResult> {
   const customer = await requireCustomer();
   const bank = getAppBank();
   const pair = bank
     .listOutsideContactsInGroups(customer)
-    .find((candidate) => `${candidate.outsideContactId}:${candidate.groupId}` === String(form.get("member") ?? ""));
+    .find((candidate) => candidate.key === String(form.get("member") ?? ""));
   if (!pair) return { ok: false, message: "Pick who adds it and to which Group." };
   let amount;
   try {

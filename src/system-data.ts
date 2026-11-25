@@ -53,8 +53,6 @@ export interface SystemData {
   ensureSystemAccount(account: SystemAccount): number;
   /** Adds an Outside contact, a person outside Plinth whom the Simulator plays as a Member. */
   createOutsideContact(name: string): OutsideContact;
-  /** Every Outside contact, in the order they were added. */
-  listOutsideContacts(): OutsideContact[];
 }
 
 const customerColumns = { id: customersTable.id, name: customersTable.name };
@@ -95,14 +93,6 @@ export function createSystemData(db: Database): SystemData {
     createOutsideContact(name) {
       const row = db.insert(outsideContactsTable).values({ name }).returning().get();
       return { id: asOutsideContactId(row.id), name: row.name };
-    },
-    listOutsideContacts() {
-      return db
-        .select()
-        .from(outsideContactsTable)
-        .orderBy(asc(outsideContactsTable.id))
-        .all()
-        .map((row) => ({ id: asOutsideContactId(row.id), name: row.name }));
     },
     ensureSystemAccount(account) {
       const { key, name } = SYSTEM_ACCOUNTS[account];

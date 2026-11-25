@@ -51,7 +51,7 @@ import { createSimulator, type Simulator } from "./simulator";
 import { setStandingSearch } from "./standing-searches";
 import { startSubscriptionPriceRises } from "./subscription-price-rises";
 import { createSystemData, type SystemData } from "./system-data";
-import type { GroupId, SharedCost } from "./split";
+import type { GroupId, SharedCost, SharedCostByHand } from "./split";
 import {
   groupOnPage,
   outsideContactsInGroups,
@@ -293,7 +293,7 @@ export interface Bank extends Simulator, RuleChanges {
    * before setup. Throws SplitError, saving nothing, if they aren't a Member, the amount isn't above zero or what it
    * was for is blank.
    */
-  addSharedCost(customer: Customer, cost: { groupId: GroupId; description: string; amount: Cents }): SharedCost;
+  addSharedCost(customer: Customer, cost: SharedCostByHand): SharedCost;
   /** The Outside contacts in the customer's Groups, for the Simulator's form that plays them. */
   listOutsideContactsInGroups(customer: Customer): OutsideContactInGroup[];
 }

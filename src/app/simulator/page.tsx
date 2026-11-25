@@ -72,7 +72,7 @@ export default async function SimulatorPage() {
           <p className="muted">An Outside contact in one of your Groups adds a Shared cost they paid. No money moves.</p>
           <OutsideContactSharedCostForm
             members={outsideContacts.map((contact) => ({
-              value: `${contact.outsideContactId}:${contact.groupId}`,
+              value: contact.key,
               label: `${contact.name} in ${contact.groupName}`,
             }))}
           />

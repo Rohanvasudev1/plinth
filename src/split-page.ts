@@ -4,7 +4,9 @@ import { cents, type Cents } from "./money";
 import {
   balanceStatus,
   netBetween,
+  NotAMemberError,
   shareOf,
+  stillCounts,
   type BalanceStatus,
   type Group,
   type GroupId,
@@ -61,7 +63,7 @@ export interface SplitView {
 /** One of the customer's Groups as their Split page shows it. */
 export function groupOnPage(customer: Customer, group: Group): GroupOnPage {
   const you = group.members.find((member) => member.customerId === customer.id);
-  if (!you) throw new Error(`Customer ${customer.id} isn't a Member of Group ${group.id}`);
+  if (!you) throw new NotAMemberError("You aren't a Member of that Group");
   const nameOf = (memberId: MemberId) => group.members.find((member) => member.id === memberId)?.name ?? "Someone";
   return {
     id: group.id,
@@ -74,7 +76,7 @@ export function groupOnPage(customer: Customer, group: Group): GroupOnPage {
         return { memberId: member.id, name: member.name, net, status: balanceStatus(net) };
       }),
     sharedCosts: group.sharedCosts
-      .filter((cost) => cost.removedAt === null)
+      .filter(stillCounts)
       .map((cost) => ({
         id: cost.id,
         date: cost.date,
@@ -98,6 +100,8 @@ export function readSplitView(customerData: CustomerData, customer: Customer): S
 
 /** An Outside contact in one of the customer's Groups, for the Simulator's form that plays them. */
 export interface OutsideContactInGroup {
+  /** Names this Outside contact in this Group, for a form to send back. */
+  key: string;
   outsideContactId: OutsideContactId;
   name: string;
   groupId: GroupId;
@@ -110,7 +114,15 @@ export function outsideContactsInGroups(customerData: CustomerData, customer: Cu
     group.members.flatMap((member) =>
       member.outsideContactId === null
         ? []
-        : [{ outsideContactId: member.outsideContactId, name: member.name, groupId: group.id, groupName: group.name }],
+        : [
+            {
+              key: `${member.outsideContactId}:${group.id}`,
+              outsideContactId: member.outsideContactId,
+              name: member.name,
+              groupId: group.id,
+              groupName: group.name,
+            },
+          ],
     ),
   );
 }

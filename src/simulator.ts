@@ -5,7 +5,7 @@ import type { Category } from "./categories";
 import { cents, type Cents } from "./money";
 import { isBillDue, isPayday } from "./schedules";
 import { EMPLOYERS, type SystemData } from "./system-data";
-import type { GroupId, OutsideContactId, SharedCost } from "./split";
+import type { OutsideContactId, SharedCost, SharedCostByHand } from "./split";
 
 interface PostedMoney {
   customerId: number;
@@ -112,10 +112,7 @@ export interface Simulator {
    * no money. Throws SplitError, saving nothing, if they aren't a Member, the amount isn't above zero or what it was
    * for is blank.
    */
-  outsideContactAddsSharedCost(
-    outsideContactId: OutsideContactId,
-    cost: { groupId: GroupId; description: string; amount: Cents },
-  ): SharedCost;
+  outsideContactAddsSharedCost(outsideContactId: OutsideContactId, cost: SharedCostByHand): SharedCost;
 }
 
 interface PaycheckToPost {
