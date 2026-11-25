@@ -12,6 +12,7 @@ export type NavPage =
   | "agent"
   | "privacy"
   | "decision-log"
+  | "split"
   | "simulator";
 
 const MAIN_LINKS: { page: NavPage; href: string; label: string }[] = [
@@ -23,6 +24,7 @@ const MAIN_LINKS: { page: NavPage; href: string; label: string }[] = [
 ];
 
 const MORE_LINKS: { page: NavPage; href: string; label: string }[] = [
+  { page: "split", href: "/split", label: "Split" },
   { page: "agent", href: "/agent", label: "Agent & limits" },
   { page: "privacy", href: "/privacy", label: "Privacy" },
   { page: "decision-log", href: "/decision-log", label: "Decision log" },

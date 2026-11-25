@@ -6,7 +6,17 @@ import { ACCESS_READERS } from "../access-log";
 import { MISSION_STATES } from "../missions";
 import { LINKED_ACCOUNT_TYPES } from "../open-banking";
 import { SAVINGS_GOALS } from "../settings";
-import { check, index, integer, sqliteTable, text, uniqueIndex, type AnySQLiteColumn } from "drizzle-orm/sqlite-core";
+import { SHARED_COST_SOURCES } from "../split";
+import {
+  check,
+  foreignKey,
+  index,
+  integer,
+  sqliteTable,
+  text,
+  uniqueIndex,
+  type AnySQLiteColumn,
+} from "drizzle-orm/sqlite-core";
 
 /** The app's simulated time. It holds at most one row, with id 1. */
 export const simulatedClockTable = sqliteTable("simulated_clock", {
@@ -444,5 +454,78 @@ export const linkedAccountsTable = sqliteTable(
   (table) => [
     uniqueIndex("linked_accounts_customer_institution_account").on(table.customerId, table.institutionAccount),
     check("linked_accounts_consent_order", sql`${table.consentStart} < ${table.consentEnd}`),
+  ],
+);
+
+/** An Outside contact: a person outside Plinth whom the Simulator plays as a Member. A system row with a name. */
+export const outsideContactsTable = sqliteTable("outside_contacts", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull().unique(),
+});
+
+/**
+ * A Group: a fixed set of Members who share costs. A shared record that belongs to no single customer (ADR 0011), so
+ * it is read and written only through functions that first check, by id, that the reader is a Member.
+ */
+export const groupsTable = sqliteTable("split_groups", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
+});
+
+/** One Member of a Group: exactly one of a customer and an Outside contact, each at most once per Group. */
+export const groupMembersTable = sqliteTable(
+  "group_members",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    groupId: integer("group_id")
+      .notNull()
+      .references(() => groupsTable.id),
+    customerId: integer("customer_id").references(() => customersTable.id),
+    outsideContactId: integer("outside_contact_id").references(() => outsideContactsTable.id),
+  },
+  (table) => [
+    check("group_members_one_person", sql`(${table.customerId} IS NULL) <> (${table.outsideContactId} IS NULL)`),
+    uniqueIndex("group_members_group_customer").on(table.groupId, table.customerId),
+    uniqueIndex("group_members_group_outside_contact").on(table.groupId, table.outsideContactId),
+    // The target of shared_costs' (group_id, paid_by_member_id) key, so a cost's payer is a Member of its Group.
+    uniqueIndex("group_members_group_id_id").on(table.groupId, table.id),
+    index("group_members_customer_id").on(table.customerId),
+  ],
+);
+
+/**
+ * A Shared cost: an amount one Member paid for their Group, split into equal Shares that are worked out, not stored.
+ * `date` is a YYYY-MM-DD date in the bank's time zone. A ledger transaction is the source of at most one Shared cost.
+ * A removed Shared cost keeps its row, with the time it was removed, and stops counting.
+ */
+export const sharedCostsTable = sqliteTable(
+  "shared_costs",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    groupId: integer("group_id")
+      .notNull()
+      .references(() => groupsTable.id),
+    paidByMemberId: integer("paid_by_member_id").notNull(),
+    description: text("description").notNull(),
+    amountCents: integer("amount_cents").notNull(),
+    date: text("date").notNull(),
+    source: text("source", { enum: SHARED_COST_SOURCES }).notNull(),
+    /** The Split rule's Decision log entry, on a Shared cost the Split rule added. */
+    decisionId: integer("decision_id").references(() => decisionsTable.id),
+    ledgerTransactionId: integer("ledger_transaction_id")
+      .unique()
+      .references(() => ledgerTransactionsTable.id),
+    removedAtMs: integer("removed_at_ms"),
+    createdAtMs: integer("created_at_ms").notNull(),
+  },
+  (table) => [
+    index("shared_costs_group_id").on(table.groupId),
+    foreignKey({
+      name: "shared_costs_payer_in_group",
+      columns: [table.groupId, table.paidByMemberId],
+      foreignColumns: [groupMembersTable.groupId, groupMembersTable.id],
+    }),
+    check("shared_costs_amount_positive", sql`${table.amountCents} > 0`),
+    check("shared_costs_decision_on_split_rule", sql`${table.decisionId} IS NULL OR ${table.source} = 'split_rule'`),
   ],
 );

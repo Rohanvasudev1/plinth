@@ -7,7 +7,12 @@ import type { AccessLogEntry, NewAccessLogEntry } from "./access-log";
 import {
   accessLogTable,
   accountsTable,
+  customersTable,
   decisionsTable,
+  groupMembersTable,
+  groupsTable,
+  outsideContactsTable,
+  sharedCostsTable,
   findingsTable,
   ledgerEntriesTable,
   ledgerEventsTable,
@@ -58,6 +63,20 @@ import { cents, type Cents } from "./money";
 import { isRuleKind, parseRuleContent, type NewRule, type Rule } from "./rules";
 import { parseSettingsChoices, SettingsError, type SavingsGoal, type Settings, type SettingsChoices } from "./settings";
 import { isEmployer, type Employer } from "./system-data";
+import {
+  asGroupId,
+  asMemberId,
+  asOutsideContactId,
+  NotAMemberError,
+  SplitError,
+  type Group,
+  type GroupId,
+  type MemberId,
+  type MemberIdentity,
+  type NewSharedCost,
+  type OutsideContactId,
+  type SharedCost,
+} from "./split";
 
 /** A seeded customer. Every customer-scoped read and write takes one as its first argument. */
 export interface Customer {
@@ -312,6 +331,29 @@ export interface CustomerData {
    * LinkedAccountError if it isn't theirs.
    */
   deleteLinkedAccount(customer: Customer, linkedAccountId: LinkedAccountId): LinkedAccount;
+  /**
+   * Creates a Group with these Members, fixed from then on. The customer must be one of them. Throws SplitError,
+   * saving nothing, if they aren't or a Member is named twice.
+   */
+  createGroup(customer: Customer, group: { name: string; members: MemberIdentity[] }): Group;
+  /** Every Group the customer is a Member of, oldest first, each with its Shared costs newest first. */
+  listGroups(customer: Customer): Group[];
+  /**
+   * One Group, with its Shared costs newest first (ADR 0011). Checks by id that the customer is a Member before
+   * reading anything, and throws SplitError if they aren't.
+   */
+  getGroup(customer: Customer, groupId: GroupId): Group;
+  /**
+   * Adds a Shared cost the customer paid, after checking by id that they are a Member of its Group. Moves no money.
+   * Throws SplitError, saving nothing, if they aren't a Member, the amount isn't above zero, what it was for is blank,
+   * or the ledger transaction it came from isn't theirs or is already a Shared cost.
+   */
+  addSharedCost(customer: Customer, cost: NewSharedCost): SharedCost;
+  /**
+   * The Simulator's way in: adds a Shared cost an Outside contact paid, after checking by id that they are a Member
+   * of its Group, with the same checks as `addSharedCost`. An Outside contact has no ledger transactions.
+   */
+  addOutsideContactSharedCost(outsideContactId: OutsideContactId, cost: NewSharedCost): SharedCost;
 }
 
 /** A change to a Rule: its switch, its parameters, or both. Whatever is left out stays as it is. */
@@ -1044,7 +1086,159 @@ export function createCustomerData(deps: {
     return requireLinkedAccount(customer, linkedAccountId);
   }
 
+  /** The Member id of this customer or Outside contact in the Group, or undefined if they aren't a Member. */
+  function memberIdIn(groupId: GroupId, who: MemberIdentity): MemberId | undefined {
+    const row = db
+      .select({ id: groupMembersTable.id })
+      .from(groupMembersTable)
+      .where(
+        and(
+          eq(groupMembersTable.groupId, groupId),
+          "customerId" in who
+            ? eq(groupMembersTable.customerId, who.customerId)
+            : eq(groupMembersTable.outsideContactId, who.outsideContactId),
+        ),
+      )
+      .get();
+    return row ? asMemberId(row.id) : undefined;
+  }
+
+  /** The membership check every Group read and write starts with (ADR 0011). */
+  function requireMember(groupId: GroupId, who: MemberIdentity): MemberId {
+    const memberId = memberIdIn(groupId, who);
+    if (memberId === undefined) throw new NotAMemberError("You aren't a Member of that Group");
+    return memberId;
+  }
+
+  /** Reads a Group with no membership check. Only call it after one. */
+  function readGroup(groupId: GroupId): Group {
+    const group = db.select().from(groupsTable).where(eq(groupsTable.id, groupId)).get();
+    if (!group) throw new SplitError(`No Group ${groupId}`);
+    const members = db
+      .select({
+        id: groupMembersTable.id,
+        customerId: groupMembersTable.customerId,
+        outsideContactId: groupMembersTable.outsideContactId,
+        customerName: customersTable.name,
+        outsideContactName: outsideContactsTable.name,
+      })
+      .from(groupMembersTable)
+      .leftJoin(customersTable, eq(customersTable.id, groupMembersTable.customerId))
+      .leftJoin(outsideContactsTable, eq(outsideContactsTable.id, groupMembersTable.outsideContactId))
+      .where(eq(groupMembersTable.groupId, groupId))
+      .orderBy(asc(groupMembersTable.id))
+      .all()
+      .map((row) => {
+        const name = row.customerName ?? row.outsideContactName;
+        if (name === null) throw new Error(`Member ${row.id} names nobody`);
+        return {
+          id: asMemberId(row.id),
+          name,
+          customerId: row.customerId,
+          outsideContactId: row.outsideContactId === null ? null : asOutsideContactId(row.outsideContactId),
+        };
+      });
+    const sharedCosts = db
+      .select()
+      .from(sharedCostsTable)
+      .where(eq(sharedCostsTable.groupId, groupId))
+      .orderBy(desc(sharedCostsTable.date), desc(sharedCostsTable.id))
+      .all()
+      .map(
+        (row): SharedCost => ({
+          id: row.id,
+          groupId,
+          paidBy: asMemberId(row.paidByMemberId),
+          description: row.description,
+          amount: cents(row.amountCents),
+          date: localDate(row.date),
+          source: row.source,
+          decisionId: row.decisionId,
+          ledgerTransactionId: row.ledgerTransactionId,
+          removedAt: row.removedAtMs === null ? null : new Date(row.removedAtMs),
+        }),
+      );
+    return { id: groupId, name: group.name, members, sharedCosts };
+  }
+
+  function insertSharedCost(paidBy: MemberId, cost: NewSharedCost): SharedCost {
+    if (cost.description.trim() === "") throw new SplitError("Say what the Shared cost was for");
+    if (!Number.isSafeInteger(cost.amount) || cost.amount <= 0) throw new SplitError("A Shared cost must be more than $0.00");
+    const row = db
+      .insert(sharedCostsTable)
+      .values({
+        groupId: cost.groupId,
+        paidByMemberId: paidBy,
+        description: cost.description.trim(),
+        amountCents: cost.amount,
+        date: localDate(cost.date),
+        source: cost.source,
+        ledgerTransactionId: cost.ledgerTransactionId ?? null,
+        createdAtMs: clock.now().getTime(),
+      })
+      .returning({ id: sharedCostsTable.id })
+      .get();
+    const added = readGroup(cost.groupId).sharedCosts.find((candidate) => candidate.id === row.id);
+    if (!added) throw new Error(`Shared cost ${row.id} vanished after it was added`);
+    return added;
+  }
+
   return {
+    createGroup(customer, group) {
+      if (!group.members.some((member) => "customerId" in member && member.customerId === customer.id)) {
+        throw new SplitError("A Group you create must have you as a Member");
+      }
+      return inOneTransaction(() => {
+        const groupId = asGroupId(db.insert(groupsTable).values({ name: group.name }).returning().get().id);
+        for (const member of group.members) {
+          if (memberIdIn(groupId, member) !== undefined) throw new SplitError("A Group names each Member once");
+          db.insert(groupMembersTable)
+            .values({
+              groupId,
+              customerId: "customerId" in member ? member.customerId : null,
+              outsideContactId: "outsideContactId" in member ? member.outsideContactId : null,
+            })
+            .run();
+        }
+        return readGroup(groupId);
+      });
+    },
+    listGroups(customer) {
+      return db
+        .select({ groupId: groupMembersTable.groupId })
+        .from(groupMembersTable)
+        .where(eq(groupMembersTable.customerId, customer.id))
+        .orderBy(asc(groupMembersTable.groupId))
+        .all()
+        .map((row) => readGroup(asGroupId(row.groupId)));
+    },
+    getGroup(customer, groupId) {
+      requireMember(groupId, { customerId: customer.id });
+      return readGroup(groupId);
+    },
+    addSharedCost(customer, cost) {
+      const paidBy = requireMember(cost.groupId, { customerId: customer.id });
+      return inOneTransaction(() => {
+        const { ledgerTransactionId } = cost;
+        if (ledgerTransactionId !== undefined) {
+          if (!selectLedgerTransactions(customer, { id: ledgerTransactionId })[0]) {
+            throw new SplitError("A Shared cost can only come from one of your own ledger transactions");
+          }
+          const already = db
+            .select({ id: sharedCostsTable.id })
+            .from(sharedCostsTable)
+            .where(eq(sharedCostsTable.ledgerTransactionId, ledgerTransactionId))
+            .get();
+          if (already) throw new SplitError("That transaction is already a Shared cost");
+        }
+        return insertSharedCost(paidBy, cost);
+      });
+    },
+    addOutsideContactSharedCost(outsideContactId, cost) {
+      const paidBy = requireMember(cost.groupId, { outsideContactId });
+      if (cost.ledgerTransactionId !== undefined) throw new SplitError("An Outside contact has no ledger transactions");
+      return insertSharedCost(paidBy, cost);
+    },
     createLinkedAccount(customer, linked) {
       const already = selectLinkedAccounts(customer).some((other) => other.institutionAccount === linked.institutionAccount);
       if (already) throw new LinkedAccountError(`${linked.institution} is already linked`);

@@ -454,3 +454,9 @@ table.categories { width: 100%; border-collapse: collapse; }
 .linkable { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
 .linkable-account { display: flex; flex-direction: column; gap: 8px; }
 .linkable-account p { margin: 0; }
+
+/* Split: where the customer stands with each other Member of a Group. */
+.balances { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; overflow-wrap: anywhere; }
+.balances .owes_you { color: var(--good); font-weight: 600; }
+.balances .you_owe { font-weight: 600; }
+.balances .settled_up { color: var(--muted); }

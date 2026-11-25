@@ -5,6 +5,7 @@ import type { Category } from "./categories";
 import { cents, type Cents } from "./money";
 import { isBillDue, isPayday } from "./schedules";
 import { EMPLOYERS, type SystemData } from "./system-data";
+import type { OutsideContactId, SharedCost, SharedCostByHand } from "./split";
 
 interface PostedMoney {
   customerId: number;
@@ -106,6 +107,12 @@ export interface Simulator {
    * holds less than the amount.
    */
   cardPurchase(customer: Customer, purchase: CardPurchase): PostedCardPurchase;
+  /**
+   * An Outside contact, such as Jordan Reyes, adds a Shared cost they paid to a Group they are in, dated today. Moves
+   * no money. Throws SplitError, saving nothing, if they aren't a Member, the amount isn't above zero or what it was
+   * for is blank.
+   */
+  outsideContactAddsSharedCost(outsideContactId: OutsideContactId, cost: SharedCostByHand): SharedCost;
 }
 
 interface PaycheckToPost {
@@ -238,6 +245,13 @@ export function createSimulator(deps: {
           clock.setTo(before);
           throw error;
         }
+      });
+    },
+    outsideContactAddsSharedCost(outsideContactId, cost) {
+      return customerData.addOutsideContactSharedCost(outsideContactId, {
+        ...cost,
+        date: localDateOf(clock.now()),
+        source: "by_hand",
       });
     },
     cardPurchase(customer, { accountId, merchant: merchantKey, amount, idempotencyKey }) {
